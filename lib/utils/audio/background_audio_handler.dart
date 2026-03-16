@@ -366,8 +366,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _stopAtEndOfSong = false;
   bool _isSkipping = false;
   bool _isSwappingSource = false;
-  bool _queuedSkipNext = false;
-  bool _queuedSkipPrevious = false;
+  final ListQueue<int> _pendingSkipCommands = ListQueue<int>();
   bool _isPreloadingNext = false;
   bool _isInitialized = false;
   StreamSubscription<int?>? _currentIndexSubscription;
@@ -659,10 +658,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         },
         onError: (Object e, StackTrace stackTrace) {
           // print('❌ Error en playbackStream: $e');
-          // Intentar recuperar saltando a la siguiente canción si es posible
-          if (mounted && _mediaQueue.isNotEmpty) {
-            skipToNext();
-          }
+          // No auto-saltar en errores: evitamos saltos extra no solicitados
+          // cuando el usuario hace taps rápidos en siguiente/anterior.
         },
       );
 
@@ -3484,8 +3481,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (_initializing) return;
     if (_isSkipping) {
-      _queuedSkipNext = true;
-      _queuedSkipPrevious = false;
+      _pendingSkipCommands.addLast(1);
       return;
     }
 
@@ -3517,7 +3513,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           return;
         }
         _isSkipping = false;
-        _consumeQueuedSkip();
         _scheduleStreamingSkip(
           nextIndex,
           playAfterResolve: wasPlayingBeforeSkip,
@@ -3576,8 +3571,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (_initializing) return;
     if (_isSkipping) {
-      _queuedSkipPrevious = true;
-      _queuedSkipNext = false;
+      _pendingSkipCommands.addLast(-1);
       return;
     }
 
@@ -3598,7 +3592,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           final previousIndex = _previousDeferredQueueIndex();
           if (previousIndex != null) {
             _isSkipping = false;
-            _consumeQueuedSkip();
             _scheduleStreamingSkip(
               previousIndex,
               playAfterResolve: wasPlayingBeforeSkip,
@@ -3720,15 +3713,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   void _consumeQueuedSkip() {
     if (_isSkipping || _initializing) return;
+    if (_pendingSkipCommands.isEmpty) return;
 
-    if (_queuedSkipNext) {
-      _queuedSkipNext = false;
+    final command = _pendingSkipCommands.removeFirst();
+    if (command > 0) {
       unawaited(skipToNext());
       return;
     }
 
-    if (_queuedSkipPrevious) {
-      _queuedSkipPrevious = false;
+    if (command < 0) {
       unawaited(skipToPrevious());
     }
   }
