@@ -181,6 +181,7 @@ final selectedTabIndex = ValueNotifier<int>(0);
 
 final GlobalKey<HomeScreenState> homeScreenKey = GlobalKey<HomeScreenState>();
 final GlobalKey ytScreenKey = GlobalKey();
+final GlobalKey favoritesScreenKey = GlobalKey();
 final GlobalKey foldersScreenKey = GlobalKey();
 
 class MainNavRoot extends StatefulWidget {
@@ -346,7 +347,7 @@ class _MainNavRootState extends State<MainNavRoot> {
           setColorScheme: widget.setColorScheme,
         ),
         (context, onTabChange) => YtSearchTestScreen(key: ytScreenKey),
-        (context, onTabChange) => FavoritesScreen(),
+        (context, onTabChange) => FavoritesScreen(key: favoritesScreenKey),
         (context, onTabChange) => FoldersScreen(key: foldersScreenKey),
       ],
       selectedTabIndex: selectedTabIndex,

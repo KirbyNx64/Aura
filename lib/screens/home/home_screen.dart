@@ -2954,11 +2954,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Primero reproducir la canción
         _playSong(song, queue, queueSource: queueSource);
 
-        // Desactivar indicador de carga después de reproducir (comportamiento consistente)
-        Future.delayed(const Duration(milliseconds: 200), () {
-          if (mounted) playLoadingNotifier.value = false;
-        });
-
         // Luego agregar las canciones aleatorias al reproductor (si es necesario)
         if (queueSource == LocaleProvider.tr('quick_access_songs') ||
             queueSource == LocaleProvider.tr('quick_pick_songs')) {

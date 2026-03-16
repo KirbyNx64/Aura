@@ -1341,9 +1341,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       const minLoaderVisible = Duration(milliseconds: 320);
       playLoadingNotifier.value = true;
       final loaderHardGuard = Timer(const Duration(seconds: 6), () {
-        if (mounted && playLoadingNotifier.value) {
-          playLoadingNotifier.value = false;
-        }
+        // Loader local se gestiona globalmente desde audio handler.
       });
 
       try {
@@ -1358,10 +1356,7 @@ class _FoldersScreenState extends State<FoldersScreen>
         if (elapsed < minLoaderVisible) {
           await Future<void>.delayed(minLoaderVisible - elapsed);
         }
-        if (mounted) {
-          // Desactivar indicador de carga después de reproducir
-          playLoadingNotifier.value = false;
-        }
+        // Desactivar indicador de carga lo gestiona audio handler para local.
       }
     }
   }

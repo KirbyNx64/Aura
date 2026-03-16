@@ -1018,9 +1018,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     const minLoaderVisible = Duration(milliseconds: 320);
     playLoadingNotifier.value = true;
     final loaderHardGuard = Timer(const Duration(seconds: 6), () {
-      if (mounted && playLoadingNotifier.value) {
-        playLoadingNotifier.value = false;
-      }
+      // Loader local se gestiona globalmente desde audio handler.
     });
 
     try {
@@ -1034,9 +1032,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       final elapsed = DateTime.now().difference(loaderStartedAt);
       if (elapsed < minLoaderVisible) {
         await Future<void>.delayed(minLoaderVisible - elapsed);
-      }
-      if (mounted) {
-        playLoadingNotifier.value = false;
       }
     }
   }

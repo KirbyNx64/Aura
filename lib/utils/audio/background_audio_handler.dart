@@ -387,6 +387,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   // Control de notificaciones del sistema
   Timer? _notificationUpdateTimer;
+  Timer? _localPlayLoaderGuardTimer;
 
   // Persistencia
   SharedPreferences? _prefs;
@@ -551,6 +552,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           final transformedState = _transformPlaybackEvent(event);
           playbackState.add(transformedState);
 
+          // El loader global de play local debe apagarse desde el handler
+          // al comenzar reproducción real, sin depender de la pantalla origen.
+          _dismissLocalPlayLoaderOnPlaybackStart(event: event);
+
           // Si se completó y está en loop one, lanza el seek/play en segundo plano
           if (event.processingState == ProcessingState.completed &&
               !_stopAtEndOfSong &&
@@ -709,6 +714,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // No actualizar playbackState aquí - se maneja en playbackEventStream
 
         if (playing) {
+          _dismissLocalPlayLoaderOnPlaybackStart();
+        }
+
+        if (playing) {
           // Reanudar timer de tracking si hay una canción actual y no ha sido guardada
           if (_currentTrackingId != null && !_hasBeenTracked) {
             _trackingStartTime = DateTime.now();
@@ -774,6 +783,47 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  void _dismissLocalPlayLoaderOnPlaybackStart({PlaybackEvent? event}) {
+    if (!playLoadingNotifier.value) return;
+
+    final currentItem = mediaItem.value;
+    if (currentItem == null) return;
+    if (_isStreamingMediaItem(currentItem)) return;
+
+    final processingState = event?.processingState ?? _player.processingState;
+    final position = event?.updatePosition ?? _player.position;
+    final hasStartedPlayback =
+        _player.playing &&
+        (processingState == ProcessingState.ready ||
+            processingState == ProcessingState.buffering ||
+            position > Duration.zero);
+
+    if (hasStartedPlayback) {
+      playLoadingNotifier.value = false;
+      _clearLocalPlayLoaderGuard();
+    }
+  }
+
+  void _armLocalPlayLoaderGuard() {
+    if (!playLoadingNotifier.value) return;
+    final currentItem = mediaItem.value;
+    if (currentItem == null) return;
+    if (_isStreamingMediaItem(currentItem)) return;
+
+    _clearLocalPlayLoaderGuard();
+    _localPlayLoaderGuardTimer = Timer(const Duration(seconds: 8), () {
+      if (!playLoadingNotifier.value) return;
+      final item = mediaItem.value;
+      if (item == null || _isStreamingMediaItem(item)) return;
+      playLoadingNotifier.value = false;
+    });
+  }
+
+  void _clearLocalPlayLoaderGuard() {
+    _localPlayLoaderGuardTimer?.cancel();
+    _localPlayLoaderGuardTimer = null;
+  }
+
   /// Cancela todos los listeners para evitar duplicados
   Future<void> _disposeListeners() async {
     await _currentIndexSubscription?.cancel();
@@ -787,6 +837,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Cancelar timer de notificaciones
     _notificationUpdateTimer?.cancel();
+    _clearLocalPlayLoaderGuard();
 
     _currentIndexSubscription = null;
     _playbackEventSubscription = null;
@@ -3346,6 +3397,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   @override
   Future<void> play() async {
     _lastManualPlayPauseToggle = DateTime.now();
+    _armLocalPlayLoaderGuard();
     // Verificar si hay canciones disponibles
     if (_mediaQueue.isEmpty) {
       return;
@@ -3450,6 +3502,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       // Cancelar timer de notificaciones
       _notificationUpdateTimer?.cancel();
+      _clearLocalPlayLoaderGuard();
 
       // Detener y limpiar el reproductor completamente
       await _player.stop();
