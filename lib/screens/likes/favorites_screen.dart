@@ -631,14 +631,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         }
       });
 
-      final visibleList = _searchController.text.isNotEmpty
-          ? _filteredStreamingFavorites
-          : _streamingFavorites;
-      if (visibleList.isEmpty) return;
-      final selectedIndex = visibleList.indexWhere(
-        (entry) => entry.rawPath == item.rawPath,
-      );
-      final queueItems = visibleList
+      // Siempre enviar la lista completa de favoritos streaming al reproductor,
+      // aunque el usuario haya seleccionado desde resultados filtrados.
+      if (_streamingFavorites.isEmpty) return;
+      final queueItems = _streamingFavorites
           .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
           .map((entry) {
             final entryVideoId = entry.videoId!.trim();
@@ -669,9 +665,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         (entry) => entry['videoId'] == selectedVideoId,
       );
       if (initialQueueIndex < 0) {
-        initialQueueIndex = selectedIndex
-            .clamp(0, queueItems.length - 1)
-            .toInt();
+        initialQueueIndex = 0;
       }
 
       final prefs = await SharedPreferences.getInstance();

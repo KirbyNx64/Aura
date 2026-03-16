@@ -212,9 +212,9 @@ const Map<String, String> appLocalizationsEn = {
   'lyrics_deleted_desc': 'Song lyrics have been deleted successfully.',
   'delete_audio_links': 'Delete streaming audio links',
   'delete_audio_links_desc':
-      'Removes all temporary saved links used for streaming audio playback.\n\nThese links are automatically deleted after a certain time, but you can use this option to manually delete them if you have playback issues.',
+      'Removes all temporary saved links used for streaming audio playback.',
   'delete_audio_links_confirm':
-      'All temporary streaming audio links saved by the app will be deleted.',
+      'All temporary streaming audio links saved by the app will be deleted.\n\nThese links are automatically deleted after a certain time, but you can use this option to manually delete them if you have playback issues.',
   'audio_links_deleted': 'Cleanup completed',
   'audio_links_deleted_desc': 'All saved streaming audio links were deleted.',
   'clear_artwork_cache': 'Clear artwork cache',

@@ -1794,10 +1794,9 @@ class _FoldersScreenState extends State<FoldersScreen>
           releaseLoading();
         }
       });
-      final visibleList = _searchController.text.isNotEmpty
-          ? _filteredPlaylistStreamingItems
-          : _playlistStreamingItems;
-      final queueItems = visibleList
+      // En playlists streaming, siempre enviar la lista completa al reproductor
+      // y solo usar el item tocado para resolver el índice inicial.
+      final queueItems = _playlistStreamingItems
           .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
           .map((entry) {
             final entryVideoId = entry.videoId!.trim();

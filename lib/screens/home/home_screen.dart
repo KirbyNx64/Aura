@@ -2466,14 +2466,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
 
-      final visibleList = _searchRecentsController.text.isNotEmpty
-          ? _filteredStreamingRecents
-          : _streamingRecents;
-      if (visibleList.isEmpty) return;
-      final selectedIndex = visibleList.indexWhere(
-        (entry) => entry.rawPath == item.rawPath,
-      );
-      final queueItems = visibleList
+      // En recientes streaming, siempre enviar la lista completa al reproductor,
+      // aunque la selección provenga de resultados filtrados.
+      if (_streamingRecents.isEmpty) return;
+      final queueItems = _streamingRecents
           .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
           .map((entry) {
             final entryVideoId = entry.videoId!.trim();
@@ -2503,7 +2499,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         (entry) => entry['videoId'] == videoId,
       );
       if (initialQueueIndex < 0) {
-        initialQueueIndex = selectedIndex.clamp(0, queueItems.length - 1);
+        initialQueueIndex = 0;
       }
 
       final prefs = await SharedPreferences.getInstance();
