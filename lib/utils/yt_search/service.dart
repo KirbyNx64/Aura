@@ -903,7 +903,24 @@ Future<Map<String, dynamic>> getWatchRadioTracks({
     );
   }
 
-  return _getWatchRadioTracksViaDartYtMusicApi(videoId: videoId, limit: limit);
+  final primary = await _getWatchRadioTracksViaDartYtMusicApi(
+    videoId: videoId,
+    limit: limit,
+  );
+  final tracks = primary['tracks'];
+  if (tracks is List && tracks.isNotEmpty) {
+    return primary;
+  }
+
+  // Fallback: el proveedor principal puede devolver vacío en el primer
+  // arranque de sesión. Intentamos endpoint legacy para no perder la radio
+  // inicial en reproducción individual.
+  return _getWatchRadioTracksLegacy(
+    videoId: videoId,
+    limit: limit,
+    playlistId: playlistId,
+    additionalParamsNext: additionalParamsNext,
+  );
 }
 
 Future<void> _ensureYtMusicApiInitialized() async {

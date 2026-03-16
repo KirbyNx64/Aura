@@ -1525,13 +1525,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
               ],
               'initialIndex': 0,
               'autoPlay': true,
+              'autoStartRadio': true,
             })
             .timeout(const Duration(seconds: 20));
-
-        // Reproducción individual desde artista debe continuar en radio mode.
-        await handler.customAction('startStreamingRadioFromCurrent', {
-          'replaceQueue': true,
-        });
       }
     } catch (_) {
       // Ignorar para no mostrar error si inició correctamente entre transiciones.

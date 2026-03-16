@@ -8316,14 +8316,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               ],
               'initialIndex': 0,
               'autoPlay': true,
+              'autoStartRadio': true,
             })
             .timeout(const Duration(seconds: 15));
-
-        // En reproducción individual desde YT Search, activar modo radio
-        // para anexar canciones relacionadas después de resolver el stream.
-        await handler.customAction('startStreamingRadioFromCurrent', {
-          'replaceQueue': true,
-        });
 
         unawaited(
           _refreshPlayerArtworkInBackground(

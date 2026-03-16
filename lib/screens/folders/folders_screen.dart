@@ -1896,12 +1896,9 @@ class _FoldersScreenState extends State<FoldersScreen>
             ],
             'initialIndex': 0,
             'autoPlay': true,
+            'autoStartRadio': true,
           })
           .timeout(const Duration(seconds: 20));
-
-      await handler.customAction('startStreamingRadioFromCurrent', {
-        'replaceQueue': true,
-      });
     } catch (_) {
       playLoadingNotifier.value = false;
     }

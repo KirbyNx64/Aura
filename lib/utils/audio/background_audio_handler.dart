@@ -422,6 +422,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _streamRadioInitialBatchLoaded = false;
   bool _deferredStreamingQueueMode = false;
   int _deferredStreamingQueueIndex = 0;
+  DateTime _lastManualPlayPauseToggle = DateTime.fromMillisecondsSinceEpoch(0);
   final Random _random = Random();
   List<int> _deferredShuffleOrder = const <int>[];
   int _deferredShuffleCursor = 0;
@@ -571,6 +572,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               return;
             }
             if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
+              final toggleElapsedMs = DateTime.now()
+                  .difference(_lastManualPlayPauseToggle)
+                  .inMilliseconds;
+              if (toggleElapsedMs >= 0 && toggleElapsedMs < 1200) {
+                debugPrint(
+                  '[RADIO_DEBUG] completed ignored after recent play/pause toggle (${toggleElapsedMs}ms)',
+                );
+                return;
+              }
               // No auto-avanzar si estamos en medio de un swap de fuente
               // (_concat.clear() dispara completed, pero no es fin natural de canción).
               if (_isSwappingSource) return;
@@ -907,7 +917,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Si quedan menos de 18 segundos, precargar la siguiente canción
     final remainingTime = duration - position;
-    if (remainingTime.inSeconds <= 18 && remainingTime.inSeconds > 15) {
+    if (remainingTime.inSeconds <= 18) {
       _isPreloadingNext = true;
 
       unawaited(() async {
@@ -2695,12 +2705,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   Future<void> _ensureStreamingRadioQueue({bool force = false}) async {
+    debugPrint(
+      '[RADIO_DEBUG] ensure start enabled=$_streamRadioEnabled appendInProgress=$_streamRadioAppendInProgress initialBatchLoaded=$_streamRadioInitialBatchLoaded force=$force queueSize=${_mediaQueue.length}',
+    );
     if (!_streamRadioEnabled ||
         _streamRadioAppendInProgress ||
         _streamRadioInitialBatchLoaded) {
+      debugPrint('[RADIO_DEBUG] ensure skip by state flags');
       return;
     }
     if (_mediaQueue.isEmpty || !_isStreamingMediaItem(_mediaQueue.first)) {
+      debugPrint(
+        '[RADIO_DEBUG] ensure skip: queue empty or first item not streaming',
+      );
       return;
     }
     final int sessionVersion = _streamSessionVersion;
@@ -2713,16 +2730,27 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final int missingItems = _streamRadioFixedQueueSize - remaining;
     if (missingItems <= 0) {
       _streamRadioInitialBatchLoaded = true;
+      debugPrint(
+        '[RADIO_DEBUG] ensure skip: no missing items, locking initial batch',
+      );
       return;
     }
-    if (!force && remaining > _streamRadioPrefetchThreshold) return;
+    if (!force && remaining > _streamRadioPrefetchThreshold) {
+      debugPrint(
+        '[RADIO_DEBUG] ensure skip: remaining=$remaining threshold=$_streamRadioPrefetchThreshold (force=$force)',
+      );
+      return;
+    }
 
     final currentItem = _mediaQueue[currentIndex];
     final currentVideoId = currentItem.extras?['videoId']?.toString().trim();
     final seedVideoId = (currentVideoId != null && currentVideoId.isNotEmpty)
         ? currentVideoId
         : _streamRadioSeedVideoId;
-    if (seedVideoId == null || seedVideoId.isEmpty) return;
+    if (seedVideoId == null || seedVideoId.isEmpty) {
+      debugPrint('[RADIO_DEBUG] ensure abort: missing seed video id');
+      return;
+    }
     final continuationForRequest =
         (_streamRadioSeedVideoId == null ||
             _streamRadioSeedVideoId == seedVideoId)
@@ -2734,14 +2762,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
 
     _streamRadioAppendInProgress = true;
-    // En modo radio fijo, hacemos un único intento de carga para esta sesión.
-    var shouldLockRadioQueue = force;
+    // Solo bloquear cuando realmente se anexó un lote o la cola ya está llena.
+    var shouldLockRadioQueue = false;
     try {
       final requestLimit = missingItems + _streamRadioOverscanCount;
       final radioPayload = await yt_service.getWatchRadioTracks(
         videoId: seedVideoId,
         limit: requestLimit,
         additionalParamsNext: continuationForRequest,
+      );
+      debugPrint(
+        '[RADIO_DEBUG] ensure payload provider=${radioPayload['provider']} tracks=${(radioPayload['tracks'] is List) ? (radioPayload['tracks'] as List).length : -1} requestLimit=$requestLimit seed=$seedVideoId',
       );
       if (sessionVersion != _streamSessionVersion) return;
       final nextParams = radioPayload['additionalParamsForNext']
@@ -2753,7 +2784,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       final rawTracks = radioPayload['tracks'];
       if (rawTracks is! List || rawTracks.isEmpty) {
-        shouldLockRadioQueue = true;
+        debugPrint('[RADIO_DEBUG] ensure empty tracks from provider');
         return;
       }
 
@@ -2771,7 +2802,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         candidates.add(Map<String, dynamic>.from(rawTrack));
       }
       if (candidates.isEmpty) {
-        shouldLockRadioQueue = true;
+        debugPrint('[RADIO_DEBUG] ensure no candidates after dedupe');
         return;
       }
 
@@ -2786,7 +2817,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
 
       if (resolvedCandidates.isEmpty) {
-        shouldLockRadioQueue = true;
+        debugPrint('[RADIO_DEBUG] ensure no resolved candidates');
         return;
       }
       if (sessionVersion != _streamSessionVersion) return;
@@ -2813,15 +2844,22 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           items: batchItems,
           sessionVersion: sessionVersion,
         );
+        debugPrint(
+          '[RADIO_DEBUG] ensure appended batch=${batchItems.length} newQueueSize=${_mediaQueue.length}',
+        );
+        shouldLockRadioQueue = true;
       }
-      shouldLockRadioQueue = true;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[RADIO_DEBUG] ensure exception: $e');
       // Mantener la reproducción estable ante errores de red/parsing.
     } finally {
       if (shouldLockRadioQueue && sessionVersion == _streamSessionVersion) {
         _streamRadioInitialBatchLoaded = true;
       }
       _streamRadioAppendInProgress = false;
+      debugPrint(
+        '[RADIO_DEBUG] ensure end lock=$shouldLockRadioQueue initialBatchLoaded=$_streamRadioInitialBatchLoaded queueSize=${_mediaQueue.length}',
+      );
     }
   }
 
@@ -2867,7 +2905,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<Map<String, dynamic>> _startStreamingRadioFromCurrent({
     bool replaceQueue = true,
   }) async {
+    debugPrint(
+      '[RADIO_DEBUG] startRadio called replaceQueue=$replaceQueue deferred=$_deferredStreamingQueueMode queueSize=${_mediaQueue.length} currentPlayerIndex=${_player.currentIndex}',
+    );
     if (_mediaQueue.isEmpty) {
+      debugPrint('[RADIO_DEBUG] startRadio abort: empty_queue');
       return {'ok': false, 'reason': 'empty_queue'};
     }
 
@@ -2878,6 +2920,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             .clamp(0, _mediaQueue.length - 1);
     final currentItem = _mediaQueue[currentIndex];
     if (!_isStreamingMediaItem(currentItem)) {
+      debugPrint(
+        '[RADIO_DEBUG] startRadio abort: not_streaming index=$currentIndex id=${currentItem.id}',
+      );
       return {'ok': false, 'reason': 'not_streaming'};
     }
 
@@ -2888,8 +2933,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               ? currentItem.id.replaceFirst('yt:', '').trim()
               : '');
     if (seedVideoId.isEmpty) {
+      debugPrint('[RADIO_DEBUG] startRadio abort: missing_video_id');
       return {'ok': false, 'reason': 'missing_video_id'};
     }
+    debugPrint(
+      '[RADIO_DEBUG] startRadio seed=$seedVideoId currentIndex=$currentIndex replaceQueue=$replaceQueue',
+    );
 
     _streamSessionVersion++;
     _resolveGeneration++;
@@ -2904,7 +2953,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _streamUrlPrefetchTasks.clear();
 
     if (replaceQueue && currentIndex < _mediaQueue.length - 1) {
+      final removed = _mediaQueue.length - (currentIndex + 1);
       _mediaQueue.removeRange(currentIndex + 1, _mediaQueue.length);
+      debugPrint('[RADIO_DEBUG] startRadio trimmed queue removed=$removed');
     }
 
     _deferredStreamingQueueMode = true;
@@ -2954,6 +3005,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     playbackState.add(playbackState.value.copyWith(queueIndex: currentIndex));
 
     await _ensureStreamingRadioQueue(force: true);
+    debugPrint(
+      '[RADIO_DEBUG] startRadio done queueSize=${_mediaQueue.length} initialBatchLoaded=$_streamRadioInitialBatchLoaded',
+    );
     return {'ok': true, 'queue_size': _mediaQueue.length};
   }
 
@@ -3291,6 +3345,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> play() async {
+    _lastManualPlayPauseToggle = DateTime.now();
     // Verificar si hay canciones disponibles
     if (_mediaQueue.isEmpty) {
       return;
@@ -3325,18 +3380,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       await _player.play();
     } catch (e) {
-      // Intentar saltar a la siguiente canción si la actual falla (e.g. archivo corrupto)
-      try {
-        if (_mediaQueue.isNotEmpty &&
-            _player.currentIndex != null &&
-            _player.currentIndex! < _mediaQueue.length - 1) {
-          // print('⚠️ Error al reproducir, intentando saltar a la siguiente...');
-          await skipToNext();
-          await _player.play();
-          return;
-        }
-      } catch (_) {
-        // Si falla el salto, continuar con la reinicialización
+      // En streaming diferido (radio/YT), no saltar automáticamente al siguiente
+      // ante un fallo transitorio de play(); eso puede percibirse como que el
+      // botón play/pause cambia de canción.
+      if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
+        final retryIndex = _deferredStreamingQueueIndex.clamp(
+          0,
+          _mediaQueue.length - 1,
+        );
+        final recovered = await _resolveAndPlayDeferredStreamingIndex(
+          retryIndex,
+          playAfterResolve: true,
+        );
+        if (recovered) return;
       }
 
       // Reintentar una vez tras pequeña espera si seguía inicializando
@@ -3376,6 +3432,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> pause() async {
+    _lastManualPlayPauseToggle = DateTime.now();
     try {
       await _player.pause();
     } catch (e) {
@@ -4364,6 +4421,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
 
       final requestedIndex = extras?['initialIndex'];
+      final autoStartRadio = extras?['autoStartRadio'] == true;
+      debugPrint(
+        '[RADIO_DEBUG] playYtStreamQueue called items=${rawItems.length} requestedIndex=$requestedIndex autoStartRadio=$autoStartRadio autoPlay=${extras?['autoPlay']}',
+      );
       int initialIndex = requestedIndex is int
           ? requestedIndex
           : int.tryParse(requestedIndex?.toString() ?? '0') ?? 0;
@@ -4454,9 +4515,32 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));
 
       final ok = await _resolveAndPlayDeferredStreamingIndex(initialIndex);
-      if (!ok) return {'ok': false, 'reason': 'missing_stream_url'};
+      if (!ok) {
+        debugPrint(
+          '[RADIO_DEBUG] playYtStreamQueue resolve failed initialIndex=$initialIndex',
+        );
+        return {'ok': false, 'reason': 'missing_stream_url'};
+      }
       if (extras?['autoPlay'] != false) {
-        await play();
+        // No bloquear esta acción esperando al Future de play(), porque en
+        // just_audio puede completarse al pausar/finalizar la pista.
+        unawaited(play());
+      }
+      debugPrint(
+        '[RADIO_DEBUG] playYtStreamQueue resolved and playing initialIndex=$initialIndex queueSize=${_mediaQueue.length}',
+      );
+
+      if (autoStartRadio) {
+        final radioResult = await _startStreamingRadioFromCurrent(
+          replaceQueue: true,
+        );
+        debugPrint(
+          '[RADIO_DEBUG] playYtStreamQueue autoStartRadio result=$radioResult',
+        );
+        final radioOk = radioResult['ok'] == true;
+        if (!radioOk) {
+          return {'ok': true, 'radio': radioResult};
+        }
       }
       return {'ok': true};
     }
