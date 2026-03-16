@@ -5017,6 +5017,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     _loadingAlbumSongs = true;
                                                     _albumSongs = [];
                                                     _currentAlbum = {
+                                                      'id': album.videoId,
                                                       'title': album.title,
                                                       'artist': album.artist,
                                                       'thumbUrl':
@@ -5365,8 +5366,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       else
                                         Expanded(
                                           child: ListView.builder(
-                                            key: const PageStorageKey(
-                                              'yt_album_details_list',
+                                            key: PageStorageKey(
+                                              "yt_album_details_list_${_currentAlbum?['id'] ?? 'unknown'}",
                                             ),
                                             padding: EdgeInsets.only(
                                               bottom: bottomSpace,
@@ -5872,8 +5873,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                       else
                                         Expanded(
                                           child: ListView.builder(
-                                            key: const PageStorageKey(
-                                              'yt_playlist_details_list',
+                                            key: PageStorageKey(
+                                              "yt_playlist_details_list_${_currentPlaylist?['id'] ?? 'unknown'}",
                                             ),
                                             padding: EdgeInsets.only(
                                               bottom: bottomSpace,
@@ -8050,6 +8051,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                       _loadingAlbumSongs = true;
                                                       _albumSongs = [];
                                                       _currentAlbum = {
+                                                        'id': album.videoId,
                                                         'title': album.title,
                                                         'artist': album.artist,
                                                         'thumbUrl':
