@@ -366,7 +366,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _stopAtEndOfSong = false;
   bool _isSkipping = false;
   bool _isSwappingSource = false;
-  final ListQueue<int> _pendingSkipCommands = ListQueue<int>();
   bool _isPreloadingNext = false;
   bool _isInitialized = false;
   StreamSubscription<int?>? _currentIndexSubscription;
@@ -3463,7 +3462,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (_initializing) return;
     if (_isSkipping) {
-      _pendingSkipCommands.addLast(1);
       return;
     }
 
@@ -3539,7 +3537,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // print('⚠️ Error en skipToNext: $e');
     } finally {
       _isSkipping = false;
-      _consumeQueuedSkip();
     }
   }
 
@@ -3553,7 +3550,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     if (_initializing) return;
     if (_isSkipping) {
-      _pendingSkipCommands.addLast(-1);
       return;
     }
 
@@ -3619,7 +3615,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // print('⚠️ Error en skipToPrevious: $e');
     } finally {
       _isSkipping = false;
-      _consumeQueuedSkip();
     }
   }
 
@@ -3691,21 +3686,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       );
       _updateSleepTimer();
     }());
-  }
-
-  void _consumeQueuedSkip() {
-    if (_isSkipping || _initializing) return;
-    if (_pendingSkipCommands.isEmpty) return;
-
-    final command = _pendingSkipCommands.removeFirst();
-    if (command > 0) {
-      unawaited(skipToNext());
-      return;
-    }
-
-    if (command < 0) {
-      unawaited(skipToPrevious());
-    }
   }
 
   @override
