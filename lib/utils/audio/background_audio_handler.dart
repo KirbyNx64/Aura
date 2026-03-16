@@ -2142,7 +2142,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Pequeño margen para que la UI pinte metadatos/caratula inicial
     // antes de iniciar la resolución y carga del stream.
-    await Future.delayed(const Duration(milliseconds: 100));
+    await Future.delayed(const Duration(milliseconds: 150));
     if (isSuperseded()) return false;
 
     // 2) Resolver stream URL y cargar audio después.
@@ -3661,11 +3661,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Cancelar inmediatamente cualquier resolución previa en curso.
     _resolveGeneration++;
     final requestGeneration = _resolveGeneration;
-    // Refuerzo en capa de servicio: cancelar resolución de DB/red en curso
-    // y reiniciar el cliente de youtube_explode_dart para abortar requests viejas.
-    StreamService.cancelPendingResolves(resetClient: true);
-    // Evitar reutilizar prefetch en curso durante cambios rápidos manuales.
-    _streamUrlPrefetchTasks.clear();
+    // Cancelar resoluciones antiguas sin reiniciar el cliente de red para
+    // conservar conexiones calientes y mantener transiciones suaves.
+    StreamService.cancelPendingResolves(resetClient: false);
 
     // Incrementar generación de artwork para cancelar descargas intermedias.
     _artworkGeneration++;
