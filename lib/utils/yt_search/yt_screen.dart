@@ -1302,25 +1302,36 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     if (_urlPlaylistVideos.isEmpty) return const SizedBox.shrink();
 
-    return StreamBuilder<MediaItem?>(
-      stream: audioHandler?.mediaItem,
-      builder: (context, snapshot) {
-        final mediaItem = snapshot.data;
-        // Calcular espacio inferior considerando overlay de reproducción
-        double bottomSpace = mediaItem != null ? 100.0 : 0.0;
+    return ValueListenableBuilder<bool>(
+      valueListenable: overlayVisibleNotifier,
+      builder: (context, overlayVisible, _) {
+        final bottomPadding = MediaQuery.of(context).padding.bottom;
+        final bottomSpace = (overlayVisible ? 100.0 : 0.0) + bottomPadding;
+        final cardColor = isAmoled && isDark
+            ? Colors.white.withAlpha(20)
+            : isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
 
-        return Padding(
+        return RawScrollbar(
+          thumbColor: Theme.of(context).colorScheme.primary,
+          thickness: 6,
+          radius: const Radius.circular(8),
+          interactive: true,
           padding: EdgeInsets.only(bottom: bottomSpace),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header de la playlist
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 12,
+              bottom: bottomSpace,
+            ),
+            itemCount: _urlPlaylistVideos.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
                   child: Row(
                     children: [
                       if (_urlPlaylistThumb != null)
@@ -1445,209 +1456,168 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                       ),
                     ],
                   ),
-                ),
+                );
+              }
 
-                // Lista de canciones
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _urlPlaylistVideos.length,
-                    itemBuilder: (context, index) {
-                      final item = _urlPlaylistVideos[index];
+              final songIndex = index - 1;
+              final item = _urlPlaylistVideos[songIndex];
+              final bool isFirst = songIndex == 0;
+              final bool isLast = songIndex == _urlPlaylistVideos.length - 1;
+              final bool isOnly = _urlPlaylistVideos.length == 1;
 
-                      // Card styling logic matching search results
-                      final cardColor = isAmoled && isDark
-                          ? Colors.white.withAlpha(20)
-                          : isDark
-                          ? Theme.of(
+              BorderRadius borderRadius;
+              if (isOnly) {
+                borderRadius = BorderRadius.circular(20);
+              } else if (isFirst) {
+                borderRadius = const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                );
+              } else if (isLast) {
+                borderRadius = const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(20),
+                  bottomRight: Radius.circular(20),
+                );
+              } else {
+                borderRadius = BorderRadius.circular(4);
+              }
+
+              return Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                child: Card(
+                  color: cardColor,
+                  margin: EdgeInsets.zero,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: borderRadius),
+                  child: InkWell(
+                    borderRadius: borderRadius,
+                    onTap: null,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 4,
+                      ),
+                      leading: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: SizedBox(
+                          width: 50,
+                          height: 50,
+                          child: _YtStreamingArtwork(
+                            sources: _playlistArtworkSources(item),
+                            backgroundColor: Theme.of(
                               context,
-                            ).colorScheme.secondary.withValues(alpha: 0.06)
-                          : Theme.of(
+                            ).colorScheme.surfaceContainerHigh,
+                            iconColor: Theme.of(
                               context,
-                            ).colorScheme.secondary.withValues(alpha: 0.07);
-
-                      final bool isFirst = index == 0;
-                      final bool isLast =
-                          index == _urlPlaylistVideos.length - 1;
-                      final bool isOnly = _urlPlaylistVideos.length == 1;
-
-                      BorderRadius borderRadius;
-                      if (isOnly) {
-                        borderRadius = BorderRadius.circular(20);
-                      } else if (isFirst) {
-                        borderRadius = const BorderRadius.only(
-                          topLeft: Radius.circular(20),
-                          topRight: Radius.circular(20),
-                          bottomLeft: Radius.circular(4),
-                          bottomRight: Radius.circular(4),
-                        );
-                      } else if (isLast) {
-                        borderRadius = const BorderRadius.only(
-                          topLeft: Radius.circular(4),
-                          topRight: Radius.circular(4),
-                          bottomLeft: Radius.circular(20),
-                          bottomRight: Radius.circular(20),
-                        );
-                      } else {
-                        borderRadius = BorderRadius.circular(4);
-                      }
-
-                      return Padding(
-                        padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
-                        child: Card(
-                          color: cardColor,
-                          margin: EdgeInsets.zero,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: borderRadius,
-                          ),
-                          child: InkWell(
-                            borderRadius: borderRadius,
-                            onTap: null,
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 4,
-                              ),
-                              leading: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: SizedBox(
-                                  width: 50,
-                                  height: 50,
-                                  child: _YtStreamingArtwork(
-                                    sources: _playlistArtworkSources(item),
-                                    backgroundColor: Theme.of(
-                                      context,
-                                    ).colorScheme.surfaceContainerHigh,
-                                    iconColor: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                              title: Text(
-                                item.title ?? 'Sin título',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              subtitle: Text(
-                                _artistWithDurationText(
-                                  artist: item.artist?.replaceFirst(
-                                    RegExp(r' - Topic$'),
-                                    '',
-                                  ),
-                                  fallbackArtist: 'Unknown Artist',
-                                  durationText: item.durationText,
-                                  durationMs: item.durationMs,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              trailing: Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.primary.withAlpha(20),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: PopupMenuButton<String>(
-                                  tooltip: LocaleProvider.tr(
-                                    'want_more_options',
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  icon: const Icon(Icons.more_vert, size: 20),
-                                  color: isAmoled
-                                      ? Colors.grey.shade900
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.surfaceContainerHigh,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  onSelected: (value) async {
-                                    if (value == 'favorites') {
-                                      await _addSongToFavorites(item);
-                                    } else if (value == 'playlist') {
-                                      await _showAddSongToPlaylistDialog(item);
-                                    } else if (value == 'download') {
-                                      await _downloadSingleSong(item);
-                                    }
-                                  },
-                                  itemBuilder: (context) => [
-                                    PopupMenuItem<String>(
-                                      value: 'favorites',
-                                      child: Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.favorite_outline_rounded,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              LocaleProvider.tr(
-                                                'add_to_favorites',
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    PopupMenuItem<String>(
-                                      value: 'playlist',
-                                      child: Row(
-                                        children: [
-                                          const Icon(
-                                            Icons.playlist_add_rounded,
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              LocaleProvider.tr(
-                                                'add_to_playlist',
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    PopupMenuItem<String>(
-                                      value: 'download',
-                                      child: Row(
-                                        children: [
-                                          const Icon(Icons.download_rounded),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Text(
-                                              LocaleProvider.tr('download'),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
+                            ).colorScheme.onSurfaceVariant,
                           ),
                         ),
-                      );
-                    },
+                      ),
+                      title: Text(
+                        item.title ?? 'Sin título',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      subtitle: Text(
+                        _artistWithDurationText(
+                          artist: item.artist?.replaceFirst(
+                            RegExp(r' - Topic$'),
+                            '',
+                          ),
+                          fallbackArtist: 'Unknown Artist',
+                          durationText: item.durationText,
+                          durationMs: item.durationMs,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      trailing: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.primary.withAlpha(20),
+                          shape: BoxShape.circle,
+                        ),
+                        child: PopupMenuButton<String>(
+                          tooltip: LocaleProvider.tr('want_more_options'),
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Icons.more_vert, size: 20),
+                          color: isAmoled
+                              ? Colors.grey.shade900
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHigh,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          onSelected: (value) async {
+                            if (value == 'favorites') {
+                              await _addSongToFavorites(item);
+                            } else if (value == 'playlist') {
+                              await _showAddSongToPlaylistDialog(item);
+                            } else if (value == 'download') {
+                              await _downloadSingleSong(item);
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem<String>(
+                              value: 'favorites',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.favorite_outline_rounded),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      LocaleProvider.tr('add_to_favorites'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'playlist',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.playlist_add_rounded),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      LocaleProvider.tr('add_to_playlist'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem<String>(
+                              value: 'download',
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.download_rounded),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(LocaleProvider.tr('download')),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ],
-            ),
+              );
+            },
           ),
         );
       },
@@ -2343,21 +2313,25 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   }
 
   Future<void> _addSongsToFavorites(List<YtMusicResult> items) async {
-    final validItems = items
-        .where((item) => item.videoId?.trim().isNotEmpty == true)
-        .toList();
-    if (validItems.isEmpty) return;
+    final itemsInDisplayOrder = <YtMusicResult>[];
+    final seenVideoIds = <String>{};
 
-    final addedVideoIds = <String>{};
-
-    for (final item in validItems) {
+    for (final item in items) {
       final videoId = item.videoId?.trim();
       if (videoId == null || videoId.isEmpty) continue;
-      if (!addedVideoIds.add(videoId)) continue;
+      if (!seenVideoIds.add(videoId)) continue;
+      itemsInDisplayOrder.add(item);
+    }
+
+    if (itemsInDisplayOrder.isEmpty) return;
+
+    // Favorites se muestran en orden inverso de insercion.
+    // Insertamos al reves para preservar el orden visual de arriba hacia abajo.
+    for (final item in itemsInDisplayOrder.reversed) {
       await _addSongToFavorites(item, notifyReload: false);
     }
 
-    if (addedVideoIds.isNotEmpty) {
+    if (seenVideoIds.isNotEmpty) {
       favoritesShouldReload.value = !favoritesShouldReload.value;
     }
   }
@@ -2779,7 +2753,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final textController = TextEditingController();
 
     Future<void> addItemsToPlaylist(String playlistId) async {
+      final itemsInDisplayOrder = <YtMusicResult>[];
+      final seenVideoIds = <String>{};
       for (final item in validItems) {
+        final videoId = item.videoId?.trim();
+        if (videoId == null || videoId.isEmpty) continue;
+        if (!seenVideoIds.add(videoId)) continue;
+        itemsInDisplayOrder.add(item);
+      }
+
+      for (final item in itemsInDisplayOrder) {
         final videoId = item.videoId?.trim();
         if (videoId == null || videoId.isEmpty) continue;
         await PlaylistsDB().addSongPathToPlaylist(
@@ -3241,7 +3224,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final textController = TextEditingController();
 
     Future<void> addItemsToPlaylist(String playlistId) async {
+      final itemsInDisplayOrder = <YtMusicResult>[];
+      final seenVideoIds = <String>{};
       for (final item in items) {
+        final videoId = item.videoId?.trim();
+        if (videoId == null || videoId.isEmpty) continue;
+        if (!seenVideoIds.add(videoId)) continue;
+        itemsInDisplayOrder.add(item);
+      }
+
+      for (final item in itemsInDisplayOrder) {
         final videoId = item.videoId?.trim();
         if (videoId == null || videoId.isEmpty) continue;
         await PlaylistsDB().addSongPathToPlaylist(
