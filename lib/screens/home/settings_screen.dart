@@ -51,7 +51,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _currentLanguage = 'es';
   String? _downloadDirectory;
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
-  String _coverQuality = 'high'; // 'high', 'medium', 'low'
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
   AppColorScheme _currentColorScheme = AppColorScheme.amoled;
   int _artworkQuality = 410; // 80% por defecto
@@ -65,7 +64,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadLanguage();
     _loadDownloadDirectory();
     _loadDownloadType();
-    _loadCoverQuality();
     _loadAudioQuality();
     _loadColorScheme();
     _loadArtworkQuality();
@@ -1391,35 +1389,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     downloadTypeNotifier.value = _downloadTypeExplode;
   }
 
-  Future<void> _loadCoverQuality() async {
-    final prefs = await SharedPreferences.getInstance();
-    String quality =
-        prefs.getString('cover_quality') ??
-        (prefs.getBool('cover_quality_high') == false ? 'low' : 'high');
-
-    if (quality != 'high' && quality != 'medium' && quality != 'low') {
-      quality = 'high';
-    }
-
-    // Migración: persistir en el nuevo key si venimos del booleano anterior
-    await prefs.setString('cover_quality', quality);
-    setState(() {
-      _coverQuality = quality;
-    });
-    // Actualizar el notifier global
-    coverQualityNotifier.value = quality;
-  }
-
-  Future<void> _setCoverQuality(String quality) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('cover_quality', quality);
-    setState(() {
-      _coverQuality = quality;
-    });
-    // Actualizar el notifier global
-    coverQualityNotifier.value = quality;
-  }
-
   Future<void> _loadAudioQuality() async {
     final prefs = await SharedPreferences.getInstance();
     final quality = prefs.getString('audio_quality') ?? 'high';
@@ -1611,167 +1580,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showCoverQualitySelection() async {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return ValueListenableBuilder<AppColorScheme>(
-          valueListenable: colorSchemeNotifier,
-          builder: (context, colorScheme, child) {
-            final isAmoled = colorScheme == AppColorScheme.amoled;
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            final primaryColor = Theme.of(context).colorScheme.primary;
-
-            return AlertDialog(
-              backgroundColor: isAmoled && isDark
-                  ? Colors.black
-                  : Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(28),
-                side: isAmoled && isDark
-                    ? const BorderSide(color: Colors.white24, width: 1)
-                    : BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
-              content: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: 400,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.image_rounded,
-                      size: 32,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    const SizedBox(height: 16),
-                    TranslatedText(
-                      'cover_quality',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: TranslatedText(
-                        'cover_quality_desc',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withAlpha(180),
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildCoverQualityOption(
-                      context: context,
-                      title: LocaleProvider.tr('high_quality'),
-                      value: 'high',
-                      isSelected: _coverQuality == 'high',
-                    ),
-                    _buildCoverQualityOption(
-                      context: context,
-                      title: LocaleProvider.tr('medium_quality'),
-                      value: 'medium',
-                      isSelected: _coverQuality == 'medium',
-                    ),
-                    _buildCoverQualityOption(
-                      context: context,
-                      title: LocaleProvider.tr('low_quality'),
-                      value: 'low',
-                      isSelected: _coverQuality == 'low',
-                    ),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 24, bottom: 8),
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: TranslatedText(
-                            'cancel',
-                            style: TextStyle(
-                              color: primaryColor,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildCoverQualityOption({
-    required BuildContext context,
-    required String title,
-    required String value,
-    required bool isSelected,
-  }) {
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
-    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: InkWell(
-        onTap: () async {
-          if (!isSelected) {
-            await _setCoverQuality(value);
-          }
-          if (context.mounted) Navigator.of(context).pop();
-        },
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          decoration: BoxDecoration(
-            color: isSelected ? primaryColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                isSelected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
-                color: isSelected ? onPrimaryColor : onSurfaceColor,
-                size: 24,
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: isSelected
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                    color: isSelected ? onPrimaryColor : onSurfaceColor,
-                  ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -3594,58 +3402,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       borderRadius: BorderRadius.all(Radius.circular(4)),
                     ),
                     onTap: () => _showAudioQualitySelection(),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 4),
-            Card(
-              color: cardColor,
-              margin: EdgeInsets.zero,
-              elevation: 0,
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(4),
-                  topRight: Radius.circular(4),
-                  bottomLeft: Radius.circular(4),
-                  bottomRight: Radius.circular(4),
-                ),
-              ),
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(
-                      Icons.add_photo_alternate,
-                      weight: 600,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    title: TranslatedText(
-                      'cover_quality',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    subtitle: TranslatedText(
-                      'cover_quality_desc',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.9),
-                      ),
-                    ),
-                    trailing: IconButton(
-                      icon: Icon(
-                        Icons.arrow_drop_down,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      onPressed: () => _showCoverQualitySelection(),
-                    ),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(4)),
-                    ),
-                    onTap: () => _showCoverQualitySelection(),
                   ),
                 ],
               ),
