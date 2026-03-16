@@ -1007,6 +1007,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _currentAlbum = null;
       _playlistSongs = [];
       _currentPlaylist = null;
+      _selectedIndexes.clear();
+      _isSelectionMode = false;
       _searchSessionId++;
     });
     if (_tabScrollController.hasClients) {
