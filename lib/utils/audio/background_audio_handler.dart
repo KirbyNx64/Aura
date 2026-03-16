@@ -8,7 +8,6 @@ import 'dart:collection';
 import 'dart:math';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import 'album_art_cache_manager.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
@@ -2539,12 +2538,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Abortar si ya no es la canción actual.
     if (isStale()) return null;
 
-    // Migración puntual desde cache legado (v1) a v3 recortado.
+    // Usamos cache v4 sin recorte para preservar la carátula original.
     try {
       final tempDir = await getTemporaryDirectory();
-      final v3File = File('${tempDir.path}/yt_stream_art_v3_$videoId.jpg');
-      if (await v3File.exists() && await v3File.length() > 0) {
-        final uri = Uri.file(v3File.path);
+      final v4File = File('${tempDir.path}/yt_stream_art_v4_$videoId.jpg');
+      if (await v4File.exists() && await v4File.length() > 0) {
+        final uri = Uri.file(v4File.path);
         _streamArtworkFileCache[videoId] = uri;
         return uri;
       }
@@ -2553,21 +2552,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       final legacyFile = File('${tempDir.path}/yt_stream_art_$videoId.jpg');
       if (await legacyFile.exists() && await legacyFile.length() > 0) {
-        final bytes = await legacyFile.readAsBytes();
-        final decoded = img.decodeImage(bytes);
-        if (decoded != null) {
-          final square = _buildStreamingSquareCrop(
-            image: decoded,
-            imageUrl: remoteUri.toString(),
-          );
-          await v3File.writeAsBytes(
-            img.encodeJpg(square, quality: 88),
-            flush: false,
-          );
-          final uri = Uri.file(v3File.path);
-          _streamArtworkFileCache[videoId] = uri;
-          return uri;
-        }
+        await legacyFile.copy(v4File.path);
+        final uri = Uri.file(v4File.path);
+        _streamArtworkFileCache[videoId] = uri;
+        return uri;
       }
     } catch (_) {}
 
@@ -2607,45 +2595,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
-  img.Image _buildStreamingSquareCrop({
-    required img.Image image,
-    required String imageUrl,
-  }) {
-    final w = image.width;
-    final h = image.height;
-    if (w <= 0 || h <= 0) return image;
-
-    final ratio = w / h;
-    final isHqLike =
-        imageUrl.contains('hqdefault') || imageUrl.contains('sddefault');
-
-    // Forzar recorte físico: para horizontales aplicamos recorte vertical tipo preview.
-    if (isHqLike || ratio > 1.1) {
-      final contentHeight = (h * 0.75).round();
-      final offsetY = (h - contentHeight) ~/ 2;
-      final side = w < contentHeight ? w : contentHeight;
-      final offsetX = (w - side) ~/ 2;
-      return img.copyCrop(
-        image,
-        x: offsetX,
-        y: offsetY,
-        width: side,
-        height: side,
-      );
-    }
-
-    final side = w < h ? w : h;
-    final offsetX = (w - side) ~/ 2;
-    final offsetY = (h - side) ~/ 2;
-    return img.copyCrop(
-      image,
-      x: offsetX,
-      y: offsetY,
-      width: side,
-      height: side,
-    );
-  }
-
   Future<Uri?> _downloadStreamingArtworkToFile(
     String videoId,
     Uri remoteUri, {
@@ -2674,31 +2623,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final bytes = await consolidateHttpClientResponseBytes(response);
       if (bytes.isEmpty) return null;
 
-      // Verificar antes de procesamiento de imagen (CPU-intensivo).
-      if (isStale()) return null;
-
-      List<int> outputBytes = bytes;
-      try {
-        final decoded = img.decodeImage(bytes);
-        if (decoded != null) {
-          // Último check antes de la operación más costosa (crop + encode).
-          if (isStale()) return null;
-          final square = _buildStreamingSquareCrop(
-            image: decoded,
-            imageUrl: remoteUri.toString(),
-          );
-          outputBytes = img.encodeJpg(square, quality: 88);
-        }
-      } catch (_) {
-        outputBytes = bytes;
-      }
-
       if (isStale()) return null;
 
       final tempDir = await getTemporaryDirectory();
-      // v3 invalida archivos previos no recortados que Android pudo cachear.
-      final file = File('${tempDir.path}/yt_stream_art_v3_$videoId.jpg');
-      await file.writeAsBytes(outputBytes, flush: true);
+      // v4 invalida el cache recortado anterior para usar la carátula completa.
+      final file = File('${tempDir.path}/yt_stream_art_v4_$videoId.jpg');
+      await file.writeAsBytes(bytes, flush: true);
       return Uri.file(file.path);
     } catch (_) {
       return null;
