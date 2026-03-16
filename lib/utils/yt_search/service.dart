@@ -2989,6 +2989,10 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
   ]);
   if (thumbnails is List && thumbnails.isNotEmpty) {
     thumbUrl = thumbnails.last['url'];
+    if (thumbUrl != null) {
+      // Mantener la misma normalizacion de miniaturas que en busqueda general.
+      thumbUrl = _cleanThumbnailUrl(thumbUrl);
+    }
   }
 
   return YtMusicResult(
