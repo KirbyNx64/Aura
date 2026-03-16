@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,66 +12,14 @@ import 'package:music/screens/download/stream_provider.dart';
 import 'package:audiotags/audiotags.dart';
 // import 'package:path/path.dart' as p;
 // import 'package:music/main.dart';
-import 'package:image/image.dart' as img;
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/utils/notifiers.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:music/services/download_history_service.dart';
 import 'package:music/models/download_record.dart';
 import 'package:path/path.dart' as path;
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/download_history_hive.dart';
-
-// Top-level function para usar con compute
-Uint8List? decodeAndCropImage(Uint8List bytes) {
-  final original = img.decodeImage(bytes);
-  if (original != null) {
-    final minSide = original.width < original.height
-        ? original.width
-        : original.height;
-    final offsetX = (original.width - minSide) ~/ 2;
-    final offsetY = (original.height - minSide) ~/ 2;
-    final square = img.copyCrop(
-      original,
-      x: offsetX,
-      y: offsetY,
-      width: minSide,
-      height: minSide,
-    );
-    return Uint8List.fromList(img.encodeJpg(square));
-  }
-  return null;
-}
-
-// Top-level function para recortar imágenes hqdefault (elimina franjas negras)
-Uint8List? decodeAndCropImageHQ(Uint8List bytes) {
-  final original = img.decodeImage(bytes);
-  if (original != null) {
-    // Para hqdefault (480x360), el contenido real está en el centro
-    // Las franjas negras están arriba y abajo
-    final width = original.width;
-    final height = original.height;
-
-    // Calcular el área de contenido real (aproximadamente 75% del centro)
-    final contentHeight = (height * 0.75).round();
-    final offsetY = (height - contentHeight) ~/ 2;
-
-    // Crear un cuadrado del área de contenido
-    final minSide = width < contentHeight ? width : contentHeight;
-    final offsetX = (width - minSide) ~/ 2;
-
-    final square = img.copyCrop(
-      original,
-      x: offsetX,
-      y: offsetY,
-      width: minSide,
-      height: minSide,
-    );
-    return Uint8List.fromList(img.encodeJpg(square));
-  }
-  return null;
-}
 
 class DownloadManager {
   static final DownloadManager _instance = DownloadManager._internal();
@@ -169,6 +118,7 @@ class DownloadManager {
     bool? usarExplode,
     bool? usarFFmpeg,
     String? songTitle,
+    String? preferredThumbUrl,
   }) async {
     // Usar parámetros proporcionados o valores por defecto
     final dirPath = directoryPath ?? _directoryPath;
@@ -194,9 +144,21 @@ class DownloadManager {
 
     try {
       if (explode) {
-        await _downloadAudioOnlyExplode(url, dirPath, ffmpeg, songTitle);
+        await _downloadAudioOnlyExplode(
+          url,
+          dirPath,
+          ffmpeg,
+          songTitle,
+          preferredThumbUrl,
+        );
       } else {
-        await _downloadAudioOnly(url, dirPath, ffmpeg, songTitle);
+        await _downloadAudioOnly(
+          url,
+          dirPath,
+          ffmpeg,
+          songTitle,
+          preferredThumbUrl,
+        );
       }
     } catch (e) {
       if (e is VideoUnplayableException) {
@@ -218,6 +180,7 @@ class DownloadManager {
     String directoryPath,
     bool usarFFmpeg,
     String? songTitle,
+    String? preferredThumbUrl,
   ) async {
     final yt = _getYoutubeExplode();
     try {
@@ -246,12 +209,10 @@ class DownloadManager {
           : (await getApplicationDocumentsDirectory()).path;
       final filePath = '$saveDir/$safeTitle.m4a';
 
-      // Descargar portada
-      final prefs = await SharedPreferences.getInstance();
-      final coverQuality = _getCoverQualityPref(prefs);
+      // Descargar portada con estrategia fija por videoId.
       final coverBytes = await _downloadCover(
         video.id.toString(),
-        quality: coverQuality,
+        preferredThumbUrl: preferredThumbUrl,
       );
 
       onInfoUpdate?.call(video.title, video.author, coverBytes);
@@ -303,6 +264,7 @@ class DownloadManager {
     String directoryPath,
     bool usarFFmpeg,
     String? songTitle,
+    String? preferredThumbUrl,
   ) async {
     // Extraer videoId de la URL
     final videoId = VideoId.parseVideoId(url);
@@ -383,12 +345,10 @@ class DownloadManager {
         ? directoryPath
         : (await getApplicationDocumentsDirectory()).path;
 
-    // Descargar portada
-    final prefs = await SharedPreferences.getInstance();
-    final coverQuality = _getCoverQualityPref(prefs);
+    // Descargar portada con estrategia fija por videoId.
     final coverBytes = await _downloadCover(
       video.id.toString(),
-      quality: coverQuality,
+      preferredThumbUrl: preferredThumbUrl,
     );
 
     onInfoUpdate?.call(video.title, video.author, coverBytes);
@@ -751,30 +711,54 @@ class DownloadManager {
     return await Future.sync(() => func());
   }
 
-  String _getCoverQualityPref(SharedPreferences prefs) {
-    final q = prefs.getString('cover_quality');
-    if (q == 'high' || q == 'medium' || q == 'low') return q!;
-    final old = prefs.getBool('cover_quality_high');
-    return old == false ? 'low' : 'high';
-  }
-
   Future<Uint8List?> _downloadCover(
     String videoId, {
-    required String quality, // 'high', 'medium', 'low'
+    String? preferredThumbUrl,
   }) async {
     final coverUrlMax = 'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
     final coverUrlSD = 'https://img.youtube.com/vi/$videoId/sddefault.jpg';
     final coverUrlHQ = 'https://img.youtube.com/vi/$videoId/hqdefault.jpg';
 
     Uint8List? bytes;
-    String? usedUrl;
     final client = HttpClient();
     try {
-      final List<String> urlsToTry = switch (quality) {
-        'high' => [coverUrlMax, coverUrlSD, coverUrlHQ],
-        'medium' => [coverUrlSD, coverUrlHQ],
-        _ => [coverUrlHQ],
-      };
+      final preferred = preferredThumbUrl?.trim();
+      if (preferred != null && preferred.isNotEmpty) {
+        try {
+          final preferredUri = Uri.tryParse(preferred);
+          File? preferredFile;
+
+          if (preferredUri != null && preferredUri.scheme == 'file') {
+            preferredFile = File(preferredUri.toFilePath());
+          } else if (preferredUri == null || preferredUri.scheme.isEmpty) {
+            preferredFile = File(preferred);
+          }
+
+          if (preferredFile != null && await preferredFile.exists()) {
+            final localBytes = await preferredFile.readAsBytes();
+            if (localBytes.isNotEmpty) {
+              return localBytes;
+            }
+          }
+        } catch (_) {
+          // Si falla lectura local, continuar con descarga remota.
+        }
+      }
+
+      final urlsToTry = <String>[];
+      void addCandidate(String? url) {
+        final value = url?.trim();
+        if (value == null || value.isEmpty) return;
+        if (!urlsToTry.contains(value)) {
+          urlsToTry.add(value);
+        }
+      }
+
+      // Igual que streaming: priorizar miniatura preferida si existe.
+      addCandidate(preferredThumbUrl);
+      addCandidate(coverUrlMax);
+      addCandidate(coverUrlSD);
+      addCandidate(coverUrlHQ);
 
       // Intento principal con HttpClient (más rápido / streaming)
       try {
@@ -782,8 +766,9 @@ class DownloadManager {
           final request = await client.getUrl(Uri.parse(url));
           final response = await request.close();
           if (response.statusCode == 200) {
-            bytes = Uint8List.fromList(await _consolidateResponseBytes(response));
-            usedUrl = url;
+            bytes = Uint8List.fromList(
+              await _consolidateResponseBytes(response),
+            );
             break;
           }
         }
@@ -797,7 +782,6 @@ class DownloadManager {
           final httpResponse = await http.get(Uri.parse(url));
           if (httpResponse.statusCode == 200) {
             bytes = httpResponse.bodyBytes;
-            usedUrl = url;
             break;
           }
         }
@@ -805,14 +789,6 @@ class DownloadManager {
 
       if (bytes == null) {
         throw Exception('No se pudo descargar ninguna portada');
-      }
-
-      // Recortar a cuadrado centrado según la calidad
-      final isMaxRes = usedUrl?.contains('maxresdefault') == true;
-      final cropFn = isMaxRes ? decodeAndCropImage : decodeAndCropImageHQ;
-      final croppedBytes = await compute(cropFn, bytes);
-      if (croppedBytes != null) {
-        bytes = croppedBytes;
       }
     } finally {
       client.close();

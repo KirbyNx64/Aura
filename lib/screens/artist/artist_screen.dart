@@ -1578,6 +1578,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       videoId,
       item.title ?? LocaleProvider.tr('title_unknown'),
       item.artist ?? LocaleProvider.tr('artist_unknown'),
+      thumbUrl: item.thumbUrl,
     );
   }
 
@@ -1596,6 +1597,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         artist:
             song.artist?.replaceFirst(RegExp(r' - Topic$'), '') ??
             'Artista desconocido',
+        thumbUrl: song.thumbUrl,
       );
     }
 

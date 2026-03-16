@@ -1255,6 +1255,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     RegExp(r' - Topic$'),
                     '',
                   ),
+                  thumbUrl:
+                      'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
                 );
                 _showMessage(
                   LocaleProvider.tr('success'),
@@ -2243,6 +2245,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       artist:
           item.artist?.replaceFirst(RegExp(r' - Topic$'), '') ??
           LocaleProvider.tr('artist_unknown'),
+      thumbUrl: item.thumbUrl,
     );
     _showMessage(
       LocaleProvider.tr('success'),
@@ -2266,6 +2269,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         artist:
             item.artist?.replaceFirst(RegExp(r' - Topic$'), '') ??
             LocaleProvider.tr('artist_unknown'),
+        thumbUrl: item.thumbUrl,
       );
     }
 

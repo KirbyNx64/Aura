@@ -2188,6 +2188,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final artist = (mediaItem.artist ?? '').trim().isNotEmpty
         ? mediaItem.artist!.trim()
         : LocaleProvider.tr('artist_unknown');
+    final preferredThumbUrl =
+        mediaItem.extras?['displayArtUri']?.toString().trim().isNotEmpty == true
+        ? mediaItem.extras!['displayArtUri'].toString().trim()
+        : mediaItem.artUri?.toString();
 
     final downloadQueue = DownloadQueue();
     await downloadQueue.addToQueue(
@@ -2195,6 +2199,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       videoId: videoId,
       title: mediaItem.title,
       artist: artist,
+      thumbUrl: preferredThumbUrl,
     );
     if (!context.mounted) return;
     await _showDownloadStartedDialog(context);

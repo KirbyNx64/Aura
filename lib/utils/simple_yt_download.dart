@@ -58,12 +58,14 @@ class DownloadQueue {
     required String videoId,
     required String title,
     required String artist,
+    String? thumbUrl,
   }) async {
     final task = DownloadTask(
       context: context,
       videoId: videoId,
       title: title,
       artist: artist,
+      thumbUrl: thumbUrl,
       notificationId: _nextNotificationId++, // Asignar ID único
     );
 
@@ -174,7 +176,11 @@ class DownloadQueue {
       },
     );
 
-    await downloadManager.downloadAudio(url: videoUrl, songTitle: task.title);
+    await downloadManager.downloadAudio(
+      url: videoUrl,
+      songTitle: task.title,
+      preferredThumbUrl: task.thumbUrl,
+    );
   }
 
   // Método seguro para mostrar diálogo verificando si el contexto sigue válido
@@ -230,6 +236,7 @@ class DownloadTask {
   final String videoId;
   final String title;
   final String artist;
+  final String? thumbUrl;
   final int notificationId; // Nuevo campo para el ID de notificación
 
   DownloadTask({
@@ -237,6 +244,7 @@ class DownloadTask {
     required this.videoId,
     required this.title,
     required this.artist,
+    this.thumbUrl,
     required this.notificationId,
   });
 }
@@ -247,8 +255,9 @@ class SimpleYtDownload {
   static Future<void> downloadVideo(
     BuildContext context,
     String videoId,
-    String title,
-  ) async {
+    String title, {
+    String? thumbUrl,
+  }) async {
     // Agregar la descarga a la cola (los callbacks ya están configurados globalmente)
     final downloadQueue = DownloadQueue();
     await downloadQueue.addToQueue(
@@ -256,6 +265,7 @@ class SimpleYtDownload {
       videoId: videoId,
       title: title,
       artist: title, // Usar el título como artista por defecto
+      thumbUrl: thumbUrl,
     );
   }
 
@@ -264,8 +274,9 @@ class SimpleYtDownload {
     BuildContext context,
     String videoId,
     String title,
-    String artist,
-  ) async {
+    String artist, {
+    String? thumbUrl,
+  }) async {
     // Agregar la descarga a la cola (los callbacks ya están configurados globalmente)
     final downloadQueue = DownloadQueue();
     await downloadQueue.addToQueue(
@@ -273,6 +284,7 @@ class SimpleYtDownload {
       videoId: videoId,
       title: title,
       artist: artist,
+      thumbUrl: thumbUrl,
     );
   }
 }

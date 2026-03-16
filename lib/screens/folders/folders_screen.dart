@@ -1922,6 +1922,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       videoId,
       item.title,
       item.artist,
+      thumbUrl: item.artUri,
     );
   }
 

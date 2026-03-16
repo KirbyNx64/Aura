@@ -1287,6 +1287,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       videoId,
       item.title,
       item.artist,
+      thumbUrl: item.artUri,
     );
   }
 
