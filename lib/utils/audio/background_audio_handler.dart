@@ -381,6 +381,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   String? _lastProcessedSongId;
   final Map<String, bool> _pendingArtworkOperations = {};
   final Set<String> _favoriteIds = {};
+  // Cache de videoId → resultado de búsqueda en DB para evitar consultas
+  // repetidas en cada cambio de canción. Se invalida al modificar la DB.
+  final Map<String, bool> _mediaItemFlagCache = {};
 
   // Control de notificaciones del sistema
   Timer? _notificationUpdateTimer;
@@ -683,6 +686,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _currentIndexSubscription = _player.currentIndexStream.listen((index) {
         if (_initializing) return;
         if (_deferredStreamingQueueMode) {
+          // Mientras _isSwappingSource, el concat hace clear()+add() que dispara
+          // un cambio en currentIndex. No debemos re-procesar: ya se maneja
+          // en _resolveAndPlayDeferredStreamingIndex. Esto evita ejecutar
+          // _syncFavoriteFlagForItem + _updateCurrentStreamingArtwork de más.
+          if (_isSwappingSource) return;
           if (_mediaQueue.isEmpty) return;
           final effectiveIndex = _deferredStreamingQueueIndex.clamp(
             0,
@@ -1111,33 +1119,52 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final videoId = _streamingVideoIdForMediaItem(item);
     if (videoId == null || videoId.isEmpty) return null;
 
+    // Consultar cache en memoria antes de hacer accesos costosos a la DB.
+    final cached = _mediaItemFlagCache[videoId];
+    if (cached == false) return null;
+
     final favoritePaths = await FavoritesDB().getFavoritePaths();
     for (final raw in favoritePaths) {
       final path = raw.trim();
       if (path.isEmpty) continue;
       if (path == 'yt:$videoId' || path == videoId) {
+        _mediaItemFlagCache[videoId] = true;
         return path;
       }
     }
 
+    // Segundo pase: solo extraer videoId de las rutas (sin consultar meta DB),
+    // ya que getFavoriteMeta por cada favorito es O(n) accesos a disco.
     for (final raw in favoritePaths) {
       final path = raw.trim();
       if (path.isEmpty) continue;
+      final extractedVideoId = _extractVideoIdFromFavoritePath(path);
+      if (extractedVideoId != null && extractedVideoId == videoId) {
+        _mediaItemFlagCache[videoId] = true;
+        return path;
+      }
+    }
+
+    // Tercer pase: solo si los métodos anteriores fallan, consultar meta.
+    // Esto es raro y solo ocurre con favoritos guardados sin formato conocido.
+    for (final raw in favoritePaths) {
+      final path = raw.trim();
+      if (path.isEmpty) continue;
+      // Evitar re-verificar paths que ya se cubrieron en pases anteriores.
+      if (path == 'yt:$videoId' || path == videoId) continue;
+      if (_extractVideoIdFromFavoritePath(path) != null) continue;
 
       final meta = await FavoritesDB().getFavoriteMeta(path);
       final metaVideoId = meta?['videoId']?.toString().trim();
       if (metaVideoId != null &&
           metaVideoId.isNotEmpty &&
           metaVideoId == videoId) {
-        return path;
-      }
-
-      final extractedVideoId = _extractVideoIdFromFavoritePath(path);
-      if (extractedVideoId != null && extractedVideoId == videoId) {
+        _mediaItemFlagCache[videoId] = true;
         return path;
       }
     }
 
+    _mediaItemFlagCache[videoId] = false;
     return null;
   }
 
@@ -2153,14 +2180,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       ),
     );
 
-    unawaited(
-      _updateCurrentStreamingArtwork(
-        index: targetIndex,
-        currentMediaItem: currentItem,
-        currentSongId: currentItem.id,
-        trackGeneration: true,
-      ),
-    );
+    // La primera actualización de artwork se pospone: será llamada con el
+    // item actualizado (con streamUrl) en la parte final de esta función.
+    // Esto evita una descarga doble de carátula por cada skip.
 
     if (isSuperseded() || !isStillSelectedTarget()) return false;
 
@@ -3733,7 +3755,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _deferredStreamingQueueIndex = targetIndex;
     final item = _mediaQueue[targetIndex];
     mediaItem.add(item);
-    unawaited(_syncFavoriteFlagForItem(item));
+    // La sincronización de flags se hace una sola vez dentro de
+    // _resolveAndPlayDeferredStreamingIndex para evitar duplicar la
+    // consulta costosa a la DB en cada skip.
     playbackState.add(
       playbackState.value.copyWith(
         queueIndex: targetIndex,
@@ -4805,6 +4829,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final existingFavoriteKey = await _findExistingFavoriteStorageKey(item);
       final isFav =
           _favoriteIds.contains(item.id) || existingFavoriteKey != null;
+      // Invalidar cache de flags para que el siguiente skip refleje el cambio.
+      final videoIdForCache = _streamingVideoIdForMediaItem(item);
+      if (videoIdForCache != null && videoIdForCache.isNotEmpty) {
+        _mediaItemFlagCache.remove(videoIdForCache);
+      }
+
       if (isFav) {
         final keyToRemove = existingFavoriteKey ?? favoritePath;
         await FavoritesDB().removeFavorite(keyToRemove);
