@@ -84,6 +84,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/icon.png
+    - assets/icon.ico
     - assets/icon/icon_foreground.svg
     - assets/icon/Youtube_logo.png
     - assets/icon/Youtube_Music_icon.png

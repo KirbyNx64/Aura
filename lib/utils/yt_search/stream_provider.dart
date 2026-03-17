@@ -467,9 +467,11 @@ class StreamService {
         } catch (e) {
           // Fallback defensivo: si el isolate falla por plataforma/estado,
           // resolver en el isolate actual para no romper reproducción.
+          /*
           print(
             '[STREAM_PROVIDER] Isolate.run failed for $videoId: $e. Falling back to direct resolve.',
           );
+          */
           streamInfo = await _resolveBestAudioStreamInfoInIsolate(
             videoId,
             null,
@@ -478,24 +480,26 @@ class StreamService {
 
         if (_isResolveCancelled(requestGeneration)) return null;
         if (streamInfo == null) {
-          print('[STREAM_PROVIDER] streamInfo is null for $videoId');
+          // print('[STREAM_PROVIDER] streamInfo is null for $videoId');
           _setLastResolveErrorCode(videoId, 'unknown');
           return null;
         }
 
         final errorCode = streamInfo['errorCode']?.toString();
-        final errorMessage = streamInfo['errorMessage']?.toString();
+        // final errorMessage = streamInfo['errorMessage']?.toString();
         if (errorCode != null && errorCode.isNotEmpty) {
-          print(
+          /*
+          debugPrint(
             '[STREAM_PROVIDER] Resolve error for $videoId: code=$errorCode message=${errorMessage ?? 'n/a'}',
           );
+          */
           _setLastResolveErrorCode(videoId, errorCode);
           return null;
         }
 
         final resolvedUrl = streamInfo['url']?.toString();
         if (resolvedUrl == null || resolvedUrl.isEmpty) {
-          print('[STREAM_PROVIDER] Missing resolved URL for $videoId');
+          // print('[STREAM_PROVIDER] Missing resolved URL for $videoId');
           _setLastResolveErrorCode(videoId, 'unknown');
           return null;
         }

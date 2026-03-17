@@ -2465,6 +2465,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       final item = _mediaQueue[idx];
       if (!_isStreamingMediaItem(item)) continue;
+      if (item.extras?['radioGenerated'] == true) continue;
 
       final artUri = item.artUri;
       if (artUri == null) continue;
@@ -2509,6 +2510,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ? rawVideoId
         : currentMediaItem.id.replaceFirst('yt:', '').trim();
     if (videoId.isEmpty) return;
+
+    // Para pistas agregadas por radio, evitamos I/O local de carátula en cada
+    // cambio para priorizar fluidez del skip en cola diferida.
+    if (currentMediaItem.extras?['radioGenerated'] == true) return;
 
     // Para notificación: usar versión local recortada cuando esté disponible.
     // Pasar la generación actual para que descargas obsoletas se cancelen.
@@ -2676,6 +2681,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'videoId': videoId,
         'isStreaming': true,
         'radioMode': true,
+        'radioGenerated': true,
         'streamUrl': rawTrack['streamUrl']?.toString().trim(),
         'displayArtUri': resolvedDisplayArtUri,
       },
@@ -2929,16 +2935,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
 
     _streamSessionVersion++;
-    _resolveGeneration++;
-    _artworkGeneration++;
-    _activeArtworkDownloads = 0;
     _streamRadioAppendInProgress = false;
     _streamRadioInitialBatchLoaded = false;
     _streamRadioEnabled = true;
     _streamRadioSeedVideoId = seedVideoId;
     _streamRadioContinuationParams = null;
-    _streamArtworkPreloadTasks.clear();
-    _streamUrlPrefetchTasks.clear();
 
     if (replaceQueue && currentIndex < _mediaQueue.length - 1) {
       final removed = _mediaQueue.length - (currentIndex + 1);
@@ -2976,7 +2977,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final normalizedExtras = <String, dynamic>{
         ...?item.extras,
         'isStreaming': true,
-        'radioMode': true,
+        'radioMode': false,
+        'radioGenerated': item.extras?['radioGenerated'] == true,
         'queueIndex': i,
         if (itemVideoId.isNotEmpty) 'videoId': itemVideoId,
         'displayArtUri': resolvedDisplayArtUri,
@@ -3002,11 +3004,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         !_streamRadioInitialBatchLoaded) {
       await _ensureStreamingRadioQueue(force: true);
     }
-    // Desactivar procesos de radio para que el cambio de canciones sea igual de suave.
-    if (_mediaQueue.length >= targetSize || _streamRadioInitialBatchLoaded) {
-      _streamRadioEnabled = false;
-      _streamRadioTargetQueueSize = null;
-    }
+
+    // Modo one-shot: radio solo agrega canciones al iniciar.
+    // Después se desactiva para que los cambios se comporten como sin radio.
+    _streamRadioEnabled = false;
+    _streamRadioTargetQueueSize = null;
+
     debugPrint(
       '[RADIO_DEBUG] startRadio done queueSize=${_mediaQueue.length} initialBatchLoaded=$_streamRadioInitialBatchLoaded target=$targetSize radioEnabled=$_streamRadioEnabled',
     );
@@ -3068,6 +3071,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           'videoId': videoId,
           'isStreaming': true,
           'radioMode': _streamRadioEnabled,
+          'radioGenerated': false,
           'streamUrl': effectiveStreamUrl,
           'displayArtUri': resolvedDisplayArtUri,
           'queueIndex': queueIndex,
@@ -4400,7 +4404,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
     if (name == 'startStreamingRadioFromCurrent' ||
         extras?['action'] == 'startStreamingRadioFromCurrent') {
-      final replaceQueue = extras?['replaceQueue'] != false;
+      // Desde PlayerScreen, por defecto agregamos +50 sin recortar la cola.
+      final replaceQueue = extras?['replaceQueue'] == true;
       return _startStreamingRadioFromCurrent(replaceQueue: replaceQueue);
     }
     if (name == 'playYtStreamQueue' ||
@@ -4522,7 +4527,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       if (autoStartRadio) {
         final radioResult = await _startStreamingRadioFromCurrent(
-          replaceQueue: true,
+          replaceQueue: false,
         );
         debugPrint(
           '[RADIO_DEBUG] playYtStreamQueue autoStartRadio result=$radioResult',
