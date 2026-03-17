@@ -1,7 +1,157 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:music/utils/db/stream_cache_db.dart';
 import 'package:music/utils/notifiers.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
+import 'dart:isolate';
+
+String _classifyIsolateResolveError(String message) {
+  final lower = message.toLowerCase();
+
+  bool containsAny(List<String> tokens) {
+    for (final token in tokens) {
+      if (lower.contains(token)) return true;
+    }
+    return false;
+  }
+
+  if (containsAny(<String>[
+    'copyright',
+    'copyrighted',
+    'restricted',
+    'restriction',
+    'not available',
+    'unavailable',
+    'video unavailable',
+    'private',
+    'age-restricted',
+    'age restricted',
+    'members-only',
+    'members only',
+    'forbidden',
+    'status code: 403',
+    'error 403',
+    'geo',
+    'country',
+    'region',
+    'premium',
+  ])) {
+    return 'restricted';
+  }
+
+  if (containsAny(<String>[
+    'socketexception',
+    'httpexception',
+    'network',
+    'connection',
+    'dns',
+    'timeout',
+    'timed out',
+    'handshake',
+    'connection closed',
+    'connection reset',
+    'broken pipe',
+  ])) {
+    return 'network';
+  }
+
+  return 'unknown';
+}
+
+Future<Map<String, dynamic>?> _resolveBestAudioStreamInfoInIsolate(
+  String videoId,
+  RootIsolateToken? token,
+) async {
+  if (token != null) {
+    BackgroundIsolateBinaryMessenger.ensureInitialized(token);
+  }
+
+  final yt = YoutubeExplode();
+  try {
+    final manifest = await yt.videos.streamsClient.getManifest(videoId);
+    final preferredAudioCandidates = manifest.audioOnly.where((s) {
+      return s.codec.mimeType == 'audio/mp4' ||
+          s.codec.toString().contains('mp4a');
+    });
+
+    AudioOnlyStreamInfo? bestAudio;
+    for (final candidate in preferredAudioCandidates) {
+      if (bestAudio == null ||
+          candidate.bitrate.compareTo(bestAudio.bitrate) > 0) {
+        bestAudio = candidate;
+      }
+    }
+
+    // Fallback: algunos videos no exponen mp4a; intentar cualquier audio-only.
+    if (bestAudio == null) {
+      for (final candidate in manifest.audioOnly) {
+        if (bestAudio == null ||
+            candidate.bitrate.compareTo(bestAudio.bitrate) > 0) {
+          bestAudio = candidate;
+        }
+      }
+    }
+
+    if (bestAudio == null) {
+      return <String, dynamic>{
+        'errorCode': 'restricted',
+        'errorMessage': 'No audio streams available in manifest',
+      };
+    }
+
+    return <String, dynamic>{
+      'url': bestAudio.url.toString(),
+      'itag': bestAudio.tag,
+      'codec': bestAudio.codec.toString(),
+      'bitrate': bestAudio.bitrate.bitsPerSecond,
+      'size': bestAudio.size.totalBytes,
+      'duration': bestAudio.duration,
+      'loudnessDb': 0.0,
+    };
+  } on SocketException catch (e) {
+    return <String, dynamic>{
+      'errorCode': 'network',
+      'errorMessage': e.toString(),
+    };
+  } on HttpException catch (e) {
+    final msg = e.toString().toLowerCase();
+    return <String, dynamic>{
+      'errorCode': (msg.contains('403') || msg.contains('forbidden'))
+          ? 'restricted'
+          : 'network',
+      'errorMessage': e.toString(),
+    };
+  } on VideoRequiresPurchaseException catch (e) {
+    return <String, dynamic>{
+      'errorCode': 'restricted',
+      'errorMessage': e.toString(),
+    };
+  } on VideoUnavailableException catch (e) {
+    return <String, dynamic>{
+      'errorCode': 'restricted',
+      'errorMessage': e.toString(),
+    };
+  } on VideoUnplayableException catch (e) {
+    return <String, dynamic>{
+      'errorCode': 'restricted',
+      'errorMessage': e.toString(),
+    };
+  } on YoutubeExplodeException catch (e) {
+    return <String, dynamic>{
+      'errorCode': _classifyIsolateResolveError(e.toString()),
+      'errorMessage': e.toString(),
+    };
+  } catch (e) {
+    return <String, dynamic>{
+      'errorCode': _classifyIsolateResolveError(e.toString()),
+      'errorMessage': e.toString(),
+    };
+  } finally {
+    try {
+      yt.close();
+    } catch (_) {}
+  }
+}
 
 class StreamService {
   static final Map<String, String?> _urlCache = {};
@@ -12,11 +162,6 @@ class StreamService {
   static int _resolveGeneration = 0;
   static const int _maxPrefetchConcurrency = 8;
   static const Duration _urlExpirySafetyMargin = Duration(minutes: 5);
-
-  static YoutubeExplode _getYoutubeExplode() {
-    _ytInstance ??= YoutubeExplode();
-    return _ytInstance!;
-  }
 
   static void _recreateYoutubeExplode() {
     try {
@@ -312,36 +457,51 @@ class StreamService {
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
       if (_isResolveCancelled(requestGeneration)) return null;
       try {
-        final yt = _getYoutubeExplode();
-        final manifest = await yt.videos.streamsClient.getManifest(videoId);
-        if (_isResolveCancelled(requestGeneration)) return null;
-        final audio =
-            manifest.audioOnly
-                .where(
-                  (s) =>
-                      s.codec.mimeType == 'audio/mp4' ||
-                      s.codec.toString().contains('mp4a'),
-                )
-                .toList()
-              ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+        Map<String, dynamic>? streamInfo;
+        try {
+          final token = RootIsolateToken.instance;
+          // Mover parse/seleccion de manifest a otro isolate reduce jank en UI.
+          streamInfo = await Isolate.run<Map<String, dynamic>?>(
+            () => _resolveBestAudioStreamInfoInIsolate(videoId, token),
+          );
+        } catch (e) {
+          // Fallback defensivo: si el isolate falla por plataforma/estado,
+          // resolver en el isolate actual para no romper reproducción.
+          print(
+            '[STREAM_PROVIDER] Isolate.run failed for $videoId: $e. Falling back to direct resolve.',
+          );
+          streamInfo = await _resolveBestAudioStreamInfoInIsolate(
+            videoId,
+            null,
+          );
+        }
 
-        if (audio.isEmpty) {
-          _setLastResolveErrorCode(videoId, 'restricted');
+        if (_isResolveCancelled(requestGeneration)) return null;
+        if (streamInfo == null) {
+          print('[STREAM_PROVIDER] streamInfo is null for $videoId');
+          _setLastResolveErrorCode(videoId, 'unknown');
           return null;
         }
 
-        final bestAudio = audio.first;
+        final errorCode = streamInfo['errorCode']?.toString();
+        final errorMessage = streamInfo['errorMessage']?.toString();
+        if (errorCode != null && errorCode.isNotEmpty) {
+          print(
+            '[STREAM_PROVIDER] Resolve error for $videoId: code=$errorCode message=${errorMessage ?? 'n/a'}',
+          );
+          _setLastResolveErrorCode(videoId, errorCode);
+          return null;
+        }
+
+        final resolvedUrl = streamInfo['url']?.toString();
+        if (resolvedUrl == null || resolvedUrl.isEmpty) {
+          print('[STREAM_PROVIDER] Missing resolved URL for $videoId');
+          _setLastResolveErrorCode(videoId, 'unknown');
+          return null;
+        }
+
         _clearLastResolveErrorCode(videoId);
-        return {
-          'url': bestAudio.url.toString(),
-          'itag': bestAudio.tag,
-          'codec': bestAudio.codec.toString(),
-          'bitrate': bestAudio.bitrate.bitsPerSecond,
-          'size': bestAudio.size.totalBytes,
-          'duration': bestAudio.duration,
-          'loudnessDb':
-              0.0, // YouTube no proporciona esta información directamente
-        };
+        return streamInfo;
       } catch (e) {
         if (_isResolveCancelled(requestGeneration)) return null;
         final classified = _classifyResolveError(e);

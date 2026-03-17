@@ -418,11 +418,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   String? _streamRadioContinuationParams;
   bool _streamRadioAppendInProgress = false;
   bool _streamRadioInitialBatchLoaded = false;
+
   /// Si no es null, objetivo de tamaño de cola (p. ej. actual + 50 al activar desde player).
   int? _streamRadioTargetQueueSize;
   bool _deferredStreamingQueueMode = false;
   int _deferredStreamingQueueIndex = 0;
   DateTime _lastManualPlayPauseToggle = DateTime.fromMillisecondsSinceEpoch(0);
+  bool _manualDeferredSkipInProgress = false;
+  int _manualDeferredSkipGeneration = 0;
   final Random _random = Random();
   List<int> _deferredShuffleOrder = const <int>[];
   int _deferredShuffleCursor = 0;
@@ -580,6 +583,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               return;
             }
             if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
+              if (_manualDeferredSkipInProgress) {
+                debugPrint(
+                  '[RADIO_DEBUG] completed ignored while manual deferred skip is in progress',
+                );
+                return;
+              }
               final toggleElapsedMs = DateTime.now()
                   .difference(_lastManualPlayPauseToggle)
                   .inMilliseconds;
@@ -2698,7 +2707,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                 : (_player.currentIndex ?? 0))
             .clamp(0, _mediaQueue.length - 1);
     final int remaining = (_mediaQueue.length - 1) - currentIndex;
-    final int targetSize = _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
+    final int targetSize =
+        _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
     final int missingItems = targetSize - _mediaQueue.length;
     if (missingItems <= 0) {
       _streamRadioInitialBatchLoaded = true;
@@ -2828,7 +2838,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } finally {
       if (shouldLockRadioQueue && sessionVersion == _streamSessionVersion) {
         _streamRadioInitialBatchLoaded = true;
-        final target = _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
+        final target =
+            _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
         if (_mediaQueue.length >= target) {
           _streamRadioTargetQueueSize = null;
         }
@@ -2984,7 +2995,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     playbackState.add(playbackState.value.copyWith(queueIndex: currentIndex));
 
     // Cargar hasta alcanzar objetivo (actual + 50) sin interrumpir la reproducción actual.
-    final targetSize = _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
+    final targetSize =
+        _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
     while (_streamRadioEnabled &&
         _mediaQueue.length < targetSize &&
         !_streamRadioInitialBatchLoaded) {
@@ -3662,6 +3674,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Cancelar inmediatamente cualquier resolución previa en curso.
     _resolveGeneration++;
     final requestGeneration = _resolveGeneration;
+    _manualDeferredSkipInProgress = true;
+    _manualDeferredSkipGeneration = requestGeneration;
     // Cancelar resoluciones antiguas sin reiniciar el cliente de red para
     // conservar conexiones calientes y mantener transiciones suaves.
     StreamService.cancelPendingResolves(resetClient: false);
@@ -3712,12 +3726,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _streamResolveDebounceTimer?.cancel();
     _streamResolveDebounceTimer = Timer(_streamResolveDebounceDuration, () {
       unawaited(() async {
-        await _resolveAndPlayDeferredStreamingIndex(
-          targetIndex,
-          playAfterResolve: playAfterResolve,
-          expectedGeneration: requestGeneration,
-        );
-        _updateSleepTimer();
+        try {
+          await _resolveAndPlayDeferredStreamingIndex(
+            targetIndex,
+            playAfterResolve: playAfterResolve,
+            expectedGeneration: requestGeneration,
+          );
+          _updateSleepTimer();
+        } finally {
+          if (_manualDeferredSkipGeneration == requestGeneration) {
+            _manualDeferredSkipInProgress = false;
+          }
+        }
       }());
     });
   }
