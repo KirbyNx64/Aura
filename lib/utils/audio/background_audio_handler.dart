@@ -2142,6 +2142,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     int targetIndex, {
     bool playAfterResolve = false,
     int? expectedGeneration,
+    bool skipInitialEmit = false,
   }) async {
     if (!_deferredStreamingQueueMode) return false;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return false;
@@ -2168,17 +2169,21 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       return _mediaQueue[targetIndex].id == currentItem.id;
     }
 
-    // 1) Publicar metadatos de inmediato para que la UI cambie instantáneamente.
-    _deferredStreamingQueueIndex = targetIndex;
-    _ensureDeferredShuffleOrder(currentIndex: targetIndex);
-    mediaItem.add(currentItem);
-    unawaited(_syncFavoriteFlagForItem(currentItem));
-    playbackState.add(
-      playbackState.value.copyWith(
-        queueIndex: targetIndex,
-        processingState: AudioProcessingState.loading,
-      ),
-    );
+    // 1) Publicar metadatos solo si el caller no lo hizo ya.
+    // _scheduleStreamingSkip ya emite mediaItem/playbackState/index
+    // antes de llamar aquí, así que no necesitamos repetir.
+    if (!skipInitialEmit) {
+      _deferredStreamingQueueIndex = targetIndex;
+      _ensureDeferredShuffleOrder(currentIndex: targetIndex);
+      mediaItem.add(currentItem);
+      unawaited(_syncFavoriteFlagForItem(currentItem));
+      playbackState.add(
+        playbackState.value.copyWith(
+          queueIndex: targetIndex,
+          processingState: AudioProcessingState.loading,
+        ),
+      );
+    }
 
     // La primera actualización de artwork se pospone: será llamada con el
     // item actualizado (con streamUrl) en la parte final de esta función.
@@ -2313,6 +2318,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (playAfterResolve) {
       await _player.play();
     }
+
+    // Sincronizar flag solo para la canción que realmente se reproduce,
+    // no para cada skip intermedio durante skips rápidos.
+    unawaited(_syncFavoriteFlagForItem(updatedItem));
 
     // Prefetch ligero: solo resuelve URL del siguiente item en background.
     unawaited(_prefetchDeferredNextStreamUrl(targetIndex));
@@ -3797,6 +3806,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             targetIndex,
             playAfterResolve: playAfterResolve,
             expectedGeneration: requestGeneration,
+            skipInitialEmit: true,
           );
           _updateSleepTimer();
         } finally {
@@ -3815,6 +3825,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             targetIndex,
             playAfterResolve: playAfterResolve,
             expectedGeneration: requestGeneration,
+            skipInitialEmit: true,
           );
           _updateSleepTimer();
         } finally {
