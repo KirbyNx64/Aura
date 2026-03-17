@@ -213,6 +213,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     milliseconds: 850,
   );
   final Set<String> _artworkDiskPreloadGuard = <String>{};
+  Timer? _precacheNextTimer;
 
   // Control de indicadores de doble toque
   bool _showDoubleTapIndicators = false;
@@ -1207,8 +1208,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   /// Precarga la siguiente carátula en la cola directamente en el caché de Flutter
-  /// Esto evita el flicker/parpadeo al cambiar de canción ya que la imagen estará decodificada
+  /// Esto evita el flicker/parpadeo al cambiar de canción ya que la imagen estará decodificada.
+  /// Usa debounce para evitar lanzar descargas concurrentes durante skips rápidos.
   void _precacheNextInQueue() {
+    _precacheNextTimer?.cancel();
+    _precacheNextTimer = Timer(const Duration(milliseconds: 300), () {
+      _precacheNextInQueueImmediate();
+    });
+  }
+
+  void _precacheNextInQueueImmediate() {
     if (!mounted) return;
 
     final queue = audioHandler?.queue.value ?? [];
@@ -1256,6 +1265,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   @override
   void dispose() {
+    _precacheNextTimer?.cancel();
     _seekDebounceTimer?.cancel();
     _hideIndicatorsTimer?.cancel();
     _streamingArtworkDebounceTimer?.cancel();

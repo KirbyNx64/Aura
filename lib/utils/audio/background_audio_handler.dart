@@ -2185,9 +2185,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       );
     }
 
-    // La primera actualización de artwork se pospone: será llamada con el
-    // item actualizado (con streamUrl) en la parte final de esta función.
-    // Esto evita una descarga doble de carátula por cada skip.
+    // En inicio de reproducción (!skipInitialEmit), lanzar artwork en paralelo
+    // con la resolución de stream URL para que la carátula aparezca rápido.
+    // En skips rápidos (skipInitialEmit), se omite para evitar descargas dobles:
+    // el artwork se carga una sola vez al final de esta función.
+    if (!skipInitialEmit) {
+      unawaited(
+        _updateCurrentStreamingArtwork(
+          index: targetIndex,
+          currentMediaItem: currentItem,
+          currentSongId: currentItem.id,
+          trackGeneration: true,
+        ),
+      );
+    }
 
     if (isSuperseded() || !isStillSelectedTarget()) return false;
 
