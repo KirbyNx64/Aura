@@ -418,6 +418,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   String? _streamRadioContinuationParams;
   bool _streamRadioAppendInProgress = false;
   bool _streamRadioInitialBatchLoaded = false;
+  /// Si no es null, objetivo de tamaño de cola (p. ej. actual + 50 al activar desde player).
+  int? _streamRadioTargetQueueSize;
   bool _deferredStreamingQueueMode = false;
   int _deferredStreamingQueueIndex = 0;
   DateTime _lastManualPlayPauseToggle = DateTime.fromMillisecondsSinceEpoch(0);
@@ -2082,6 +2084,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _streamRadioSeedVideoId = null;
     _streamRadioContinuationParams = null;
     _streamRadioAppendInProgress = false;
+    _streamRadioTargetQueueSize = null;
     _deferredStreamingQueueMode = false;
     _deferredStreamingQueueIndex = 0;
     _deferredShuffleOrder = const <int>[];
@@ -2286,9 +2289,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> _prefetchDeferredNextStreamUrl(int currentIndex) async {
     if (!_deferredStreamingQueueMode) return;
     final myGeneration = _resolveGeneration;
-    // Prefetchear las 2 siguientes canciones para reducir esperas al saltar rápido.
-    for (int offset = 1; offset <= 2; offset++) {
-      // Si el usuario saltó de nuevo, abortar prefetch.
+    // Pre-resolver solo la siguiente canción (actual ya está cargada).
+    const int nextCount = 1;
+    for (int offset = 1; offset <= nextCount; offset++) {
       if (myGeneration != _resolveGeneration) return;
       final nextIndex = currentIndex + offset;
       if (nextIndex < 0 || nextIndex >= _mediaQueue.length) break;
@@ -2695,11 +2698,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                 : (_player.currentIndex ?? 0))
             .clamp(0, _mediaQueue.length - 1);
     final int remaining = (_mediaQueue.length - 1) - currentIndex;
-    final int missingItems = _streamRadioFixedQueueSize - _mediaQueue.length;
+    final int targetSize = _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
+    final int missingItems = targetSize - _mediaQueue.length;
     if (missingItems <= 0) {
       _streamRadioInitialBatchLoaded = true;
+      _streamRadioTargetQueueSize = null;
       debugPrint(
-        '[RADIO_DEBUG] ensure skip: no missing items, locking initial batch',
+        '[RADIO_DEBUG] ensure skip: no missing items (target=$targetSize), locking',
       );
       return;
     }
@@ -2823,6 +2828,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     } finally {
       if (shouldLockRadioQueue && sessionVersion == _streamSessionVersion) {
         _streamRadioInitialBatchLoaded = true;
+        final target = _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
+        if (_mediaQueue.length >= target) {
+          _streamRadioTargetQueueSize = null;
+        }
       }
       _streamRadioAppendInProgress = false;
       debugPrint(
@@ -2925,6 +2934,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _mediaQueue.removeRange(currentIndex + 1, _mediaQueue.length);
       debugPrint('[RADIO_DEBUG] startRadio trimmed queue removed=$removed');
     }
+    // Objetivo: mantener hasta la actual + añadir 50 canciones de radio (sin interrumpir).
+    _streamRadioTargetQueueSize = _mediaQueue.length + 50;
 
     _deferredStreamingQueueMode = true;
     _deferredStreamingQueueIndex = currentIndex;
@@ -2972,9 +2983,20 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     unawaited(_syncFavoriteFlagForItem(_mediaQueue[currentIndex]));
     playbackState.add(playbackState.value.copyWith(queueIndex: currentIndex));
 
-    await _ensureStreamingRadioQueue(force: true);
+    // Cargar hasta alcanzar objetivo (actual + 50) sin interrumpir la reproducción actual.
+    final targetSize = _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
+    while (_streamRadioEnabled &&
+        _mediaQueue.length < targetSize &&
+        !_streamRadioInitialBatchLoaded) {
+      await _ensureStreamingRadioQueue(force: true);
+    }
+    // Desactivar procesos de radio para que el cambio de canciones sea igual de suave.
+    if (_mediaQueue.length >= targetSize || _streamRadioInitialBatchLoaded) {
+      _streamRadioEnabled = false;
+      _streamRadioTargetQueueSize = null;
+    }
     debugPrint(
-      '[RADIO_DEBUG] startRadio done queueSize=${_mediaQueue.length} initialBatchLoaded=$_streamRadioInitialBatchLoaded',
+      '[RADIO_DEBUG] startRadio done queueSize=${_mediaQueue.length} initialBatchLoaded=$_streamRadioInitialBatchLoaded target=$targetSize radioEnabled=$_streamRadioEnabled',
     );
     return {'ok': true, 'queue_size': _mediaQueue.length};
   }
