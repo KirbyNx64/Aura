@@ -1,9 +1,12 @@
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
+import 'dart:async';
 import 'dart:io';
 
 class StreamCacheDB {
   static Box<Map>? _box;
   static const String _boxName = 'stream_cache_box';
+  static final Map<String, int> _lastUsedWriteEpochByVideoId = <String, int>{};
+  static const Duration _lastUsedWriteThrottle = Duration(minutes: 2);
 
   // Keys del registro en Hive
   static const String _columnId = 'id';
@@ -82,8 +85,14 @@ class StreamCacheDB {
     final expiresAt = _asInt(row[_columnExpiresAt]) ?? 0;
     if (isValid != 1 || expiresAt <= now) return null;
 
-    row[_columnLastUsed] = now;
-    await b.put(normalizedVideoId, row);
+    // Evitar I/O síncrono en cada lectura para reducir jank en UI.
+    // Persistimos last_used como best-effort con throttling.
+    final lastPersisted = _lastUsedWriteEpochByVideoId[normalizedVideoId] ?? 0;
+    if (now - lastPersisted >= _lastUsedWriteThrottle.inMilliseconds) {
+      _lastUsedWriteEpochByVideoId[normalizedVideoId] = now;
+      row[_columnLastUsed] = now;
+      unawaited(b.put(normalizedVideoId, row));
+    }
 
     return CachedStream(
       videoId: row[_columnVideoId] as String? ?? normalizedVideoId,
@@ -216,6 +225,7 @@ class StreamCacheDB {
   Future<void> clearCache() async {
     final b = await box;
     await b.clear();
+    _lastUsedWriteEpochByVideoId.clear();
   }
 
   /// Cierra la base de datos
@@ -225,6 +235,7 @@ class StreamCacheDB {
       await b.close();
       _box = null;
     }
+    _lastUsedWriteEpochByVideoId.clear();
   }
 
   int? _asInt(dynamic value) {

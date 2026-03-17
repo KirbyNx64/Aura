@@ -72,7 +72,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          // androidStopForegroundOnPause: false,
+          androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -447,6 +447,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   static const int _streamRadioOverscanCount = 12;
   static const int _streamArtworkPrefetchCount = 1;
   static const int _streamArtworkCacheMaxEntries = 120;
+  static const bool _enableDeferredStreamPrefetch = false;
+  static const int _deferredStreamPrefetchAheadCount = 3;
+  static const int _deferredStreamPrefetchMaxConcurrent = 2;
   static const Duration _streamResolveDebounceDuration = Duration(
     milliseconds: 150,
   );
@@ -2296,14 +2299,42 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   Future<void> _prefetchDeferredNextStreamUrl(int currentIndex) async {
+    if (!_enableDeferredStreamPrefetch) return;
     if (!_deferredStreamingQueueMode) return;
     final myGeneration = _resolveGeneration;
-    // Pre-resolver solo la siguiente canción (actual ya está cargada).
-    const int nextCount = 1;
-    for (int offset = 1; offset <= nextCount; offset++) {
+    // Calentar un pequeño bloque "up next" para reducir espera al hacer skip.
+    final idsToPrefetch = <String>[];
+    for (
+      int offset = 1;
+      offset <= _deferredStreamPrefetchAheadCount;
+      offset++
+    ) {
       if (myGeneration != _resolveGeneration) return;
       final nextIndex = currentIndex + offset;
       if (nextIndex < 0 || nextIndex >= _mediaQueue.length) break;
+      final item = _mediaQueue[nextIndex];
+      final existingUrl = item.extras?['streamUrl']?.toString().trim();
+      if (existingUrl != null && existingUrl.isNotEmpty) continue;
+      final rawVideoId = item.extras?['videoId']?.toString().trim();
+      final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+          ? rawVideoId
+          : item.id.replaceFirst('yt:', '').trim();
+      if (videoId.isEmpty) continue;
+      idsToPrefetch.add(videoId);
+    }
+
+    if (idsToPrefetch.isNotEmpty) {
+      unawaited(
+        StreamService.prefetchBestAudioUrls(
+          idsToPrefetch,
+          maxConcurrent: _deferredStreamPrefetchMaxConcurrent,
+        ),
+      );
+    }
+
+    // Además, deja una tarea directa del siguiente inmediato para baja latencia.
+    final nextIndex = currentIndex + 1;
+    if (nextIndex >= 0 && nextIndex < _mediaQueue.length) {
       unawaited(_prefetchSingleDeferredStreamUrl(nextIndex, myGeneration));
     }
   }
@@ -3683,8 +3714,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Cancelar resoluciones antiguas sin reiniciar el cliente de red para
     // conservar conexiones calientes y mantener transiciones suaves.
     StreamService.cancelPendingResolves(resetClient: false);
-    // Evitar reutilizar prefetch en curso durante cambios rápidos manuales.
-    _streamUrlPrefetchTasks.clear();
 
     // Incrementar generación de artwork para cancelar descargas intermedias.
     _artworkGeneration++;
@@ -3728,6 +3757,33 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // 2) Debounce real: resolver solo la última selección estable del usuario.
     _streamResolveDebounceTimer?.cancel();
+    final hasResolvedStreamUrl =
+        item.extras?['streamUrl']?.toString().trim().isNotEmpty == true;
+    final targetVideoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+        ? rawVideoId
+        : item.id.replaceFirst('yt:', '').trim();
+    final hasPrefetchInFlight =
+        targetVideoId.isNotEmpty &&
+        _streamUrlPrefetchTasks.containsKey(targetVideoId);
+
+    if (hasResolvedStreamUrl || hasPrefetchInFlight) {
+      unawaited(() async {
+        try {
+          await _resolveAndPlayDeferredStreamingIndex(
+            targetIndex,
+            playAfterResolve: playAfterResolve,
+            expectedGeneration: requestGeneration,
+          );
+          _updateSleepTimer();
+        } finally {
+          if (_manualDeferredSkipGeneration == requestGeneration) {
+            _manualDeferredSkipInProgress = false;
+          }
+        }
+      }());
+      return;
+    }
+
     _streamResolveDebounceTimer = Timer(_streamResolveDebounceDuration, () {
       unawaited(() async {
         try {
