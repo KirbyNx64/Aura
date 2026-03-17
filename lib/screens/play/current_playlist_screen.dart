@@ -241,23 +241,15 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
   }
 
   Widget _buildFallbackIcon() {
-    final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
+    // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     return Container(
       width: 50,
       height: 50,
       decoration: BoxDecoration(
-        color: isSystem
-            ? Theme.of(
-                context,
-              ).colorScheme.secondaryContainer.withValues(alpha: 0.5)
-            : Theme.of(context).colorScheme.surfaceContainer,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(
-        Icons.music_note,
-        size: 25,
-        color: Theme.of(context).colorScheme.onSurface,
-      ),
+      child: Icon(Icons.music_note, size: 25, color: Colors.transparent),
     );
   }
 
@@ -413,7 +405,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                                           MediaQuery.of(
                                                             context,
                                                           ).size.width -
-                                                          150,
+                                                          160,
                                                       style: const TextStyle(
                                                         fontSize: 16,
                                                         fontWeight:
