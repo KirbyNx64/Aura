@@ -72,7 +72,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -3529,6 +3529,30 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Verificar si hay canciones disponibles
     if (_mediaQueue.isEmpty) {
       return;
+    }
+
+    final bool canResumeImmediately =
+        !_player.playing &&
+        _player.currentIndex != null &&
+        (_player.processingState == ProcessingState.ready ||
+            _player.processingState == ProcessingState.buffering);
+
+    // Si ya hay una pista preparada, no bloquear por _initializing.
+    if (canResumeImmediately) {
+      if (_initializing) {
+        _initializing = false;
+        initializingNotifier.value = false;
+      }
+      try {
+        _restoreAudioConfiguration();
+        if (!_equalizerSettingsApplied) {
+          unawaited(_applyEqualizerSettingsFromPrefs());
+        }
+        await _player.play();
+        return;
+      } catch (e) {
+        // Si falla el play, continuar con el flujo normal de manejo de errores
+      }
     }
 
     // Si estamos inicializando fuentes, espera brevemente a que termine
