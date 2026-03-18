@@ -722,6 +722,21 @@ class DownloadManager {
     Uint8List? bytes;
     final client = HttpClient();
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final configuredQuality = prefs.getString('download_cover_quality');
+      final fallbackSharedQuality = prefs.getString('cover_quality');
+      final legacyHigh = prefs.getBool('cover_quality_high');
+      final coverQuality =
+          (configuredQuality == 'high' ||
+              configuredQuality == 'medium' ||
+              configuredQuality == 'low')
+          ? configuredQuality!
+          : (fallbackSharedQuality == 'high' ||
+                fallbackSharedQuality == 'medium' ||
+                fallbackSharedQuality == 'low')
+          ? fallbackSharedQuality!
+          : (legacyHigh == false ? 'low' : 'medium');
+
       final preferred = preferredThumbUrl?.trim();
       if (preferred != null && preferred.isNotEmpty) {
         try {
@@ -746,6 +761,67 @@ class DownloadManager {
       }
 
       final urlsToTry = <String>[];
+
+      String normalizePreferredThumbForQuality(String? rawUrl, String quality) {
+        final normalized = rawUrl?.trim();
+        if (normalized == null || normalized.isEmpty) return '';
+
+        final lower = normalized.toLowerCase();
+        if (lower.contains('googleusercontent.com')) {
+          final size = switch (quality) {
+            'high' => 's1200',
+            'medium' => 's600',
+            _ => 's300',
+          };
+
+          final replaced = normalized.replaceFirst(
+            RegExp(r'=s\d+\b'),
+            '=$size',
+          );
+          if (replaced != normalized) {
+            return replaced;
+          }
+
+          final eqIndex = normalized.lastIndexOf('=');
+          if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+            final suffix = normalized.substring(eqIndex + 1);
+            if (!suffix.contains('/')) {
+              return '${normalized.substring(0, eqIndex + 1)}$size';
+            }
+          }
+
+          return '$normalized=$size';
+        }
+
+        // Para ytimg/img.youtube, alinear miniatura con la calidad elegida.
+        if (lower.contains('ytimg.com') || lower.contains('img.youtube.com')) {
+          final fileName = switch (quality) {
+            'high' => 'maxresdefault.jpg',
+            'medium' => 'sddefault.jpg',
+            _ => 'hqdefault.jpg',
+          };
+
+          final uri = Uri.tryParse(normalized);
+          if (uri != null) {
+            final segments = List<String>.from(uri.pathSegments);
+            if (segments.isNotEmpty) {
+              final last = segments.last.toLowerCase();
+              final isKnownThumb =
+                  last.contains('maxresdefault') ||
+                  last.contains('sddefault') ||
+                  last.contains('hqdefault') ||
+                  last.contains('mqdefault');
+              if (isKnownThumb) {
+                segments[segments.length - 1] = fileName;
+                return uri.replace(pathSegments: segments).toString();
+              }
+            }
+          }
+        }
+
+        return normalized;
+      }
+
       void addCandidate(String? url) {
         final value = url?.trim();
         if (value == null || value.isEmpty) return;
@@ -755,10 +831,23 @@ class DownloadManager {
       }
 
       // Igual que streaming: priorizar miniatura preferida si existe.
-      addCandidate(preferredThumbUrl);
-      addCandidate(coverUrlMax);
-      addCandidate(coverUrlSD);
-      addCandidate(coverUrlHQ);
+      addCandidate(
+        normalizePreferredThumbForQuality(preferredThumbUrl, coverQuality),
+      );
+      switch (coverQuality) {
+        case 'high':
+          addCandidate(coverUrlMax);
+          addCandidate(coverUrlSD);
+          addCandidate(coverUrlHQ);
+          break;
+        case 'medium':
+          addCandidate(coverUrlSD);
+          addCandidate(coverUrlHQ);
+          break;
+        case 'low':
+          addCandidate(coverUrlHQ);
+          break;
+      }
 
       // Intento principal con HttpClient (más rápido / streaming)
       try {

@@ -91,6 +91,8 @@ const Map<String, String> appLocalizationsEn = {
   'direct': 'Direct',
   'cover_quality': 'Cover quality',
   'cover_quality_desc': 'Choose the quality of covers when downloading',
+  'download_cover_quality': 'Download cover quality',
+  'download_cover_quality_desc': 'Choose cover quality when downloading',
   'audio_quality': 'Audio quality',
   'volume_boost': 'Volume Boost',
   'volume_boost_desc': 'Increase volume beyond system maximum',
@@ -236,9 +238,12 @@ const Map<String, String> appLocalizationsEn = {
   'settings_info': 'Customize the app according to your preferences',
   'select_language_desc': 'Select the language of the app',
   'select_theme_desc': 'Select the theme of the app',
-  'artwork_quality': 'Artwork quality when playing',
+  'streaming_artwork_quality': 'Streaming artwork quality',
+  'streaming_artwork_quality_description':
+      'Select artwork quality when playing music via streaming',
+  'artwork_quality': 'Artwork quality when local playing',
   'artwork_quality_description':
-      'Select the quality of artwork when playing music (local music only)',
+      'Select the quality of artwork when playing local music',
 
   'overlay_next_button': 'Next button in overlay',
   'overlay_next_button_desc':

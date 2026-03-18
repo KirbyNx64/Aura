@@ -95,6 +95,8 @@ const Map<String, String> appLocalizationsEs = {
   'direct': 'Directo',
   'cover_quality': 'Calidad de carátula',
   'cover_quality_desc': 'Elige la calidad de las carátulas al descargar',
+  'download_cover_quality': 'Calidad de carátula',
+  'download_cover_quality_desc': 'Elige la calidad de carátulas al descargar',
   'audio_quality': 'Calidad de audio',
   'volume_boost': 'Aumentar volumen',
   'volume_boost_desc': 'Aumenta el volumen más allá del máximo del sistema',
@@ -246,7 +248,10 @@ const Map<String, String> appLocalizationsEs = {
   'settings_info': 'Personaliza la app según tus preferencias',
   'select_language_desc': 'Selecciona el idioma de la app',
   'select_theme_desc': 'Selecciona el tema de la app',
-  'artwork_quality': 'Calidad de carátula al reproducir',
+  'streaming_artwork_quality': 'Calidad de carátula en streaming',
+  'streaming_artwork_quality_description':
+      'Selecciona la calidad de las carátulas al reproducir música en streaming',
+  'artwork_quality': 'Calidad de carátula al reproducir en local',
 
   'overlay_next_button': 'Botón siguiente en overlay',
   'overlay_next_button_desc':
@@ -262,7 +267,7 @@ const Map<String, String> appLocalizationsEs = {
       'Selecciona que fondo usar en el reproductor (Solo en tema oscuro AMOLED)',
   'use_dynamic_color_background': 'Usar fondo de color dinámico',
   'artwork_quality_description':
-      'Selecciona la calidad de las carátulas al reproducir música (Solo música local)',
+      'Selecciona la calidad de las carátulas al reproducir música local',
   'use_dynamic_color_in_dialogs':
       'Usar color dinámico en secciones (Temporizador, etc)',
   '100_percent_maximum': '100% (Máximo)',

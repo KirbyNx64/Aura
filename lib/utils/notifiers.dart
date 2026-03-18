@@ -34,7 +34,7 @@ final ValueNotifier<String> audioQualityNotifier = ValueNotifier<String>(
 ); // 'high', 'medium', 'low'
 
 final ValueNotifier<String> coverQualityNotifier = ValueNotifier<String>(
-  'high',
+  'medium',
 ); // 'high', 'medium', 'low'
 
 final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);

@@ -52,6 +52,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _downloadDirectory;
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
+  String _downloadCoverQuality = 'medium'; // 'high', 'medium', 'low'
+  String _streamingCoverQuality = 'medium'; // 'high', 'medium', 'low'
   AppColorScheme _currentColorScheme = AppColorScheme.amoled;
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
@@ -65,6 +67,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadDownloadDirectory();
     _loadDownloadType();
     _loadAudioQuality();
+    _loadDownloadCoverQuality();
+    _loadStreamingCoverQuality();
     _loadColorScheme();
     _loadArtworkQuality();
 
@@ -254,6 +258,289 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {
       _artworkQuality = quality;
     });
+  }
+
+  Future<void> _loadStreamingCoverQuality() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString('cover_quality');
+    final legacy = prefs.getBool('cover_quality_high');
+    final resolved = (stored == 'high' || stored == 'medium' || stored == 'low')
+        ? stored!
+        : (legacy == false ? 'low' : 'medium');
+
+    setState(() {
+      _streamingCoverQuality = resolved;
+    });
+    coverQualityNotifier.value = resolved;
+  }
+
+  Future<void> _setStreamingCoverQuality(String quality) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('cover_quality', quality);
+    await prefs.remove('cover_quality_high');
+    setState(() {
+      _streamingCoverQuality = quality;
+    });
+    coverQualityNotifier.value = quality;
+  }
+
+  Future<void> _loadDownloadCoverQuality() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getString('download_cover_quality');
+    final legacy = prefs.getBool('cover_quality_high');
+    final fallbackShared = prefs.getString('cover_quality');
+    final resolved = (stored == 'high' || stored == 'medium' || stored == 'low')
+        ? stored!
+        : (fallbackShared == 'high' ||
+              fallbackShared == 'medium' ||
+              fallbackShared == 'low')
+        ? fallbackShared!
+        : (legacy == false ? 'low' : 'medium');
+
+    setState(() {
+      _downloadCoverQuality = resolved;
+    });
+  }
+
+  Future<void> _setDownloadCoverQuality(String quality) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('download_cover_quality', quality);
+    setState(() {
+      _downloadCoverQuality = quality;
+    });
+  }
+
+  String _streamingCoverQualityLabel(String quality) {
+    switch (quality) {
+      case 'high':
+        return LocaleProvider.tr('audio_quality_high');
+      case 'medium':
+        return LocaleProvider.tr('audio_quality_medium');
+      default:
+        return LocaleProvider.tr('audio_quality_low');
+    }
+  }
+
+  Future<void> _showStreamingCoverQualityDialog() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.image_search_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'streaming_artwork_quality',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'streaming_artwork_quality_description',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_high'),
+                      subtitle: LocaleProvider.tr('audio_quality_high_desc'),
+                      value: 'high',
+                      isSelected: _streamingCoverQuality == 'high',
+                      onSelected: _setStreamingCoverQuality,
+                    ),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_medium'),
+                      subtitle: LocaleProvider.tr('audio_quality_medium_desc'),
+                      value: 'medium',
+                      isSelected: _streamingCoverQuality == 'medium',
+                      onSelected: _setStreamingCoverQuality,
+                    ),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_low'),
+                      subtitle: LocaleProvider.tr('audio_quality_low_desc'),
+                      value: 'low',
+                      isSelected: _streamingCoverQuality == 'low',
+                      onSelected: _setStreamingCoverQuality,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showDownloadCoverQualityDialog() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.image_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'download_cover_quality',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'download_cover_quality_desc',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_high'),
+                      subtitle: LocaleProvider.tr('audio_quality_high_desc'),
+                      value: 'high',
+                      isSelected: _downloadCoverQuality == 'high',
+                      onSelected: _setDownloadCoverQuality,
+                    ),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_medium'),
+                      subtitle: LocaleProvider.tr('audio_quality_medium_desc'),
+                      value: 'medium',
+                      isSelected: _downloadCoverQuality == 'medium',
+                      onSelected: _setDownloadCoverQuality,
+                    ),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_low'),
+                      subtitle: LocaleProvider.tr('audio_quality_low_desc'),
+                      value: 'low',
+                      isSelected: _downloadCoverQuality == 'low',
+                      onSelected: _setDownloadCoverQuality,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   void _showInfoDialog(BuildContext context) {
@@ -1474,6 +1761,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: LocaleProvider.tr('audio_quality_high_desc'),
                       value: 'high',
                       isSelected: _audioQuality == 'high',
+                      onSelected: _setAudioQuality,
                     ),
                     _buildAudioQualityOption(
                       context: context,
@@ -1481,6 +1769,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: LocaleProvider.tr('audio_quality_medium_desc'),
                       value: 'medium',
                       isSelected: _audioQuality == 'medium',
+                      onSelected: _setAudioQuality,
                     ),
                     _buildAudioQualityOption(
                       context: context,
@@ -1488,6 +1777,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: LocaleProvider.tr('audio_quality_low_desc'),
                       value: 'low',
                       isSelected: _audioQuality == 'low',
+                      onSelected: _setAudioQuality,
                     ),
                     const SizedBox(height: 16),
                     Padding(
@@ -1522,6 +1812,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String subtitle,
     required String value,
     required bool isSelected,
+    required Future<void> Function(String value) onSelected,
   }) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
@@ -1532,7 +1823,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: InkWell(
         onTap: () async {
           if (!isSelected) {
-            await _setAudioQuality(value);
+            await onSelected(value);
           }
           if (context.mounted) Navigator.of(context).pop();
         },
@@ -3415,6 +3706,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(4),
                   topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: Icon(
+                      Icons.image,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    title: TranslatedText(
+                      'download_cover_quality',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    subtitle: Text(
+                      LocaleProvider.tr('download_cover_quality_desc'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    trailing: IconButton(
+                      icon: Icon(
+                        Icons.arrow_drop_down,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      onPressed: _showDownloadCoverQualityDialog,
+                    ),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                    ),
+                    onTap: _showDownloadCoverQualityDialog,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
                   bottomLeft: Radius.circular(20),
                   bottomRight: Radius.circular(20),
                 ),
@@ -3598,65 +3940,121 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   bottomRight: Radius.circular(4),
                 ),
               ),
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: Icon(
-                      Icons.image,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    title: Text(
-                      LocaleProvider.tr('artwork_quality'),
+              child: ListTile(
+                leading: Icon(
+                  Icons.image_search_rounded,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                title: Text(
+                  LocaleProvider.tr('streaming_artwork_quality'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _streamingCoverQualityLabel(_streamingCoverQuality),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
                       ),
                     ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _artworkQuality == 1024
-                              ? LocaleProvider.tr('100_percent_maximum')
-                              : _artworkQuality == 410
-                              ? LocaleProvider.tr('80_percent_recommended')
-                              : _artworkQuality == 307
-                              ? LocaleProvider.tr('60_percent_performance')
-                              : _artworkQuality == 205
-                              ? LocaleProvider.tr('40_percent_low')
-                              : LocaleProvider.tr('20_percent_minimum'),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.9),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          LocaleProvider.tr(
-                            'artwork_quality_description',
-                          ), // Agrega esta key en tus traducciones
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.9),
-                          ),
-                        ),
-                      ],
-                    ),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                        bottomLeft: Radius.circular(4),
-                        bottomRight: Radius.circular(4),
+                    const SizedBox(height: 2),
+                    Text(
+                      LocaleProvider.tr(
+                        'streaming_artwork_quality_description',
+                      ),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
                       ),
                     ),
-                    onTap: () => _showArtworkQualityDialog(context),
+                  ],
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                    bottomLeft: Radius.circular(4),
+                    bottomRight: Radius.circular(4),
                   ),
-                ],
+                ),
+                onTap: _showStreamingCoverQualityDialog,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: ListTile(
+                leading: Icon(
+                  Icons.image,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                title: Text(
+                  LocaleProvider.tr('artwork_quality'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _artworkQuality == 1024
+                          ? LocaleProvider.tr('100_percent_maximum')
+                          : _artworkQuality == 410
+                          ? LocaleProvider.tr('80_percent_recommended')
+                          : _artworkQuality == 307
+                          ? LocaleProvider.tr('60_percent_performance')
+                          : _artworkQuality == 205
+                          ? LocaleProvider.tr('40_percent_low')
+                          : LocaleProvider.tr('20_percent_minimum'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      LocaleProvider.tr('artwork_quality_description'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(4),
+                    topRight: Radius.circular(4),
+                    bottomLeft: Radius.circular(4),
+                    bottomRight: Radius.circular(4),
+                  ),
+                ),
+                onTap: () => _showArtworkQualityDialog(context),
               ),
             ),
             const SizedBox(height: 4),

@@ -143,11 +143,140 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
         .toColor();
   }
 
+  String _currentStreamingCoverQuality() {
+    final quality = coverQualityNotifier.value;
+    if (quality == 'high' || quality == 'medium' || quality == 'low') {
+      return quality;
+    }
+    return 'medium';
+  }
+
+  String _ytThumbFileForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 'sddefault.jpg';
+      case 'low':
+        return 'hqdefault.jpg';
+      default:
+        return 'maxresdefault.jpg';
+    }
+  }
+
+  String _googleThumbSizeForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 's600';
+      case 'low':
+        return 's300';
+      default:
+        return 's1200';
+    }
+  }
+
+  String? _extractVideoIdFromMediaItem(MediaItem mediaItem) {
+    final rawExtraVideoId = mediaItem.extras?['videoId']?.toString().trim();
+    if (rawExtraVideoId != null && rawExtraVideoId.isNotEmpty) {
+      return rawExtraVideoId;
+    }
+
+    final rawId = mediaItem.id.trim();
+    if (rawId.startsWith('yt:')) {
+      final id = rawId.substring(3).trim();
+      return id.isNotEmpty ? id : null;
+    }
+
+    final uri = Uri.tryParse(rawId);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(rawId)) {
+      return rawId;
+    }
+
+    return null;
+  }
+
+  String? _applyStreamingArtworkQuality(String? rawUrl, {String? videoId}) {
+    final normalized = rawUrl?.trim();
+    if (normalized == null || normalized.isEmpty || normalized == 'null') {
+      return null;
+    }
+
+    final quality = _currentStreamingCoverQuality();
+    final lower = normalized.toLowerCase();
+
+    if (lower.contains('googleusercontent.com')) {
+      final size = _googleThumbSizeForQuality(quality);
+      final replaced = normalized.replaceFirst(RegExp(r'=s\d+\b'), '=$size');
+      if (replaced != normalized) return replaced;
+
+      final eqIndex = normalized.lastIndexOf('=');
+      if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+        final suffix = normalized.substring(eqIndex + 1);
+        if (!suffix.contains('/')) {
+          return '${normalized.substring(0, eqIndex + 1)}$size';
+        }
+      }
+      return '$normalized=$size';
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) return normalized;
+
+    final host = uri.host.toLowerCase();
+    if (!host.contains('ytimg.com') && !host.contains('img.youtube.com')) {
+      return normalized;
+    }
+
+    final qualityFile = _ytThumbFileForQuality(quality);
+    final qualityWebp = qualityFile.replaceAll('.jpg', '.webp');
+    final segments = List<String>.from(uri.pathSegments);
+
+    if (segments.isNotEmpty) {
+      final last = segments.last.toLowerCase();
+      final isKnownThumb =
+          last.contains('maxresdefault') ||
+          last.contains('sddefault') ||
+          last.contains('hqdefault') ||
+          last.contains('mqdefault');
+      if (isKnownThumb) {
+        final useWebp = last.endsWith('.webp');
+        segments[segments.length - 1] = useWebp ? qualityWebp : qualityFile;
+        return uri.replace(pathSegments: segments).toString();
+      }
+    }
+
+    final id = videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$id/$qualityFile';
+    }
+
+    return normalized;
+  }
+
   Uri? _displayArtUriFor(MediaItem mediaItem) {
     if (mediaItem.extras?['isStreaming'] == true) {
-      final raw = mediaItem.extras?['displayArtUri']?.toString().trim();
-      if (raw != null && raw.isNotEmpty) {
-        final parsed = Uri.tryParse(raw);
+      final videoId = _extractVideoIdFromMediaItem(mediaItem);
+      final preferred = mediaItem.extras?['displayArtUri']?.toString().trim();
+      final fallback = mediaItem.artUri?.toString().trim();
+
+      final normalized = _applyStreamingArtworkQuality(
+        preferred?.isNotEmpty == true ? preferred : fallback,
+        videoId: videoId,
+      );
+      if (normalized != null && normalized.isNotEmpty) {
+        final parsed = Uri.tryParse(normalized);
         if (parsed != null) return parsed;
       }
     }
@@ -722,6 +851,8 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                                 item.extras?['songId'] ?? 0;
                                             final songPath =
                                                 item.extras?['data'] ?? '';
+                                            final resolvedArtUri =
+                                                _displayArtUriFor(item);
 
                                             // Agregar padding adicional al primer y último elemento para evitar recorte
                                             // Ya no es tan necesario como en el modal, pero ayuda visualmente
@@ -802,7 +933,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                                     child: ArtworkListTile(
                                                       songId: songId,
                                                       songPath: songPath,
-                                                      artUri: item.artUri,
+                                                      artUri: resolvedArtUri,
                                                       size: 48,
                                                       borderRadius:
                                                           BorderRadius.circular(

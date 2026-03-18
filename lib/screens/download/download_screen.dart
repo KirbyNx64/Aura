@@ -179,10 +179,14 @@ class _DownloadScreenState extends State<DownloadScreen>
 
   Future<String> _getCoverQualitySetting() async {
     final prefs = await SharedPreferences.getInstance();
-    final q = prefs.getString('cover_quality');
+    final q = prefs.getString('download_cover_quality');
     if (q == 'high' || q == 'medium' || q == 'low') return q!;
+    final fallback = prefs.getString('cover_quality');
+    if (fallback == 'high' || fallback == 'medium' || fallback == 'low') {
+      return fallback!;
+    }
     final old = prefs.getBool('cover_quality_high');
-    return old == false ? 'low' : 'high';
+    return old == false ? 'low' : 'medium';
   }
 
   // Método para seleccionar stream de audio según calidad (para StreamProvider)
@@ -257,7 +261,9 @@ class _DownloadScreenState extends State<DownloadScreen>
           final request = await client.getUrl(Uri.parse(url));
           final response = await request.close();
           if (response.statusCode == 200) {
-            bytes = Uint8List.fromList(await consolidateResponseBytes(response));
+            bytes = Uint8List.fromList(
+              await consolidateResponseBytes(response),
+            );
             usedUrl = url;
             break;
           }

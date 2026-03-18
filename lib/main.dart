@@ -410,6 +410,18 @@ void main() async {
       prefs.getString('download_directory') ?? '/storage/emulated/0/Music';
   downloadDirectoryNotifier.value = downloadDir;
 
+  // Cargar calidad de carátula streaming al arrancar para que el player use
+  // la calidad correcta desde el primer render.
+  final storedCoverQuality = prefs.getString('cover_quality');
+  final legacyCoverHigh = prefs.getBool('cover_quality_high');
+  final resolvedCoverQuality =
+      (storedCoverQuality == 'high' ||
+          storedCoverQuality == 'medium' ||
+          storedCoverQuality == 'low')
+      ? storedCoverQuality!
+      : (legacyCoverHigh == true ? 'high' : 'medium');
+  coverQualityNotifier.value = resolvedCoverQuality;
+
   bool permisosOk = false;
 
   if (!isFirstRun) {

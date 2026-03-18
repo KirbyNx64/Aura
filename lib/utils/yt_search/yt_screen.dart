@@ -8423,7 +8423,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final q = prefs.getString('cover_quality');
     if (q == 'high' || q == 'medium' || q == 'low') return q!;
     final old = prefs.getBool('cover_quality_high');
-    return old == false ? 'low' : 'high';
+    return old == false ? 'low' : 'medium';
   }
 
   Future<String> _buildPlayerArtworkUri(

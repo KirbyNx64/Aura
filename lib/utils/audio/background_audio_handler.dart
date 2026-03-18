@@ -72,7 +72,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -411,6 +411,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   static const String _kPrefWasPlaying = 'playback_was_playing';
   static const String _kPrefRestoreLastSessionOnStartup =
       'restore_last_session_on_startup';
+  static const String _kPrefCoverQuality = 'cover_quality';
+  static const String _kPrefLegacyCoverQualityHigh = 'cover_quality_high';
 
   // Control para evitar pausar automáticamente cuando el usuario selecciona una canción
   bool _userInitiatedPlayback = false;
@@ -2072,10 +2074,110 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return item.id.startsWith('yt:') || item.id.startsWith('yt_stream_');
   }
 
+  String _resolveStreamingCoverQualityPref() {
+    final quality = _prefs?.getString(_kPrefCoverQuality);
+    if (quality == 'high' || quality == 'medium' || quality == 'low') {
+      return quality!;
+    }
+
+    final legacyHigh = _prefs?.getBool(_kPrefLegacyCoverQualityHigh);
+    return legacyHigh == false ? 'low' : 'medium';
+  }
+
+  String _streamingThumbFileNameForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 'sddefault.jpg';
+      case 'low':
+        return 'hqdefault.jpg';
+      default:
+        return 'maxresdefault.jpg';
+    }
+  }
+
+  String _streamingGoogleusercontentSizeForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 's600';
+      case 'low':
+        return 's300';
+      default:
+        return 's1200';
+    }
+  }
+
+  String _applyQualityToGoogleusercontentThumbUrl(String rawUrl) {
+    final qualitySize = _streamingGoogleusercontentSizeForQuality(
+      _resolveStreamingCoverQualityPref(),
+    );
+
+    // Caso común: URLs tipo ...=s1200
+    final updatedSized = rawUrl.replaceFirst(
+      RegExp(r'=s\d+\b'),
+      '=$qualitySize',
+    );
+    if (updatedSized != rawUrl) {
+      return updatedSized;
+    }
+
+    // Si existe un sufijo tras '=' (por ejemplo w1200-h1200), reemplazarlo.
+    final eqIndex = rawUrl.lastIndexOf('=');
+    if (eqIndex != -1 && eqIndex < rawUrl.length - 1) {
+      final suffix = rawUrl.substring(eqIndex + 1);
+      if (!suffix.contains('/')) {
+        return '${rawUrl.substring(0, eqIndex + 1)}$qualitySize';
+      }
+    }
+
+    return '$rawUrl=$qualitySize';
+  }
+
+  String? _applyQualityToYoutubeThumbUrl(String rawUrl, String? videoId) {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) return rawUrl;
+
+    final host = uri.host.toLowerCase();
+    final isYoutubeThumbHost =
+        host.contains('ytimg.com') || host.contains('img.youtube.com');
+    if (!isYoutubeThumbHost) return rawUrl;
+
+    final qualityFileName = _streamingThumbFileNameForQuality(
+      _resolveStreamingCoverQualityPref(),
+    );
+    final qualityWebp = qualityFileName.replaceAll('.jpg', '.webp');
+    final segments = List<String>.from(uri.pathSegments);
+
+    if (segments.isNotEmpty) {
+      final last = segments.last.toLowerCase();
+      final isKnownThumb =
+          last.contains('maxresdefault') ||
+          last.contains('sddefault') ||
+          last.contains('hqdefault') ||
+          last.contains('mqdefault');
+
+      if (isKnownThumb) {
+        final useWebp = last.endsWith('.webp');
+        segments[segments.length - 1] = useWebp ? qualityWebp : qualityFileName;
+        return uri.replace(pathSegments: segments).toString();
+      }
+    }
+
+    final id = videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return '${uri.scheme.isEmpty ? 'https' : uri.scheme}://'
+          '${uri.host.isEmpty ? 'i.ytimg.com' : uri.host}/vi/$id/$qualityFileName';
+    }
+
+    return rawUrl;
+  }
+
   String? _fallbackStreamingDisplayArtUri(String? videoId) {
     final id = videoId?.trim();
     if (id == null || id.isEmpty) return null;
-    return 'https://i.ytimg.com/vi/$id/maxresdefault.jpg';
+    final qualityFileName = _streamingThumbFileNameForQuality(
+      _resolveStreamingCoverQualityPref(),
+    );
+    return 'https://i.ytimg.com/vi/$id/$qualityFileName';
   }
 
   String? _toHighestQualityYtThumb(String? url, String? videoId) {
@@ -2090,12 +2192,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // preservar el encuadre cuadrado consistente con overlay.
     if (lower.contains('lh3.googleusercontent.com') ||
         lower.contains('googleusercontent.com')) {
-      return raw;
+      return _applyQualityToGoogleusercontentThumbUrl(raw);
     }
 
-    // Para thumbnails de video de YouTube, respetar URL original para evitar
-    // introducir franjas laterales en algunos contenidos.
-    return raw;
+    return _applyQualityToYoutubeThumbUrl(raw, videoId);
   }
 
   String? _resolveStreamingDisplayArtUri({

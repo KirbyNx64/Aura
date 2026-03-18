@@ -498,6 +498,105 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     return null;
   }
 
+  String _currentStreamingCoverQuality() {
+    final quality = coverQualityNotifier.value;
+    if (quality == 'high' || quality == 'medium' || quality == 'low') {
+      return quality;
+    }
+    return 'medium';
+  }
+
+  String _ytThumbFileForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 'sddefault.jpg';
+      case 'low':
+        return 'hqdefault.jpg';
+      default:
+        return 'maxresdefault.jpg';
+    }
+  }
+
+  String _googleThumbSizeForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 's600';
+      case 'low':
+        return 's300';
+      default:
+        return 's1200';
+    }
+  }
+
+  String? _applyStreamingArtworkQuality(String? rawUrl, {String? videoId}) {
+    final normalized = rawUrl?.trim();
+    if (normalized == null || normalized.isEmpty || normalized == 'null') {
+      return null;
+    }
+
+    final quality = _currentStreamingCoverQuality();
+    final lower = normalized.toLowerCase();
+
+    if (lower.contains('googleusercontent.com')) {
+      final size = _googleThumbSizeForQuality(quality);
+      final replaced = normalized.replaceFirst(RegExp(r'=s\d+\b'), '=$size');
+      if (replaced != normalized) return replaced;
+
+      final eqIndex = normalized.lastIndexOf('=');
+      if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+        final suffix = normalized.substring(eqIndex + 1);
+        if (!suffix.contains('/')) {
+          return '${normalized.substring(0, eqIndex + 1)}$size';
+        }
+      }
+      return '$normalized=$size';
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) return normalized;
+
+    final host = uri.host.toLowerCase();
+    if (!host.contains('ytimg.com') && !host.contains('img.youtube.com')) {
+      return normalized;
+    }
+
+    final qualityFile = _ytThumbFileForQuality(quality);
+    final qualityWebp = qualityFile.replaceAll('.jpg', '.webp');
+    final segments = List<String>.from(uri.pathSegments);
+
+    if (segments.isNotEmpty) {
+      final last = segments.last.toLowerCase();
+      final isKnownThumb =
+          last.contains('maxresdefault') ||
+          last.contains('sddefault') ||
+          last.contains('hqdefault') ||
+          last.contains('mqdefault');
+      if (isKnownThumb) {
+        final useWebp = last.endsWith('.webp');
+        segments[segments.length - 1] = useWebp ? qualityWebp : qualityFile;
+        return uri.replace(pathSegments: segments).toString();
+      }
+    }
+
+    final id = videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$id/$qualityFile';
+    }
+
+    return normalized;
+  }
+
+  List<String> _streamingFallbackArtworkUrls(String videoId) {
+    final qualityFile = _ytThumbFileForQuality(_currentStreamingCoverQuality());
+    final urls = <String>[
+      'https://i.ytimg.com/vi/$videoId/$qualityFile',
+      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
+      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
+    ];
+    return urls.toSet().toList();
+  }
+
   Future<List<_StreamingFavoriteItem>> _buildStreamingFavorites(
     List<String> paths,
   ) async {
@@ -522,6 +621,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       final metaTitle = meta?['title']?.toString().trim();
       final metaArtist = meta?['artist']?.toString().trim();
       final metaArtUri = meta?['artUri']?.toString().trim();
+      final resolvedMetaArtUri = _applyStreamingArtworkQuality(
+        metaArtUri,
+        videoId: videoId,
+      );
       final metaDurationText = meta?['durationText']?.toString().trim();
       final metaDurationMs = _parseDurationMs(meta?['durationMs']);
       final historyDurationMs = (history != null && history.duration > 0)
@@ -554,9 +657,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           title: title,
           artist: artist,
           videoId: videoId,
-          artUri: (metaArtUri != null && metaArtUri.isNotEmpty)
-              ? metaArtUri
-              : null,
+          artUri: resolvedMetaArtUri,
           durationText: durationText,
           durationMs: durationMs,
         ),
@@ -639,9 +740,12 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
           .map((entry) {
             final entryVideoId = entry.videoId!.trim();
-            final entryArtUri = entry.artUri?.trim().isNotEmpty == true
-                ? entry.artUri!.trim()
-                : 'https://i.ytimg.com/vi/$entryVideoId/hqdefault.jpg';
+            final entryArtUri =
+                _applyStreamingArtworkQuality(
+                  entry.artUri,
+                  videoId: entryVideoId,
+                ) ??
+                _streamingFallbackArtworkUrls(entryVideoId).first;
             return <String, dynamic>{
               'videoId': entryVideoId,
               'title': entry.title.trim().isNotEmpty
@@ -714,9 +818,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         return;
       }
 
-      final artUri = item.artUri?.trim().isNotEmpty == true
-          ? item.artUri!.trim()
-          : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+      final artUri =
+          _applyStreamingArtworkQuality(item.artUri, videoId: videoId) ??
+          _streamingFallbackArtworkUrls(videoId).first;
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
@@ -761,9 +865,9 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       await initializeAudioServiceSafely();
     }
 
-    final artUri = item.artUri?.trim().isNotEmpty == true
-        ? item.artUri!.trim()
-        : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+    final artUri =
+        _applyStreamingArtworkQuality(item.artUri, videoId: videoId) ??
+        _streamingFallbackArtworkUrls(videoId).first;
 
     await audioHandler.myHandler?.customAction('addYtStreamToQueue', {
       'videoId': videoId,
@@ -3155,17 +3259,13 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   List<String> _streamingArtworkSources(_StreamingFavoriteItem item) {
     final sources = <String>[];
-    final rawArt = item.artUri?.trim();
-    if (rawArt != null && rawArt.isNotEmpty && rawArt != 'null') {
+    final id = item.videoId?.trim();
+    final rawArt = _applyStreamingArtworkQuality(item.artUri, videoId: id);
+    if (rawArt != null && rawArt.isNotEmpty) {
       sources.add(rawArt);
     }
-    final id = item.videoId?.trim();
     if (id != null && id.isNotEmpty) {
-      sources.addAll([
-        'https://i.ytimg.com/vi/$id/hqdefault.jpg',
-        'https://img.youtube.com/vi/$id/sddefault.jpg',
-        'https://img.youtube.com/vi/$id/maxresdefault.jpg',
-      ]);
+      sources.addAll(_streamingFallbackArtworkUrls(id));
     }
     return sources.toSet().toList();
   }
@@ -4316,11 +4416,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     final videoId = _extractVideoIdFromPath(path);
     if (videoId == null || videoId.isEmpty) return const [];
-    return [
-      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
-      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
-      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
-    ];
+    return _streamingFallbackArtworkUrls(videoId);
   }
 
   Future<Map<String, List<String>>> _buildPlaylistArtworkSourcesCache(
@@ -4344,17 +4440,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             : _extractVideoIdFromPath(path);
 
         final sources = <String>[];
-        if (metaArtUri != null &&
-            metaArtUri.isNotEmpty &&
-            metaArtUri != 'null') {
-          sources.add(metaArtUri);
+        final resolvedMetaArtUri = _applyStreamingArtworkQuality(
+          metaArtUri,
+          videoId: videoId,
+        );
+        if (resolvedMetaArtUri != null && resolvedMetaArtUri.isNotEmpty) {
+          sources.add(resolvedMetaArtUri);
         }
         if (videoId != null && videoId.isNotEmpty) {
-          sources.addAll([
-            'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
-            'https://img.youtube.com/vi/$videoId/sddefault.jpg',
-            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
-          ]);
+          sources.addAll(_streamingFallbackArtworkUrls(videoId));
         }
         if (sources.isNotEmpty) {
           cache['${playlist.id}::$path'] = sources.toSet().toList();
