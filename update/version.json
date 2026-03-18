@@ -1,9 +1,9 @@
 {
-  "version": "1.8.6",
+  "version": "2.0.1",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.6/AuraMusic-v1.8.6-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.6/AuraMusic-v1.8.6-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v1.8.6/AuraMusic-v1.8.6-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.1/AuraMusic-v2.0.1-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.1/AuraMusic-v2.0.1-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.1/AuraMusic-v2.0.1-x86_64.apk"
   },
-  "changelog": "• Se aplicaron mejoras visuales generales en toda la aplicación, refinando la interfaz y logrando una experiencia más agradable.\n\n• Se optimizó la estabilidad y el rendimiento general de la app, además de corregir errores menores."
+  "changelog": "• ¡Gran actualización! Ahora puedes reproducir música vía streaming. Busca, reproduce y descarga canciones directamente desde las pantallas de búsqueda y artista. Ya no es necesario descargar una canción antes de reproducirla, aunque la opción de descarga sigue disponible.\n\n• Las pantallas de Me gusta y Biblioteca (Listas de reproducción) ahora permiten guardar y gestionar canciones en streaming.\n\n• Se añadió un nuevo modo Radio, que reproduce y recomienda canciones similares a la que estás escuchando.\n\n• Ahora puedes descargar música directamente desde el reproductor, así como desde las pantallas de Me gusta y listas de reproducción.\n\n• Se añadió una opción para seleccionar la calidad de las carátulas al reproducir música vía streaming.\n\n• Se añadió una opción para limpiar los enlaces de audio temporales.\n\n• Las canciones reproducidas en streaming ahora se guardan en Canciones recientes.\n\n• Se aplicaron mejoras visuales en la interfaz.\n\n• Se corrigieron algunos errores y se mejoró la estabilidad general de la aplicación."
 }
