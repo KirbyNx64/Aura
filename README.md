@@ -40,6 +40,35 @@
 - [`audiotags`](https://pub.dev/packages/audiotags)
 - [`path_provider`](https://pub.dev/packages/path_provider)
 - [`permission_handler`](https://pub.dev/packages/permission_handler)
+- [`hive_ce`](https://pub.dev/packages/hive_ce)
+
+# Instalación rápida
+
+1. Clona el repositorio:
+
+  ```bash
+  git clone https://github.com/KirbyNx64/Aura.git
+  ```
+
+2. Entra al directorio del proyecto:
+
+  ```bash
+  cd Aura
+  ```
+
+3. Instala las dependencias:
+
+  ```bash
+  flutter pub get
+  ```
+
+4. Conecta tu dispositivo o inicia un emulador.
+
+5. Ejecuta la aplicación:
+
+  ```bash
+  flutter run
+  ```
 
 # Licencia
 ```
@@ -69,5 +98,5 @@ el autor del software conozca la posibilidad de tales daños o defectos conocido
 # Referencias de aprendizaje y créditos
 <a href = 'https://docs.flutter.dev/'>Documentación de Flutter</a> - una guía excelente para aprender desarrollo de interfaces y aplicaciones multiplataforma<br/>
 <a href = 'https://github.com/sigma67'>sigma67</a> - proyecto no oficial de API de ytmusic
-- <a href = 'https://lrclib.net'>lrclib</a> - fuente utilizada para extraer letras de canciones (formato LRC).
-- <a href = 'https://lyrics.simpmusic.org/'>lyrics.simpmusic.org</a> - proveedor de letras y metadatos de canciones usado para extracción.
+<a href = 'https://lrclib.net'>lrclib</a> - fuente utilizada para extraer letras de canciones (formato LRC).
+<a href = 'https://lyrics.simpmusic.org/'>lyrics.simpmusic.org</a> - proveedor de letras y metadatos de canciones usado para extracción.
