@@ -93,6 +93,7 @@ const Map<String, String> appLocalizationsEs = {
   'download_type_desc': 'Elige el método para descargar audio',
   'explode': 'Explode',
   'direct': 'Directo',
+  'added_to_favorites': 'Añadido a me gusta',
   'cover_quality': 'Calidad de carátula',
   'cover_quality_desc': 'Elige la calidad de las carátulas al descargar',
   'download_cover_quality': 'Calidad de carátula',

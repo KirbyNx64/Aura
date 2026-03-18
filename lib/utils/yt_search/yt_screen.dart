@@ -293,6 +293,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   final Set<String> _selectedIndexes = {};
   bool _isSelectionMode = false;
   int _searchSessionId = 0;
+  final Map<String, String> _resolvedLh3ThumbByVideoId = {};
 
   // ScrollControllers para paginación incremental
   final ScrollController _songScrollController = ScrollController();
@@ -1149,6 +1150,19 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     if (_urlVideoResult == null) return const SizedBox.shrink();
 
+    final video = _urlVideoResult!;
+    final videoId = video.id.toString().trim();
+    final artist = video.author.replaceFirst(RegExp(r' - Topic$'), '').trim();
+    final fallbackThumbUrl =
+        'https://img.youtube.com/vi/$videoId/maxresdefault.jpg';
+    final thumbUrl = video.thumbnails.highResUrl.trim().isNotEmpty
+        ? video.thumbnails.highResUrl
+        : fallbackThumbUrl;
+    final durationMs = video.duration?.inMilliseconds;
+    final durationText = (durationMs != null && durationMs > 0)
+        ? _formatDurationFromMilliseconds(durationMs)
+        : null;
+
     final topBorderRadius = const BorderRadius.only(
       topLeft: Radius.circular(20),
       topRight: Radius.circular(20),
@@ -1186,7 +1200,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: _buildSafeNetworkImage(
-                        'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
+                        fallbackThumbUrl,
                         width: 80,
                         height: 80,
                         fit: BoxFit.cover,
@@ -1239,54 +1253,218 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             ),
           ),
           const SizedBox(height: 4),
-          // Card 2: Botón de descarga
+          // Card 2: Acciones (Guardar / Descargar)
           Card(
             color: Theme.of(context).colorScheme.primary,
             margin: EdgeInsets.zero,
             elevation: 0,
             shape: RoundedRectangleBorder(borderRadius: bottomBorderRadius),
-            child: InkWell(
-              borderRadius: bottomBorderRadius,
-              onTap: () async {
-                final downloadQueue = DownloadQueue();
-                await downloadQueue.addToQueue(
-                  context: context,
-                  videoId: _urlVideoResult!.id.toString(),
-                  title: _urlVideoResult!.title,
-                  artist: _urlVideoResult!.author.replaceFirst(
-                    RegExp(r' - Topic$'),
-                    '',
-                  ),
-                  thumbUrl:
-                      'https://img.youtube.com/vi/${_urlVideoResult!.id}/maxresdefault.jpg',
-                );
-                _showMessage(
-                  LocaleProvider.tr('success'),
-                  LocaleProvider.tr('download_started'),
-                );
-              },
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.download,
-                      color: Theme.of(context).colorScheme.onPrimary,
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      bottomLeft: Radius.circular(20),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      LocaleProvider.tr('download'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    onTap: () async {
+                      await showModalBottomSheet(
+                        context: context,
+                        backgroundColor: Colors.transparent,
+                        builder: (modalContext) {
+                          final isAmoled =
+                              colorSchemeNotifier.value ==
+                              AppColorScheme.amoled;
+                          final isDark =
+                              Theme.of(context).brightness == Brightness.dark;
+                          final menuColor = isAmoled && isDark
+                              ? Colors.black
+                              : Theme.of(context).colorScheme.surface;
+
+                          return SafeArea(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: menuColor,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(28),
+                                ),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    width: 40,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
+                                          .withAlpha(100),
+                                      borderRadius: BorderRadius.circular(2),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ListTile(
+                                    leading: const Icon(
+                                      Icons.favorite_outline_rounded,
+                                    ),
+                                    title: Text(
+                                      LocaleProvider.tr('add_to_favorites'),
+                                    ),
+                                    onTap: () async {
+                                      Navigator.of(modalContext).pop();
+                                      final resolvedLh3Thumb =
+                                          await _resolveLh3ThumbForVideoId(
+                                            videoId,
+                                            queryHint: video.title,
+                                          );
+                                      final preferredSaveThumb =
+                                          (resolvedLh3Thumb != null &&
+                                              resolvedLh3Thumb
+                                                  .trim()
+                                                  .isNotEmpty)
+                                          ? resolvedLh3Thumb
+                                          : thumbUrl;
+                                      final savedThumbUrl =
+                                          await _resolvedSavedThumbWithQuality(
+                                            preferredSaveThumb,
+                                            videoId: videoId,
+                                          );
+                                      final videoAsResult = YtMusicResult(
+                                        title: video.title,
+                                        artist: artist,
+                                        thumbUrl: savedThumbUrl,
+                                        videoId: videoId,
+                                        durationMs: durationMs,
+                                        durationText: durationText,
+                                      );
+                                      await _addSongToFavorites(videoAsResult);
+                                      _showMessage(
+                                        LocaleProvider.tr('success'),
+                                        LocaleProvider.tr('added_to_favorites'),
+                                      );
+                                    },
+                                  ),
+                                  ListTile(
+                                    leading: const Icon(
+                                      Icons.playlist_add_rounded,
+                                    ),
+                                    title: Text(
+                                      LocaleProvider.tr('add_to_playlist'),
+                                    ),
+                                    onTap: () async {
+                                      Navigator.of(modalContext).pop();
+                                      final resolvedLh3Thumb =
+                                          await _resolveLh3ThumbForVideoId(
+                                            videoId,
+                                            queryHint: video.title,
+                                          );
+                                      final preferredSaveThumb =
+                                          (resolvedLh3Thumb != null &&
+                                              resolvedLh3Thumb
+                                                  .trim()
+                                                  .isNotEmpty)
+                                          ? resolvedLh3Thumb
+                                          : thumbUrl;
+                                      final savedThumbUrl =
+                                          await _resolvedSavedThumbWithQuality(
+                                            preferredSaveThumb,
+                                            videoId: videoId,
+                                          );
+                                      final videoAsResult = YtMusicResult(
+                                        title: video.title,
+                                        artist: artist,
+                                        thumbUrl: savedThumbUrl,
+                                        videoId: videoId,
+                                        durationMs: durationMs,
+                                        durationText: durationText,
+                                      );
+                                      await _showAddSongToPlaylistDialog(
+                                        videoAsResult,
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.bookmark_add_outlined,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            LocaleProvider.tr('save'),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                Container(
+                  width: 1,
+                  height: 30,
+                  color: Theme.of(context).colorScheme.onPrimary.withAlpha(80),
+                ),
+                Expanded(
+                  child: InkWell(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(4),
+                      bottomRight: Radius.circular(20),
+                    ),
+                    onTap: () async {
+                      final downloadQueue = DownloadQueue();
+                      await downloadQueue.addToQueue(
+                        context: context,
+                        videoId: videoId,
+                        title: video.title,
+                        artist: artist,
+                        thumbUrl: thumbUrl,
+                      );
+                      _showMessage(
+                        LocaleProvider.tr('success'),
+                        LocaleProvider.tr('download_started'),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.download,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            LocaleProvider.tr('download'),
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -8424,6 +8602,157 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     if (q == 'high' || q == 'medium' || q == 'low') return q!;
     final old = prefs.getBool('cover_quality_high');
     return old == false ? 'low' : 'medium';
+  }
+
+  String _googleThumbSizeForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 's600';
+      case 'low':
+        return 's300';
+      default:
+        return 's1200';
+    }
+  }
+
+  String _ytThumbFileForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 'sddefault.jpg';
+      case 'low':
+        return 'hqdefault.jpg';
+      default:
+        return 'maxresdefault.jpg';
+    }
+  }
+
+  String _applySavedCoverQualityToThumb(
+    String rawUrl,
+    String quality, {
+    String? videoId,
+  }) {
+    final normalized = rawUrl.trim();
+    if (normalized.isEmpty || normalized == 'null') return normalized;
+
+    final lower = normalized.toLowerCase();
+    if (lower.contains('googleusercontent.com')) {
+      final size = _googleThumbSizeForQuality(quality);
+      final replaced = normalized.replaceFirst(RegExp(r'=s\d+\b'), '=$size');
+      if (replaced != normalized) return replaced;
+
+      final eqIndex = normalized.lastIndexOf('=');
+      if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+        final suffix = normalized.substring(eqIndex + 1);
+        if (!suffix.contains('/')) {
+          return '${normalized.substring(0, eqIndex + 1)}$size';
+        }
+      }
+      return '$normalized=$size';
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) return normalized;
+
+    final host = uri.host.toLowerCase();
+    if (!host.contains('ytimg.com') && !host.contains('img.youtube.com')) {
+      return normalized;
+    }
+
+    final qualityFile = _ytThumbFileForQuality(quality);
+    final qualityWebp = qualityFile.replaceAll('.jpg', '.webp');
+    final segments = List<String>.from(uri.pathSegments);
+
+    if (segments.isNotEmpty) {
+      final last = segments.last.toLowerCase();
+      final isKnownThumb =
+          last.contains('maxresdefault') ||
+          last.contains('sddefault') ||
+          last.contains('hqdefault') ||
+          last.contains('mqdefault');
+      if (isKnownThumb) {
+        final useWebp = last.endsWith('.webp');
+        segments[segments.length - 1] = useWebp ? qualityWebp : qualityFile;
+        return uri.replace(pathSegments: segments).toString();
+      }
+    }
+
+    final id = videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$id/$qualityFile';
+    }
+
+    return normalized;
+  }
+
+  Future<String> _resolvedSavedThumbWithQuality(
+    String rawUrl, {
+    String? videoId,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final quality = _getCoverQualityPref(prefs);
+    return _applySavedCoverQualityToThumb(rawUrl, quality, videoId: videoId);
+  }
+
+  String? _firstMatchingLh3Thumb(
+    List<YtMusicResult> items,
+    String targetVideoId,
+  ) {
+    final normalizedTarget = targetVideoId.trim();
+    if (normalizedTarget.isEmpty) return null;
+
+    for (final item in items) {
+      final id = item.videoId?.trim();
+      final thumb = item.thumbUrl?.trim();
+      if (id != normalizedTarget || thumb == null || thumb.isEmpty) continue;
+      if (thumb.toLowerCase().contains('googleusercontent.com')) {
+        return thumb;
+      }
+    }
+
+    return null;
+  }
+
+  Future<String?> _resolveLh3ThumbForVideoId(
+    String videoId, {
+    String? queryHint,
+  }) async {
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return null;
+
+    final cached = _resolvedLh3ThumbByVideoId[normalizedVideoId];
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+
+    final queries = <String>[];
+    final normalizedHint = queryHint?.trim();
+    if (normalizedHint != null && normalizedHint.isNotEmpty) {
+      queries.add(normalizedHint);
+    }
+    queries.add(normalizedVideoId);
+
+    try {
+      for (final query in queries) {
+        final songResults = await searchSongsOnly(query);
+        final songLh3 = _firstMatchingLh3Thumb(songResults, normalizedVideoId);
+        if (songLh3 != null && songLh3.isNotEmpty) {
+          _resolvedLh3ThumbByVideoId[normalizedVideoId] = songLh3;
+          return songLh3;
+        }
+
+        final videoResults = await _searchVideosOnly(query);
+        final videoLh3 = _firstMatchingLh3Thumb(
+          videoResults,
+          normalizedVideoId,
+        );
+        if (videoLh3 != null && videoLh3.isNotEmpty) {
+          _resolvedLh3ThumbByVideoId[normalizedVideoId] = videoLh3;
+          return videoLh3;
+        }
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   Future<String> _buildPlayerArtworkUri(

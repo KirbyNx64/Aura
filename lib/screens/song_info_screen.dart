@@ -22,12 +22,14 @@ class _StreamingMetadata {
   final String? videoId;
   final int? durationMs;
   final String? durationText;
+  final String? artworkUrl;
 
   const _StreamingMetadata({
     this.history,
     this.videoId,
     this.durationMs,
     this.durationText,
+    this.artworkUrl,
   });
 }
 
@@ -48,6 +50,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
   String? _videoId;
   int? _streamDurationMs;
   String? _streamDurationText;
+  String? _streamArtworkUrl;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -98,6 +101,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
           _videoId = metadata.videoId;
           _streamDurationMs = metadata.durationMs;
           _streamDurationText = metadata.durationText;
+          _streamArtworkUrl = metadata.artworkUrl;
           _isLoading = false;
         });
         return;
@@ -209,6 +213,18 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
       recentsMetaByCanonical,
     ];
 
+    String? artworkUrl;
+    for (final meta in metas) {
+      if (meta == null) continue;
+      artworkUrl ??= _normalizeText(meta['artUri']);
+      if (artworkUrl != null) break;
+    }
+
+    artworkUrl ??= _normalizeText(widget.mediaItem.extras?['displayArtUri']);
+    artworkUrl ??= _normalizeText(widget.mediaItem.extras?['artUri']);
+    final mediaArtUri = widget.mediaItem.artUri?.toString();
+    artworkUrl ??= _normalizeText(mediaArtUri);
+
     String? durationText;
     int? durationMs;
     for (final meta in metas) {
@@ -239,6 +255,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
       videoId: _firstNonEmpty([resolvedVideoId, history?.videoId]),
       durationMs: durationMs,
       durationText: durationText,
+      artworkUrl: artworkUrl,
     );
   }
 
@@ -485,6 +502,33 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     return '?';
   }
 
+  String _artworkUrlForInfoBox(String rawUrl) {
+    final normalized = rawUrl.trim();
+    if (normalized.isEmpty) return normalized;
+
+    final lower = normalized.toLowerCase();
+    if (!lower.contains('googleusercontent.com')) {
+      return normalized;
+    }
+
+    const targetSize = 's1200';
+    final replaced = normalized.replaceFirst(
+      RegExp(r'=s\d+\b'),
+      '=$targetSize',
+    );
+    if (replaced != normalized) return replaced;
+
+    final eqIndex = normalized.lastIndexOf('=');
+    if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+      final suffix = normalized.substring(eqIndex + 1);
+      if (!suffix.contains('/')) {
+        return '${normalized.substring(0, eqIndex + 1)}$targetSize';
+      }
+    }
+
+    return '$normalized=$targetSize';
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -493,6 +537,10 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     final mediaPath = _mediaPath();
     final resolvedVideoId = _normalizeText(_videoId);
     final hasVideoId = resolvedVideoId != null && resolvedVideoId.isNotEmpty;
+    final resolvedArtworkUrl = _normalizeText(_streamArtworkUrl);
+    final artworkUrlForInfoBox = (resolvedArtworkUrl != null)
+        ? _artworkUrlForInfoBox(resolvedArtworkUrl)
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -578,16 +626,6 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                           ),
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(color: colorScheme.primary),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _displayText(
-                            widget.mediaItem.album,
-                            LocaleProvider.tr('unknown_album'),
-                          ),
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: colorScheme.onSurfaceVariant),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -960,6 +998,65 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                       ],
                     ),
                   ),
+                  if (_isStreaming &&
+                      artworkUrlForInfoBox != null &&
+                      artworkUrlForInfoBox.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isAmoled
+                            ? Colors.white.withAlpha(20)
+                            : isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.06)
+                            : Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Artwork URL',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  artworkUrlForInfoBox,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(fontFamily: 'monospace'),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              SizedBox(width: 10),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 20),
+                                onPressed: () {
+                                  Clipboard.setData(
+                                    ClipboardData(text: artworkUrlForInfoBox),
+                                  );
+                                },
+                                style: IconButton.styleFrom(
+                                  backgroundColor: colorScheme.primaryContainer,
+                                  foregroundColor:
+                                      colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 32),
                 ],
               ),
