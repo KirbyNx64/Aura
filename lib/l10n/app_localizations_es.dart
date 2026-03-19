@@ -94,7 +94,12 @@ const Map<String, String> appLocalizationsEs = {
   'explode': 'Explode',
   'direct': 'Directo',
   'discovery': 'Descubrimiento',
+  'discovery_info_desc':
+      'Esta pantalla te muestra recomendaciones basadas en tus reproducciones. Se renueva automáticamente cada 24 horas.',
   'added_to_favorites': 'Añadido a me gusta',
+  'no_recent_streaming_yet': 'No hay recientes de streaming todavía.',
+  'no_radio_songs_found_for_seed':
+      'No se encontraron canciones de radio para esta semilla.',
   'cover_quality': 'Calidad de carátula',
   'cover_quality_desc': 'Elige la calidad de las carátulas al descargar',
   'download_cover_quality': 'Calidad de carátula',

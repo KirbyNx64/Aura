@@ -90,7 +90,11 @@ const Map<String, String> appLocalizationsEn = {
   'explode': 'Explode',
   'direct': 'Direct',
   'discovery': 'Discovery',
+  'discovery_info_desc':
+      'This screen shows recommendations based on your plays. It refreshes automatically every 24 hours.',
   'added_to_favorites': 'Added to favorites',
+  'no_recent_streaming_yet': 'No recent streaming tracks yet.',
+  'no_radio_songs_found_for_seed': 'No radio songs were found for this seed.',
   'cover_quality': 'Cover quality',
   'cover_quality_desc': 'Choose the quality of covers when downloading',
   'download_cover_quality': 'Download cover quality',
