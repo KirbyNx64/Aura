@@ -24,6 +24,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/artist_images_cache_db.dart';
+import 'package:music/utils/db/artist_songs_cache_db.dart';
 import 'package:music/utils/db/streaming_artists_db.dart';
 import 'package:music/utils/db/download_history_hive.dart';
 import 'package:music/utils/yt_search/service.dart';
@@ -2100,6 +2101,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     String? browseId,
     int limit = 40,
   }) async {
+    final cachedSongsMeta = await ArtistSongsCacheDB().getArtistSongs(
+      artistName,
+      browseId: browseId,
+    );
+    if (cachedSongsMeta.isNotEmpty) {
+      return _buildStreamingArtistItemsFromMeta(artistName, cachedSongsMeta);
+    }
+
     String? resolvedBrowseId = browseId?.trim();
     if (resolvedBrowseId == null || resolvedBrowseId.isEmpty) {
       final search = await searchArtists(artistName, limit: 1);
@@ -2119,7 +2128,33 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final rawResults = songsData['results'];
     if (rawResults is! List) return const [];
     final ytSongs = rawResults.whereType<YtMusicResult>().toList();
-    return _buildStreamingArtistItemsFromYt(artistName, ytSongs);
+    final songs = _buildStreamingArtistItemsFromYt(artistName, ytSongs);
+
+    if (songs.isNotEmpty) {
+      await ArtistSongsCacheDB().cacheArtistSongs(
+        artistName: artistName,
+        browseId: resolvedBrowseId,
+        songsMeta: songs
+            .map(
+              (song) => <String, dynamic>{
+                'path': song.rawPath,
+                'title': song.title,
+                'artist': song.artist,
+                if (song.videoId != null && song.videoId!.isNotEmpty)
+                  'videoId': song.videoId,
+                if (song.artUri != null && song.artUri!.isNotEmpty)
+                  'artUri': song.artUri,
+                if (song.durationText != null && song.durationText!.isNotEmpty)
+                  'durationText': song.durationText,
+                if (song.durationMs != null && song.durationMs! > 0)
+                  'durationMs': song.durationMs,
+              },
+            )
+            .toList(),
+      );
+    }
+
+    return songs;
   }
 
   Future<void> _openArtistSongsModalWithDeferredLoad(
@@ -2976,20 +3011,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildArtistWidget(Map<String, dynamic> artist, BuildContext context) {
     return AnimatedTapButton(
       onTap: () async {
-        final artistName = artist['name']?.toString().trim() ?? '';
-        if (artistName.isEmpty) return;
-        final songsMeta = await StreamingArtistsDB().getArtistSongs(artistName);
-        final songs = _buildStreamingArtistItemsFromMeta(artistName, songsMeta);
-
-        if (songs.isNotEmpty && mounted) {
-          await _playStreamingEntry(
-            item: songs.first,
-            sourceItems: songs,
-            queueSource: '${LocaleProvider.tr('artist')}: $artistName',
-          );
-        }
-      },
-      onLongPress: () async {
         HapticFeedback.mediumImpact();
         if (!context.mounted) return;
         final artistName = artist['name']?.toString().trim() ?? '';
@@ -3001,6 +3022,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           browseId: browseId,
         );
       },
+      onLongPress: null,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [

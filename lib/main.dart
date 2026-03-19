@@ -18,6 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hive_ce_flutter/hive_ce_flutter.dart';
 import 'package:music/utils/db/playlist_model.dart';
 import 'package:music/utils/db/download_history_model.dart';
+import 'package:music/utils/db/artist_songs_cache_db.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
@@ -358,6 +359,10 @@ void main() async {
 
   // Inicialización del servicio de notificaciones
   await NotificationService.initialize();
+
+  try {
+    await ArtistSongsCacheDB().clearAllCache();
+  } catch (_) {}
 
   await LocaleProvider.loadLocale();
 
