@@ -89,6 +89,7 @@ const Map<String, String> appLocalizationsEn = {
   'download_type_desc': 'Choose the method to download audio',
   'explode': 'Explode',
   'direct': 'Direct',
+  'discovery': 'Discovery',
   'added_to_favorites': 'Added to favorites',
   'cover_quality': 'Cover quality',
   'cover_quality_desc': 'Choose the quality of covers when downloading',

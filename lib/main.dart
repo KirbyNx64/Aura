@@ -22,7 +22,6 @@ import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/audio/background_audio_handler.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
 import 'package:music/utils/db/songs_index_db.dart';
-import 'package:music/utils/db/artists_db.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
 import 'package:music/utils/sharing_handler.dart';
@@ -84,12 +83,6 @@ Future<void> performIndexingIfNeeded() async {
 
     // Realizar la indexación de canciones
     await songsIndexDB.indexAllSongs(allSongs);
-
-    // print('🎵 Indexando artistas...');
-
-    // Indexar artistas
-    final artistsDB = ArtistsDB();
-    await artistsDB.indexArtists(allSongs);
 
     // print('🎵 Indexación completada exitosamente - La app está lista');
   } catch (e) {

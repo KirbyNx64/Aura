@@ -22,8 +22,8 @@ import 'package:music/l10n/locale_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
-import 'package:music/utils/db/artists_db.dart';
 import 'package:music/utils/db/artist_images_cache_db.dart';
+import 'package:music/utils/db/streaming_artists_db.dart';
 import 'package:music/utils/db/download_history_hive.dart';
 import 'package:music/utils/yt_search/service.dart';
 // import 'package:music/widgets/hero_cached.dart';
@@ -211,6 +211,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<SongModel> _randomSongs =
       []; // Canciones aleatorias para llenar espacios vacíos
   List<SongModel> _shuffledQuickPick = [];
+  List<_StreamingRecentItem> _shuffledStreamingRecentsQuickPick = [];
+  List<_StreamingRecentItem> _quickPickYtFallbackSongs = [];
+  List<_StreamingRecentItem> _sharedYtFallbackPool = [];
+  Future<void>? _sharedYtFallbackLoading;
   bool _randomSongsLoaded = false; // Bandera para evitar cargas duplicadas
   List<Map<String, dynamic>> _artists = []; // Lista de artistas populares
 
@@ -824,44 +828,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadArtists({bool forceRefresh = false}) async {
+    // Mantener parámetro para compatibilidad con llamadas de refresh existentes.
+    final _ = forceRefresh;
     try {
-      // print('🎵 Cargando artistas...');
-      final artistsDB = ArtistsDB();
+      final artists = await StreamingArtistsDB().getTopArtists(limit: 20);
 
-      // Intentar cargar artistas existentes primero
-      List<Map<String, dynamic>> artists = await artistsDB.getTopArtists(
-        limit: 20,
-      );
-      // print('🎵 Artistas encontrados en DB: ${artists.length}');
-
-      // Si no hay artistas y hay canciones disponibles, o si se fuerza el refresh, indexar
-      if ((artists.isEmpty && allSongs.isNotEmpty) || forceRefresh) {
-        // print(
-        //   '🎵 ${forceRefresh ? 'Forzando' : 'No hay artistas, '}indexando con ${allSongs.length} canciones...',
-        // );
-        await artistsDB.indexArtists(allSongs);
-        artists = await artistsDB.getTopArtists(limit: 20);
-        // print('🎵 Artistas después de indexar: ${artists.length}');
-      }
-
-      // Mostrar artistas inmediatamente en la UI
-      if (mounted && artists.isNotEmpty) {
-        // print('🎵 Mostrando ${artists.length} artistas en UI');
+      if (mounted) {
         setState(() {
           _artists = artists;
         });
+      }
 
-        // Enriquecer artistas con imágenes de YouTube Music en segundo plano
-        _enrichArtistsWithYTImages(artists);
-      } else if (mounted) {
-        // print('🎵 No hay artistas para mostrar');
-        setState(() {
-          _artists = [];
-        });
+      if (artists.isNotEmpty) {
+        _enrichArtistsWithYTImages(List<Map<String, dynamic>>.from(artists));
       }
     } catch (e) {
-      // print('🎵 Error cargando artistas: $e');
-      // En caso de error, mantener la lista vacía
       if (mounted) {
         setState(() {
           _artists = [];
@@ -1055,6 +1036,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }*/
 
   // Mostrar modal con canciones del artista
+  // ignore: unused_element
   Future<void> _showArtistSongsModal(
     BuildContext context,
     String artistName,
@@ -1502,52 +1484,845 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  List<_StreamingRecentItem> _buildStreamingArtistItemsFromMeta(
+    String artistName,
+    List<Map<String, dynamic>> songsMeta,
+  ) {
+    final items = <_StreamingRecentItem>[];
+    for (final meta in songsMeta) {
+      final rawPath = meta['path']?.toString().trim() ?? '';
+      final rawVideoId = meta['videoId']?.toString().trim();
+      final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+          ? rawVideoId
+          : _extractVideoIdFromPath(rawPath);
+      if (videoId == null || videoId.isEmpty) continue;
+
+      final title = meta['title']?.toString().trim();
+      final artist = meta['artist']?.toString().trim();
+      final durationText = meta['durationText']?.toString().trim();
+      final durationMs = _parseDurationMs(meta['durationMs']);
+      final artUri = _applyStreamingArtworkQuality(
+        meta['artUri']?.toString().trim(),
+        videoId: videoId,
+      );
+
+      items.add(
+        _StreamingRecentItem(
+          rawPath: rawPath.isNotEmpty ? rawPath : 'yt:$videoId',
+          title: (title != null && title.isNotEmpty)
+              ? title
+              : LocaleProvider.tr('title_unknown'),
+          artist: (artist != null && artist.isNotEmpty) ? artist : artistName,
+          videoId: videoId,
+          artUri: artUri,
+          durationText: (durationText != null && durationText.isNotEmpty)
+              ? durationText
+              : null,
+          durationMs: durationMs,
+        ),
+      );
+    }
+    return items;
+  }
+
+  List<_StreamingRecentItem> _buildStreamingArtistItemsFromYt(
+    String artistName,
+    List<YtMusicResult> songs,
+  ) {
+    final items = <_StreamingRecentItem>[];
+    final usedVideoIds = <String>{};
+
+    for (final song in songs) {
+      final videoId = song.videoId?.trim();
+      if (videoId == null || videoId.isEmpty) continue;
+      if (!usedVideoIds.add(videoId)) continue;
+
+      final title = song.title?.trim();
+      final artist = song.artist?.trim();
+      final artUri = _applyStreamingArtworkQuality(
+        song.thumbUrl,
+        videoId: videoId,
+      );
+      final durationText = song.durationText?.trim();
+      final durationMs = song.durationMs;
+
+      items.add(
+        _StreamingRecentItem(
+          rawPath: 'yt:$videoId',
+          title: (title != null && title.isNotEmpty)
+              ? title
+              : LocaleProvider.tr('title_unknown'),
+          artist: (artist != null && artist.isNotEmpty) ? artist : artistName,
+          videoId: videoId,
+          artUri: artUri,
+          durationText: (durationText != null && durationText.isNotEmpty)
+              ? durationText
+              : null,
+          durationMs: durationMs,
+        ),
+      );
+    }
+
+    return items;
+  }
+
+  Future<List<_StreamingRecentItem>> _loadArtistCatalogSongsForModal({
+    required String artistName,
+    String? browseId,
+    int limit = 40,
+  }) async {
+    String? resolvedBrowseId = browseId?.trim();
+    if (resolvedBrowseId == null || resolvedBrowseId.isEmpty) {
+      final search = await searchArtists(artistName, limit: 1);
+      if (search.isNotEmpty) {
+        resolvedBrowseId = search.first['browseId']?.toString().trim();
+      }
+    }
+
+    if (resolvedBrowseId == null || resolvedBrowseId.isEmpty) {
+      return const [];
+    }
+
+    final songsData = await getArtistSongs(
+      resolvedBrowseId,
+      initialLimit: limit,
+    );
+    final rawResults = songsData['results'];
+    if (rawResults is! List) return const [];
+    final ytSongs = rawResults.whereType<YtMusicResult>().toList();
+    return _buildStreamingArtistItemsFromYt(artistName, ytSongs);
+  }
+
+  Future<void> _openArtistSongsModalWithDeferredLoad(
+    BuildContext context, {
+    required String artistName,
+    String? browseId,
+  }) async {
+    if (!context.mounted) return;
+    final songsFuture = _loadArtistCatalogSongsForModal(
+      artistName: artistName,
+      browseId: browseId,
+      limit: 40,
+    );
+    final artistInfoFuture = ArtistImagesCacheDB.getCachedArtistImage(
+      artistName,
+    );
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: artistInfoFuture,
+                    builder: (context, snapshot) {
+                      final artistInfo = snapshot.data;
+                      return Container(
+                        width: 60,
+                        height: 60,
+                        decoration: const BoxDecoration(shape: BoxShape.circle),
+                        child: ClipOval(
+                          child: artistInfo?['thumbUrl'] != null
+                              ? CachedNetworkImage(
+                                  imageUrl: artistInfo!['thumbUrl'] as String,
+                                  width: 60,
+                                  height: 60,
+                                  fit: BoxFit.cover,
+                                  errorWidget: (context, url, error) =>
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .primary
+                                              .withValues(alpha: 0.1),
+                                        ),
+                                        child: Icon(
+                                          Icons.person,
+                                          size: 30,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                      ),
+                                  placeholder: (context, url) => Container(
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .primary
+                                          .withValues(alpha: 0.1),
+                                    ),
+                                    child: Center(child: LoadingIndicator()),
+                                  ),
+                                )
+                              : Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.primary
+                                        .withValues(alpha: 0.1),
+                                  ),
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 30,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          artistName,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FutureBuilder<Map<String, dynamic>?>(
+                    future: artistInfoFuture,
+                    builder: (context, snapshot) {
+                      final artistInfo = snapshot.data;
+                      return InkWell(
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            PageRouteBuilder(
+                              pageBuilder:
+                                  (context, animation, secondaryAnimation) =>
+                                      ArtistScreen(
+                                        artistName: artistName,
+                                        browseId: artistInfo?['browseId']
+                                            ?.toString()
+                                            .trim(),
+                                      ),
+                              transitionsBuilder:
+                                  (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                    child,
+                                  ) {
+                                    const begin = Offset(1.0, 0.0);
+                                    const end = Offset.zero;
+                                    const curve = Curves.ease;
+                                    final tween = Tween(
+                                      begin: begin,
+                                      end: end,
+                                    ).chain(CurveTween(curve: curve));
+                                    return SlideTransition(
+                                      position: animation.drive(tween),
+                                      child: child,
+                                    );
+                                  },
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context)
+                                      .colorScheme
+                                      .onPrimaryContainer
+                                      .withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.person_outline,
+                                size: 20,
+                                color:
+                                    Theme.of(context).brightness ==
+                                        Brightness.dark
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainer,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                LocaleProvider.tr('go_to_artist'),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color:
+                                      Theme.of(context).brightness ==
+                                          Brightness.dark
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.surfaceContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: FutureBuilder<List<_StreamingRecentItem>>(
+                future: songsFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return Center(child: LoadingIndicator());
+                  }
+
+                  final songs = snapshot.data ?? const <_StreamingRecentItem>[];
+                  if (songs.isEmpty) {
+                    return Center(
+                      child: Text(
+                        LocaleProvider.tr('no_songs'),
+                        style: TextStyle(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    controller: _artistSongsScrollController,
+                    padding: EdgeInsets.only(
+                      left: 16,
+                      right: 16,
+                      top: 8,
+                      bottom: MediaQuery.of(context).padding.bottom,
+                    ),
+                    itemCount: songs.length,
+                    itemBuilder: (context, index) {
+                      final item = songs[index];
+                      final itemVideoId = item.videoId?.trim();
+                      final currentMediaItem = _currentMediaItemNotifier.value;
+                      final currentVideoId = currentMediaItem
+                          ?.extras?['videoId']
+                          ?.toString()
+                          .trim();
+                      final isCurrent =
+                          (itemVideoId != null &&
+                              itemVideoId.isNotEmpty &&
+                              currentVideoId == itemVideoId) ||
+                          currentMediaItem?.id == item.rawPath ||
+                          (itemVideoId != null &&
+                              currentMediaItem?.id == 'yt:$itemVideoId');
+
+                      final colorScheme = colorSchemeNotifier.value;
+                      final isAmoledTheme =
+                          colorScheme == AppColorScheme.amoled;
+                      final isDark =
+                          Theme.of(context).brightness == Brightness.dark;
+                      final cardColor = isAmoledTheme
+                          ? Colors.white.withAlpha(20)
+                          : isDark
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.06)
+                          : Theme.of(
+                              context,
+                            ).colorScheme.secondary.withValues(alpha: 0.07);
+
+                      final bool isFirst = index == 0;
+                      final bool isLast = index == songs.length - 1;
+                      final bool isOnly = songs.length == 1;
+                      BorderRadius borderRadius;
+                      if (isOnly) {
+                        borderRadius = BorderRadius.circular(20);
+                      } else if (isFirst) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                          bottomLeft: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        );
+                      } else if (isLast) {
+                        borderRadius = const BorderRadius.only(
+                          topLeft: Radius.circular(4),
+                          topRight: Radius.circular(4),
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        );
+                      } else {
+                        borderRadius = BorderRadius.circular(4);
+                      }
+
+                      return Padding(
+                        padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                        child: Card(
+                          color: isCurrent
+                              ? isAmoledTheme
+                                    ? cardColor
+                                    : Theme.of(context).colorScheme.primary
+                                          .withAlpha(isDark ? 40 : 25)
+                              : cardColor,
+                          margin: EdgeInsets.zero,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: borderRadius,
+                          ),
+                          child: ListTile(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: borderRadius,
+                            ),
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: SizedBox(
+                                width: 50,
+                                height: 50,
+                                child: _StreamingArtwork(
+                                  sources: _streamingArtworkSources(item),
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHigh,
+                                  iconColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            title: Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: isCurrent
+                                  ? Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: isAmoledTheme
+                                          ? Colors.white
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                    )
+                                  : Theme.of(context).textTheme.titleMedium,
+                            ),
+                            subtitle: Text(
+                              _formatStreamingArtistWithDuration(item),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: isAmoledTheme
+                                  ? TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.8,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            onTap: () async {
+                              await _playStreamingEntry(
+                                item: item,
+                                sourceItems: songs,
+                                queueSource:
+                                    '${LocaleProvider.tr('artist')}: $artistName',
+                              );
+                              if (context.mounted) {
+                                Navigator.of(context).pop();
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ignore: unused_element
+  Future<void> _showStreamingArtistSongsModal(
+    BuildContext context,
+    String artistName,
+    List<_StreamingRecentItem> songs,
+  ) async {
+    final artistInfo = await ArtistImagesCacheDB.getCachedArtistImage(
+      artistName,
+    );
+
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: const BoxDecoration(shape: BoxShape.circle),
+                    child: ClipOval(
+                      child: artistInfo?['thumbUrl'] != null
+                          ? CachedNetworkImage(
+                              imageUrl: artistInfo!['thumbUrl'] as String,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorWidget: (context, url, error) => Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.1),
+                                ),
+                                child: Icon(
+                                  Icons.person,
+                                  size: 30,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                              placeholder: (context, url) => Container(
+                                decoration: BoxDecoration(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.primary.withValues(alpha: 0.1),
+                                ),
+                                child: Center(child: LoadingIndicator()),
+                              ),
+                            )
+                          : Container(
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.1),
+                              ),
+                              child: Icon(
+                                Icons.person,
+                                size: 30,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          artistName,
+                          style: Theme.of(context).textTheme.headlineSmall
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        PageRouteBuilder(
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  ArtistScreen(
+                                    artistName: artistName,
+                                    browseId: artistInfo?['browseId'],
+                                  ),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                const begin = Offset(1.0, 0.0);
+                                const end = Offset.zero;
+                                const curve = Curves.ease;
+                                final tween = Tween(
+                                  begin: begin,
+                                  end: end,
+                                ).chain(CurveTween(curve: curve));
+                                return SlideTransition(
+                                  position: animation.drive(tween),
+                                  child: child,
+                                );
+                              },
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onPrimaryContainer
+                                  .withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.person_outline,
+                            size: 20,
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Theme.of(context).colorScheme.onPrimary
+                                : Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            LocaleProvider.tr('go_to_artist'),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color:
+                                  Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : Theme.of(
+                                      context,
+                                    ).colorScheme.surfaceContainer,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: _artistSongsScrollController,
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 8,
+                  bottom: MediaQuery.of(context).padding.bottom,
+                ),
+                itemCount: songs.length,
+                itemBuilder: (context, index) {
+                  final item = songs[index];
+                  final itemVideoId = item.videoId?.trim();
+                  final currentMediaItem = _currentMediaItemNotifier.value;
+                  final currentVideoId = currentMediaItem?.extras?['videoId']
+                      ?.toString()
+                      .trim();
+                  final isCurrent =
+                      (itemVideoId != null &&
+                          itemVideoId.isNotEmpty &&
+                          currentVideoId == itemVideoId) ||
+                      currentMediaItem?.id == item.rawPath ||
+                      (itemVideoId != null &&
+                          currentMediaItem?.id == 'yt:$itemVideoId');
+
+                  final colorScheme = colorSchemeNotifier.value;
+                  final isAmoledTheme = colorScheme == AppColorScheme.amoled;
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  final cardColor = isAmoledTheme
+                      ? Colors.white.withAlpha(20)
+                      : isDark
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.06)
+                      : Theme.of(
+                          context,
+                        ).colorScheme.secondary.withValues(alpha: 0.07);
+
+                  final bool isFirst = index == 0;
+                  final bool isLast = index == songs.length - 1;
+                  final bool isOnly = songs.length == 1;
+                  BorderRadius borderRadius;
+                  if (isOnly) {
+                    borderRadius = BorderRadius.circular(20);
+                  } else if (isFirst) {
+                    borderRadius = const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                      bottomLeft: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    );
+                  } else if (isLast) {
+                    borderRadius = const BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    );
+                  } else {
+                    borderRadius = BorderRadius.circular(4);
+                  }
+
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: isLast ? 0 : 4),
+                    child: Card(
+                      color: isCurrent
+                          ? isAmoledTheme
+                                ? cardColor
+                                : Theme.of(context).colorScheme.primary
+                                      .withAlpha(isDark ? 40 : 25)
+                          : cardColor,
+                      margin: EdgeInsets.zero,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(borderRadius: borderRadius),
+                      child: ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: borderRadius,
+                        ),
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 50,
+                            height: 50,
+                            child: _StreamingArtwork(
+                              sources: _streamingArtworkSources(item),
+                              backgroundColor: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHigh,
+                              iconColor: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        title: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: isCurrent
+                              ? Theme.of(
+                                  context,
+                                ).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: isAmoledTheme
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary,
+                                )
+                              : Theme.of(context).textTheme.titleMedium,
+                        ),
+                        subtitle: Text(
+                          _formatStreamingArtistWithDuration(item),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: isAmoledTheme
+                              ? TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                )
+                              : null,
+                        ),
+                        onTap: () async {
+                          await _playStreamingEntry(
+                            item: item,
+                            sourceItems: songs,
+                            queueSource:
+                                '${LocaleProvider.tr('artist')}: $artistName',
+                          );
+                          if (context.mounted) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Widget para mostrar un artista en círculo
   Widget _buildArtistWidget(Map<String, dynamic> artist, BuildContext context) {
     return AnimatedTapButton(
       onTap: () async {
-        // Obtener canciones del artista
-        final artistsDB = ArtistsDB();
-        final artistSongs = await artistsDB.getArtistSongs(artist['name']);
-
-        // Convertir rutas a SongModel
-        final List<SongModel> songs = [];
-        for (final path in artistSongs) {
-          try {
-            final song = allSongs.firstWhere((s) => s.data == path);
-            songs.add(song);
-          } catch (_) {}
-        }
+        final artistName = artist['name']?.toString().trim() ?? '';
+        if (artistName.isEmpty) return;
+        final songsMeta = await StreamingArtistsDB().getArtistSongs(artistName);
+        final songs = _buildStreamingArtistItemsFromMeta(artistName, songsMeta);
 
         if (songs.isNotEmpty && mounted) {
-          await _playSongAndOpenPlayer(
-            songs.first,
-            songs,
-            queueSource: '${LocaleProvider.tr('artist')}: ${artist['name']}',
+          await _playStreamingEntry(
+            item: songs.first,
+            sourceItems: songs,
+            queueSource: '${LocaleProvider.tr('artist')}: $artistName',
           );
         }
       },
       onLongPress: () async {
         HapticFeedback.mediumImpact();
         if (!context.mounted) return;
-
-        // Obtener canciones del artista
-        final artistsDB = ArtistsDB();
-        final artistSongs = await artistsDB.getArtistSongs(artist['name']);
-
-        // Convertir rutas a SongModel
-        final List<SongModel> songs = [];
-        for (final path in artistSongs) {
-          try {
-            final song = allSongs.firstWhere((s) => s.data == path);
-            songs.add(song);
-          } catch (_) {}
-        }
-
-        if (songs.isNotEmpty && mounted) {
-          if (!context.mounted) return;
-          await _showArtistSongsModal(context, artist['name'], songs);
-        }
+        final artistName = artist['name']?.toString().trim() ?? '';
+        if (artistName.isEmpty) return;
+        final browseId = artist['browseId']?.toString().trim();
+        await _openArtistSongsModalWithDeferredLoad(
+          context,
+          artistName: artistName,
+          browseId: browseId,
+        );
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1588,7 +2363,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     .withValues(alpha: 0.8),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Center(child: LoadingIndicator()),
                       ),
                     )
                   : Container(
@@ -2236,24 +3010,28 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Método optimizado para selección rápida: cachea solo el leading (carátula), handlers frescos
   Widget _buildQuickPickWidget(
-    SongModel song,
+    _StreamingRecentItem song,
     BuildContext context,
-    List<SongModel> pageSongs,
+    List<_StreamingRecentItem> pageSongs,
   ) {
-    final String quickPickKey = 'quickpick_leading_${song.id}_${song.data}';
+    final songKey = (song.videoId?.trim().isNotEmpty ?? false)
+        ? 'yt:${song.videoId!.trim()}'
+        : song.rawPath;
+    final String quickPickKey = 'quickpick_leading_$songKey';
     Widget leading;
     if (_quickPickWidgetCache.containsKey(quickPickKey)) {
       leading = _quickPickWidgetCache[quickPickKey]!;
     } else {
       leading = ClipRRect(
         borderRadius: BorderRadius.circular(8),
-        child: ArtworkListTile(
-          key: ValueKey('quickpick_art_${song.data}'),
-          songId: song.id,
-          songPath: song.data,
+        child: SizedBox(
           width: 57,
           height: 60,
-          borderRadius: BorderRadius.zero,
+          child: _StreamingArtwork(
+            sources: _streamingArtworkSources(song),
+            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+            iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       );
       _quickPickWidgetCache[quickPickKey] = leading;
@@ -2263,12 +3041,16 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return ValueListenableBuilder<MediaItem?>(
       valueListenable: _currentMediaItemNotifier,
       builder: (context, currentMediaItem, child) {
-        final path = song.data;
+        final itemVideoId = song.videoId?.trim();
+        final currentVideoId = currentMediaItem?.extras?['videoId']
+            ?.toString()
+            .trim();
         final isCurrent =
-            (currentMediaItem?.id != null &&
-            path.isNotEmpty &&
-            (currentMediaItem!.id == path ||
-                currentMediaItem.extras?['data'] == path));
+            (itemVideoId != null &&
+                itemVideoId.isNotEmpty &&
+                currentVideoId == itemVideoId) ||
+            currentMediaItem?.id == song.rawPath ||
+            (itemVideoId != null && currentMediaItem?.id == 'yt:$itemVideoId');
 
         final isAmoledTheme =
             colorSchemeNotifier.value == AppColorScheme.amoled;
@@ -2306,17 +3088,17 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildOptimizedQuickPickTile({
-    required SongModel song,
+    required _StreamingRecentItem song,
     required BuildContext context,
     required Widget leading,
     required bool isCurrent,
     required bool playing,
     required bool isAmoledTheme,
-    required List<SongModel> pageSongs,
+    required List<_StreamingRecentItem> pageSongs,
   }) {
     return RepaintBoundary(
       child: ListTile(
-        key: ValueKey(song.id),
+        key: ValueKey(song.rawPath),
         contentPadding: const EdgeInsets.symmetric(horizontal: 0),
         splashColor: Colors.transparent,
         leading: leading,
@@ -2335,7 +3117,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
             Expanded(
               child: Text(
-                song.displayTitle,
+                song.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: isCurrent
@@ -2351,7 +3133,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
         subtitle: Text(
-          _formatArtistWithDuration(song),
+          _formatStreamingArtistWithDuration(song),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: isCurrent
@@ -2366,18 +3148,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         trailing: const Opacity(opacity: 0, child: Icon(Icons.more_vert)),
         onTap: () async {
-          // Precargar la carátula antes de reproducir
-          unawaited(_preloadArtworkForSong(song));
           if (!mounted) return;
-          // Usar todas las canciones de selección rápida extendidas (más de 20) para reproducción
-          final extendedQuickPick = _shuffledQuickPick.take(100).toList();
-          await _playSongAndOpenPlayer(
-            song,
-            extendedQuickPick,
+          await _playStreamingEntry(
+            item: song,
+            sourceItems: pageSongs,
             queueSource: LocaleProvider.tr('quick_pick_songs'),
           );
         },
-        onLongPress: () => _handleLongPress(context, song),
       ),
     );
   }
@@ -2540,9 +3317,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Fallback: completar huecos restantes con búsquedas aleatorias en YouTube Music.
     if (combined.length < limit) {
-      final ytFallback = await _buildStreamingFallbackFromYt(
-        limit: limit - combined.length,
-      );
+      await _ensureSharedYtFallbackPoolLoaded();
+      final ytFallback = _sharedYtFallbackPool.take(limit - combined.length);
       for (final item in ytFallback) {
         if (combined.length >= limit) break;
         addIfUnique(item);
@@ -2554,28 +3330,46 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<List<_StreamingRecentItem>> _buildStreamingFallbackFromYt({
     int limit = _quickAccessSlots,
+    List<String>? queryPoolOverride,
+    Set<String>? excludedVideoIds,
   }) async {
-    final queryPool = <String>[
-      'música',
-      'música tendencias',
-      'música del momento',
-      'música 2026',
-      'Música exitos de los 70, 80, 90',
-      'top hits',
-      'canciones virales',
-      'música popular',
-      'hits latinos',
-      'top songs',
-    ]..shuffle();
+    final queryPool =
+        (queryPoolOverride ??
+                const <String>[
+                  'música',
+                  'música tendencias',
+                  'música del momento',
+                  'música 2026',
+                  'Música exitos de los 70, 80, 90',
+                  'top hits',
+                  'canciones virales',
+                  'música popular',
+                  'hits latinos',
+                  'top songs',
+                ])
+            .toList()
+          ..shuffle();
 
     final selectedQueries = queryPool.take(4).toList();
     final items = <_StreamingRecentItem>[];
-    final usedVideoIds = <String>{};
+    final usedVideoIds = <String>{...?excludedVideoIds};
+    const int batchSize = 2;
 
-    for (final query in selectedQueries) {
+    for (int i = 0; i < selectedQueries.length; i += batchSize) {
       if (items.length >= limit) break;
-      try {
-        final results = await searchSongsOnly(query, cancelPrevious: false);
+      final batchQueries = selectedQueries.skip(i).take(batchSize).toList();
+      final batchResults = await Future.wait(
+        batchQueries.map((query) async {
+          try {
+            return await searchSongsOnly(query, cancelPrevious: false);
+          } catch (_) {
+            return <YtMusicResult>[];
+          }
+        }),
+      );
+
+      for (final results in batchResults) {
+        if (items.length >= limit) break;
         for (final result in results) {
           if (items.length >= limit) break;
           final videoId = result.videoId?.trim();
@@ -2605,12 +3399,74 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           );
         }
-      } catch (_) {
-        // Ignorar errores de red/parsing y continuar con la siguiente query.
       }
     }
 
     return items;
+  }
+
+  Future<void> _ensureQuickPickYtFallbackLoaded({
+    bool forceReload = false,
+  }) async {
+    if (!forceReload && _quickPickYtFallbackSongs.isNotEmpty) return;
+
+    await _ensureSharedYtFallbackPoolLoaded(forceReload: forceReload);
+
+    final excludedVideoIds = _streamingShortcutSongs
+        .map((item) => item.videoId?.trim())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    final fallback = _sharedYtFallbackPool
+        .where((item) {
+          final id = item.videoId?.trim();
+          if (id == null || id.isEmpty) return false;
+          return !excludedVideoIds.contains(id);
+        })
+        .take(50)
+        .toList();
+
+    if (!mounted) return;
+    setState(() {
+      _quickPickYtFallbackSongs = fallback;
+    });
+  }
+
+  Future<void> _ensureSharedYtFallbackPoolLoaded({
+    bool forceReload = false,
+  }) async {
+    if (!forceReload && _sharedYtFallbackPool.isNotEmpty) return;
+    if (_sharedYtFallbackLoading != null) {
+      await _sharedYtFallbackLoading;
+      return;
+    }
+
+    _sharedYtFallbackLoading = (() async {
+      final shared = await _buildStreamingFallbackFromYt(
+        limit: 120,
+        queryPoolOverride: const [
+          'música tendencias',
+          'música del momento',
+          'top hits',
+          'canciones virales',
+          'novedades musicales',
+          'mix canciones trending',
+          'descubrimiento musical',
+          'top charts music',
+        ],
+      );
+      if (!mounted) return;
+      setState(() {
+        _sharedYtFallbackPool = shared;
+      });
+    })();
+
+    try {
+      await _sharedYtFallbackLoading;
+    } finally {
+      _sharedYtFallbackLoading = null;
+    }
   }
 
   Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
@@ -3060,9 +3916,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _recentSongs = recents;
         _streamingRecents = streamingRecents;
+        _shuffledStreamingRecentsQuickPick =
+            streamingRecents
+                .where((item) => item.videoId?.trim().isNotEmpty ?? false)
+                .toList()
+              ..shuffle();
+        if (_shuffledStreamingRecentsQuickPick.isNotEmpty) {
+          _quickPickYtFallbackSongs = [];
+          _sharedYtFallbackPool = [];
+        }
         _showingRecents = true;
         _gradientAlphaNotifier.value = 1.0;
       });
+      if (_shuffledStreamingRecentsQuickPick.isEmpty) {
+        unawaited(_ensureQuickPickYtFallbackLoaded(forceReload: true));
+      }
 
       // Precargar carátulas de canciones recientes
       unawaited(_preloadArtworksForSongs(recents));
@@ -3070,9 +3938,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _recentSongs = [];
         _streamingRecents = [];
+        _shuffledStreamingRecentsQuickPick = [];
+        _quickPickYtFallbackSongs = [];
+        _sharedYtFallbackPool = [];
         _showingRecents = true;
         _gradientAlphaNotifier.value = 1.0;
       });
+      unawaited(_ensureQuickPickYtFallbackLoaded(forceReload: true));
     }
   }
 
@@ -3086,8 +3958,20 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _recentSongs = recents;
         _streamingRecents = streamingRecents;
+        _shuffledStreamingRecentsQuickPick =
+            streamingRecents
+                .where((item) => item.videoId?.trim().isNotEmpty ?? false)
+                .toList()
+              ..shuffle();
+        if (_shuffledStreamingRecentsQuickPick.isNotEmpty) {
+          _quickPickYtFallbackSongs = [];
+          _sharedYtFallbackPool = [];
+        }
         // No cambiamos _showingRecents aquí
       });
+      if (_shuffledStreamingRecentsQuickPick.isEmpty) {
+        unawaited(_ensureQuickPickYtFallbackLoaded(forceReload: true));
+      }
 
       // Precargar carátulas de canciones recientes
       unawaited(_preloadArtworksForSongs(recents));
@@ -3095,8 +3979,12 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         _recentSongs = [];
         _streamingRecents = [];
+        _shuffledStreamingRecentsQuickPick = [];
+        _quickPickYtFallbackSongs = [];
+        _sharedYtFallbackPool = [];
         // No cambiamos _showingRecents aquí
       });
+      unawaited(_ensureQuickPickYtFallbackLoaded(forceReload: true));
     }
   }
 
@@ -3528,6 +4416,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     favoritesShouldReload.value = !favoritesShouldReload.value;
   }
 
+  // ignore: unused_element
   Future<void> _handleLongPress(BuildContext context, SongModel song) async {
     HapticFeedback.mediumImpact();
     final isFavorite = await FavoritesDB().isFavorite(song.data);
@@ -4216,15 +5105,108 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         decoration: isAmoled ? gradientDecoration : null,
         child: Scaffold(
           backgroundColor: isAmoled ? Colors.transparent : null,
+          appBar: AppBar(
+            backgroundColor: isAmoled
+                ? Colors.transparent
+                : Theme.of(context).scaffoldBackgroundColor,
+            surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            title: Row(
+              children: [
+                SvgPicture.asset(
+                  'assets/icon/icon_foreground.svg',
+                  width: 32,
+                  height: 32,
+                  colorFilter: ColorFilter.mode(
+                    Theme.of(context).colorScheme.inverseSurface,
+                    BlendMode.srcIn,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  "Aura",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  "Music",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.auto_awesome_rounded, size: 28),
+                tooltip: LocaleProvider.tr('discovery'),
+                onPressed: _loadRecents,
+              ),
+              IconButton(
+                icon: const Icon(Icons.history, size: 28),
+                tooltip: LocaleProvider.tr('recent_songs'),
+                onPressed: _loadRecents,
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings_outlined, size: 28),
+                tooltip: LocaleProvider.tr('settings'),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    PageRouteBuilder(
+                      pageBuilder: (context, animation, secondaryAnimation) =>
+                          SettingsScreen(
+                            setThemeMode: widget.setThemeMode,
+                            setColorScheme: widget.setColorScheme,
+                          ),
+                      transitionsBuilder:
+                          (context, animation, secondaryAnimation, child) {
+                            const begin = Offset(1.0, 0.0);
+                            const end = Offset.zero;
+                            const curve = Curves.ease;
+                            final tween = Tween(
+                              begin: begin,
+                              end: end,
+                            ).chain(CurveTween(curve: curve));
+                            return SlideTransition(
+                              position: animation.drive(tween),
+                              child: child,
+                            );
+                          },
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
           body: Center(child: LoadingIndicator()),
         ),
       );
     }
 
     final quickPickSongsPerPage = 4;
-    final limitedQuickPick = _shuffledQuickPick.take(20).toList();
-    // Lista extendida para reproducción (más de 20 canciones)
-    final extendedQuickPick = _shuffledQuickPick.take(50).toList();
+    final List<_StreamingRecentItem> extendedQuickPick =
+        _shuffledStreamingRecentsQuickPick.isNotEmpty
+        ? List<_StreamingRecentItem>.from(_shuffledStreamingRecentsQuickPick)
+        : (() {
+            final fallback = _streamingRecents
+                .where((item) => item.videoId?.trim().isNotEmpty ?? false)
+                .toList();
+            if (fallback.isNotEmpty) {
+              fallback.shuffle();
+              return fallback;
+            }
+            if (_quickPickYtFallbackSongs.isNotEmpty) {
+              return List<_StreamingRecentItem>.from(_quickPickYtFallbackSongs);
+            }
+            return const <_StreamingRecentItem>[];
+          })();
+    final limitedQuickPick = extendedQuickPick.take(20).toList();
     final quickPickPageCount = limitedQuickPick.isEmpty
         ? 0
         : (limitedQuickPick.length / quickPickSongsPerPage).ceil();
@@ -4358,6 +5340,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         actions: (!_showingRecents && !_showingPlaylistSongs)
             ? [
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome_rounded, size: 28),
+                  tooltip: LocaleProvider.tr('discovery'),
+                  onPressed: _loadRecents,
+                ),
                 IconButton(
                   icon: const Icon(Icons.history, size: 28),
                   tooltip: LocaleProvider.tr('recent_songs'),
@@ -7320,6 +8307,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     // print('🔄 Iniciando refresh completo...');
                     // Actualizar accesos directos y selección rápida
                     await _loadAllSongs();
+                    await _loadRecentsData();
                     await _loadMostPlayed();
                     await _loadShortcuts();
                     await _loadArtists(
@@ -7329,6 +8317,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     _initQuickPickPages();
                     // Limpiar cache para forzar reconstrucción
                     _shortcutWidgetCache.clear();
+                    _streamingShortcutWidgetCache.clear();
                     _quickPickWidgetCache.clear();
                     // print('🔄 Refresh completado');
                     _artistWidgetCache.clear();
@@ -7646,10 +8635,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                         ),
                         // Sección de Artistas
-                        const SizedBox(height: 32),
 
                         // Solo mostrar la sección de artistas si hay artistas disponibles
                         if (_artists.isNotEmpty) ...[
+                          const SizedBox(height: 32),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: Row(
@@ -7710,9 +8699,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ),
                                   tooltip: LocaleProvider.tr('play_all'),
                                   onPressed: () {
-                                    _playSongAndOpenPlayer(
-                                      limitedQuickPick.first,
-                                      extendedQuickPick,
+                                    _playStreamingEntry(
+                                      item: limitedQuickPick.first,
+                                      sourceItems: extendedQuickPick,
                                       queueSource: LocaleProvider.tr(
                                         'quick_pick_songs',
                                       ),
@@ -7756,7 +8745,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             child: _buildQuickPickWidget(
                                               song,
                                               context,
-                                              songs,
+                                              extendedQuickPick,
                                             ),
                                           );
                                         },

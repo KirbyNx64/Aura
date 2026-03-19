@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'album_art_cache_manager.dart';
 import 'package:music/utils/db/songs_index_db.dart';
 import 'package:music/utils/db/mostplayer_db.dart';
+import 'package:music/utils/db/streaming_artists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/db/favorites_db.dart';
@@ -891,6 +892,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             : item.artUri?.toString();
         await MostPlayedDB().incrementPlayCountByPath(
           recentKey,
+          title: item.title,
+          artist: item.artist,
+          videoId: (videoId != null && videoId.isNotEmpty) ? videoId : null,
+          artUri: (artUri != null && artUri.trim().isNotEmpty)
+              ? artUri.trim()
+              : null,
+          durationMs: item.duration?.inMilliseconds,
+        );
+        await StreamingArtistsDB().incrementArtistPlay(
+          path: recentKey,
           title: item.title,
           artist: item.artist,
           videoId: (videoId != null && videoId.isNotEmpty) ? videoId : null,

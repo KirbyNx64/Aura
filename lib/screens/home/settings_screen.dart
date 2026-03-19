@@ -19,7 +19,7 @@ import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/dislikes_db.dart';
 import 'package:music/utils/db/artwork_db.dart';
 import 'package:music/utils/db/songs_index_db.dart';
-import 'package:music/utils/db/artists_db.dart';
+import 'package:music/utils/db/streaming_artists_db.dart';
 import 'package:music/utils/db/stream_cache_db.dart';
 import 'package:music/utils/db/download_history_hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6317,8 +6317,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final boxSongs = await SongsIndexDB().box;
       await boxSongs.clear();
 
-      final artistsDB = ArtistsDB();
-      await artistsDB.clear();
+      final streamingArtistsBox = await StreamingArtistsDB().artistsBox;
+      await streamingArtistsBox.clear();
 
       await StreamCacheDB().clearCache();
 
