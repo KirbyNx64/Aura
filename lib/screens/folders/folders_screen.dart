@@ -936,7 +936,6 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   void _handleLongPress(BuildContext context, SongModel song) async {
     final isFavorite = await FavoritesDB().isFavorite(song.data);
-    final isPinned = await ShortcutsDB().isShortcut(song.data);
     final isIgnored = await isSongIgnored(song.data);
 
     if (!context.mounted) return;
@@ -1136,7 +1135,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     title: TranslatedText('more'),
                     onTap: () {
                       Navigator.of(context).pop();
-                      _showMoreOptionsModal(context, song, isPinned, isIgnored);
+                      _showMoreOptionsModal(context, song, isIgnored);
                     },
                   ),
                 ],
@@ -1151,7 +1150,6 @@ class _FoldersScreenState extends State<FoldersScreen>
   void _showMoreOptionsModal(
     BuildContext context,
     SongModel song,
-    bool isPinned,
     bool isIgnored,
   ) {
     final isAmoled =
@@ -1226,25 +1224,6 @@ class _FoldersScreenState extends State<FoldersScreen>
                   ),
 
                   // Opciones adicionales
-                  ListTile(
-                    leading: Icon(
-                      isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                    ),
-                    title: TranslatedText(
-                      isPinned ? 'unpin_shortcut' : 'pin_shortcut',
-                    ),
-                    onTap: () async {
-                      Navigator.of(context).pop();
-                      if (isPinned) {
-                        await ShortcutsDB().removeShortcut(song.data);
-                      } else {
-                        await ShortcutsDB().addShortcut(song.data);
-                      }
-                      if (mounted) setState(() {});
-                      shortcutsShouldReload.value =
-                          !shortcutsShouldReload.value;
-                    },
-                  ),
                   if (song.displayArtist.trim().isNotEmpty)
                     ListTile(
                       leading: const Icon(Icons.person_outline),
@@ -2163,6 +2142,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     _StreamingPlaylistItem item,
   ) async {
     final isFavorite = await FavoritesDB().isFavorite(item.rawPath);
+    final isPinned = await ShortcutsDB().isShortcut(item.rawPath);
     if (!context.mounted) return;
     final isAmoled =
         Theme.of(context).brightness == Brightness.dark &&
@@ -2365,6 +2345,31 @@ class _FoldersScreenState extends State<FoldersScreen>
                         await _loadSongsFromPlaylist(_selectedPlaylist!);
                       },
                     ),
+                  ListTile(
+                    leading: Icon(
+                      isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    ),
+                    title: TranslatedText(
+                      isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+                    ),
+                    onTap: () async {
+                      Navigator.of(context).pop();
+                      if (isPinned) {
+                        await ShortcutsDB().removeShortcut(item.rawPath);
+                      } else {
+                        await ShortcutsDB().addShortcut(
+                          item.rawPath,
+                          title: item.title,
+                          artist: item.artist,
+                          videoId: item.videoId,
+                          artUri: item.artUri,
+                          durationText: item.durationText,
+                          durationMs: item.durationMs,
+                        );
+                      }
+                      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                    },
+                  ),
                   if (item.artist.trim().isNotEmpty &&
                       item.artist.trim() != LocaleProvider.tr('artist_unknown'))
                     ListTile(

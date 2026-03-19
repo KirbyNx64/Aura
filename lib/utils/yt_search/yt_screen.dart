@@ -28,6 +28,7 @@ import 'package:music/widgets/image_viewer.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/screens/download/download_history_screen.dart';
 import 'package:music/utils/db/favorites_db.dart';
+import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/utils/db/songs_index_db.dart';
@@ -3459,6 +3460,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               ? fallbackThumbUrl!.trim()
               : null);
     final videoId = item.videoId?.trim();
+    final rawPath = videoId != null && videoId.isNotEmpty ? 'yt:$videoId' : null;
+    final isPinned = rawPath == null
+        ? false
+        : await ShortcutsDB().isShortcut(rawPath);
+    if (!mounted) return;
 
     await showModalBottomSheet(
       context: context,
@@ -3608,6 +3614,35 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                     await _showAddSongToPlaylistDialog(item);
                   },
                 ),
+                if (rawPath != null)
+                  ListTile(
+                    leading: Icon(
+                      isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                    ),
+                    title: TranslatedText(
+                      isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+                    ),
+                    onTap: () async {
+                      Navigator.of(modalContext).pop();
+                      if (isPinned) {
+                        await ShortcutsDB().removeShortcut(rawPath);
+                      } else {
+                        final artUri = (thumb?.trim().isNotEmpty ?? false)
+                            ? thumb!.trim()
+                            : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+                        await ShortcutsDB().addShortcut(
+                          rawPath,
+                          title: title,
+                          artist: artist,
+                          videoId: videoId,
+                          artUri: artUri,
+                          durationText: item.durationText,
+                          durationMs: item.durationMs,
+                        );
+                      }
+                      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                    },
+                  ),
                 if (artist.trim().isNotEmpty &&
                     artist.trim() != LocaleProvider.tr('artist_unknown'))
                   ListTile(

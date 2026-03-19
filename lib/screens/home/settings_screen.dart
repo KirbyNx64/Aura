@@ -5486,7 +5486,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (options['shortcuts'] == true) {
         final shortcuts = await ShortcutsDB().getShortcuts();
+        final shortcutsMetaBox = await ShortcutsDB().metaBox;
+        final shortcutsMeta = <String, dynamic>{};
+        for (final path in shortcuts) {
+          final rawMeta = shortcutsMetaBox.get(path);
+          final meta = _toSerializableMetaMap(rawMeta);
+          if (meta != null && meta.isNotEmpty) {
+            shortcutsMeta[path] = meta;
+          }
+        }
         backup['shortcuts'] = shortcuts;
+        backup['shortcuts_meta'] = shortcutsMeta;
       }
 
       if (options['download_history'] == true) {
@@ -5935,8 +5945,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (options['shortcuts'] == true) {
         await ShortcutsDB().clearAll();
         if (data['shortcuts'] is List) {
-          for (final path in data['shortcuts']) {
-            await ShortcutsDB().addShortcut(path.toString());
+          for (final item in data['shortcuts']) {
+            final path = _extractPathFromBackupItem(item);
+            if (path == null) continue;
+            final itemMeta = _extractMetaFromBackupItem(item);
+            final backupMeta = _metaFromLookupByPath(
+              data['shortcuts_meta'],
+              path,
+            );
+            final mergedMeta = itemMeta ?? backupMeta;
+            await ShortcutsDB().addShortcut(
+              path,
+              title: _asTrimmedString(mergedMeta?['title']),
+              artist: _asTrimmedString(mergedMeta?['artist']),
+              videoId: _asTrimmedString(mergedMeta?['videoId']),
+              artUri: _asTrimmedString(mergedMeta?['artUri']),
+              durationText: _asTrimmedString(mergedMeta?['durationText']),
+              durationMs: _asPositiveInt(mergedMeta?['durationMs']),
+            );
           }
         }
       }

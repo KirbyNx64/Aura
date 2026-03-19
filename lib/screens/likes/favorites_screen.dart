@@ -1141,9 +1141,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
   }
 
-  void _handleLongPress(BuildContext context, SongModel song) async {
-    final isPinned = await ShortcutsDB().isShortcut(song.data);
-
+  void _handleLongPress(BuildContext context, SongModel song) {
     if (!context.mounted) return;
     final isAmoled =
         Theme.of(context).brightness == Brightness.dark &&
@@ -1278,23 +1276,6 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 onTap: () async {
                   Navigator.of(context).pop();
                   await _handleAddToPlaylistSingle(context, song);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                ),
-                title: TranslatedText(
-                  isPinned ? 'unpin_shortcut' : 'pin_shortcut',
-                ),
-                onTap: () async {
-                  Navigator.of(context).pop();
-                  if (isPinned) {
-                    await ShortcutsDB().removeShortcut(song.data);
-                  } else {
-                    await ShortcutsDB().addShortcut(song.data);
-                  }
-                  shortcutsShouldReload.value = !shortcutsShouldReload.value;
                 },
               ),
               if (song.displayArtist.trim().isNotEmpty)
@@ -1524,6 +1505,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         Theme.of(context).brightness == Brightness.dark &&
         Theme.of(context).colorScheme.surface == Colors.black;
     final videoUrl = _streamingDisplayUrl(item);
+    final isPinned = await ShortcutsDB().isShortcut(item.rawPath);
+    if (!context.mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -1659,6 +1642,31 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 onTap: () async {
                   Navigator.of(context).pop();
                   await _handleAddStreamingToPlaylist(context, item);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                ),
+                title: TranslatedText(
+                  isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  if (isPinned) {
+                    await ShortcutsDB().removeShortcut(item.rawPath);
+                  } else {
+                    await ShortcutsDB().addShortcut(
+                      item.rawPath,
+                      title: item.title,
+                      artist: item.artist,
+                      videoId: item.videoId,
+                      artUri: item.artUri,
+                      durationText: item.durationText,
+                      durationMs: item.durationMs,
+                    );
+                  }
+                  shortcutsShouldReload.value = !shortcutsShouldReload.value;
                 },
               ),
               if (item.artist.trim().isNotEmpty &&

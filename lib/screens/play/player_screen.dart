@@ -1923,17 +1923,38 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         }
                                       },
                                     ),
-                                  if (!(mediaItem.extras?['isStreaming'] ==
-                                      true))
+                                  if ((mediaItem.extras?['isStreaming'] ==
+                                          true) ||
+                                      _isStreamingPath(
+                                        _favoritePathForMediaItem(mediaItem),
+                                      ))
                                     FutureBuilder<bool>(
                                       future: ShortcutsDB().isShortcut(
-                                        mediaItem.extras?['data'] ?? '',
+                                        _favoritePathForMediaItem(mediaItem),
                                       ),
                                       builder: (context, snapshot) {
                                         final isCurrentlyPinned =
                                             snapshot.data ?? false;
                                         final path =
-                                            mediaItem.extras?['data'] ?? '';
+                                            _favoritePathForMediaItem(mediaItem);
+                                        final videoId =
+                                            _extractVideoIdFromMediaItem(
+                                              mediaItem,
+                                            );
+                                        final title = mediaItem.title.trim();
+                                        final artist =
+                                            mediaItem.artist?.trim() ?? '';
+                                        final displayArtUri = mediaItem
+                                            .extras?['displayArtUri']
+                                            ?.toString()
+                                            .trim();
+                                        final artUri = (displayArtUri != null &&
+                                                displayArtUri.isNotEmpty)
+                                            ? displayArtUri
+                                            : mediaItem.artUri
+                                                      ?.toString()
+                                                      .trim() ??
+                                                  '';
 
                                         return ListTile(
                                           leading: Icon(
@@ -1982,6 +2003,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                               // Fijar en accesos directos
                                               await shortcutsDB.addShortcut(
                                                 path,
+                                                title: title.isNotEmpty
+                                                    ? title
+                                                    : null,
+                                                artist: artist.isNotEmpty
+                                                    ? artist
+                                                    : null,
+                                                videoId: videoId,
+                                                artUri: artUri.isNotEmpty
+                                                    ? artUri
+                                                    : null,
                                               );
                                               // Notificar que los accesos directos han cambiado
                                               shortcutsShouldReload.value =

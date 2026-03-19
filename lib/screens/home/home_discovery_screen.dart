@@ -11,6 +11,8 @@ import 'package:music/main.dart'
 import 'package:music/utils/db/recent_db.dart';
 import 'package:music/utils/db/discovery_found_db.dart';
 import 'package:music/utils/db/favorites_db.dart';
+import 'package:music/utils/db/playlists_db.dart';
+import 'package:music/utils/db/shortcuts_db.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/yt_search/service.dart' as yt_service;
 import 'package:music/utils/simple_yt_download.dart';
@@ -595,6 +597,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
         _qualityFallbackArtworkUrl(videoId);
     final videoUrl = 'https://music.youtube.com/watch?v=$videoId';
     final rawPath = 'yt:$videoId';
+    final isPinned = await ShortcutsDB().isShortcut(rawPath);
+    if (!mounted) return;
 
     showModalBottomSheet(
       context: context,
@@ -720,6 +724,45 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                   favoritesShouldReload.value = !favoritesShouldReload.value;
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.playlist_add_rounded),
+                title: const TranslatedText('add_to_playlist'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await _showAddTrackToPlaylistDialog(
+                    rawPath: rawPath,
+                    title: title,
+                    artist: artist,
+                    videoId: videoId,
+                    artUri: artUri,
+                    durationMs: track.durationMs,
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                ),
+                title: TranslatedText(
+                  isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  if (isPinned) {
+                    await ShortcutsDB().removeShortcut(rawPath);
+                  } else {
+                    await ShortcutsDB().addShortcut(
+                      rawPath,
+                      title: title,
+                      artist: artist,
+                      videoId: videoId,
+                      artUri: artUri,
+                      durationMs: track.durationMs,
+                    );
+                  }
+                  shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                },
+              ),
               if (artist.trim().isNotEmpty &&
                   artist.trim() != LocaleProvider.tr('artist_unknown'))
                 ListTile(
@@ -795,6 +838,140 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _showAddTrackToPlaylistDialog({
+    required String rawPath,
+    required String title,
+    required String artist,
+    required String videoId,
+    required String artUri,
+    int? durationMs,
+  }) async {
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final TextEditingController textController = TextEditingController();
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+
+        Future<void> addToPlaylist(String playlistId) async {
+          await PlaylistsDB().addSongPathToPlaylist(
+            playlistId,
+            rawPath,
+            title: title,
+            artist: artist,
+            videoId: videoId,
+            artUri: artUri,
+            durationMs: durationMs,
+            durationText: durationMs != null && durationMs > 0
+                ? _formatDuration(durationMs)
+                : null,
+          );
+          playlistsShouldReload.value = !playlistsShouldReload.value;
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (allPlaylists.isNotEmpty)
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: allPlaylists.length,
+                        itemBuilder: (context, i) {
+                          final pl = allPlaylists[i];
+                          return Card(
+                            color: barColor,
+                            margin: EdgeInsets.only(
+                              bottom: i == allPlaylists.length - 1 ? 0 : 4,
+                            ),
+                            elevation: 0,
+                            child: ListTile(
+                              leading: const Icon(Icons.queue_music_rounded),
+                              title: Text(pl.name),
+                              onTap: () async {
+                                await addToPlaylist(pl.id);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textController,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = textController.text.trim();
+                          if (name.isEmpty) return;
+                          final playlistId = await PlaylistsDB().createPlaylist(
+                            name,
+                          );
+                          await addToPlaylist(playlistId);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (value) async {
+                      final name = value.trim();
+                      if (name.isEmpty) return;
+                      final playlistId = await PlaylistsDB().createPlaylist(
+                        name,
+                      );
+                      await addToPlaylist(playlistId);
+                      if (context.mounted) Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -54,6 +54,7 @@ class _StreamingRecentItem {
   final String? artUri;
   final String? durationText;
   final int? durationMs;
+  final bool isPinned;
 
   const _StreamingRecentItem({
     required this.rawPath,
@@ -63,6 +64,7 @@ class _StreamingRecentItem {
     this.artUri,
     this.durationText,
     this.durationMs,
+    this.isPinned = false,
   });
 }
 
@@ -163,6 +165,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _showingRecents = false;
   bool _showingDiscovery = false;
   RecentSongsSource _recentSongsSource = RecentSongsSource.local;
+  Future<void>? _recentsWarmLoad;
   bool _showingPlaylistSongs = false;
   List<SongModel> _playlistSongs = [];
   Map<String, dynamic>? _selectedPlaylist;
@@ -232,8 +235,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Cache para los widgets de artistas para evitar reconstrucciones
   final Map<String, Widget> _artistWidgetCache = {};
-  final Map<String, Uint8List?> _artworkCache = {};
+  // final Map<String, Uint8List?> _artworkCache = {};
 
+  /*
   Future<Uint8List?> _getCachedArtwork(int songId) async {
     final cacheKey = 'artwork_$songId';
 
@@ -256,7 +260,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return null;
     }
   }
+  */
 
+  /*
   Future<void> _handleAddToPlaylistSingle(
     BuildContext context,
     SongModel song,
@@ -484,6 +490,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       },
     );
   }
+  */
 
   Future<void> _handleAddStreamingToPlaylistSingle(
     BuildContext context,
@@ -778,6 +785,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _showStreamingShortcutOptions(_StreamingRecentItem item) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) return;
+    final isPinned = await ShortcutsDB().isShortcut(item.rawPath);
 
     final title = item.title.trim().isNotEmpty
         ? item.title.trim()
@@ -932,6 +940,31 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   await _handleAddStreamingToPlaylistSingle(context, item);
                 },
               ),
+              ListTile(
+                leading: Icon(
+                  isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+                ),
+                title: TranslatedText(
+                  isPinned ? 'unpin_shortcut' : 'pin_shortcut',
+                ),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  if (isPinned) {
+                    await ShortcutsDB().removeShortcut(item.rawPath);
+                  } else {
+                    await ShortcutsDB().addShortcut(
+                      item.rawPath,
+                      title: title,
+                      artist: artist,
+                      videoId: videoId,
+                      artUri: artUri,
+                      durationText: item.durationText,
+                      durationMs: item.durationMs,
+                    );
+                  }
+                  shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                },
+              ),
               if (artist.trim().isNotEmpty &&
                   artist.trim() != LocaleProvider.tr('artist_unknown'))
                 ListTile(
@@ -1025,6 +1058,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return handler.myHandler;
   }
 
+  /*
   // Devuelve la lista de accesos directos para mostrar en quick_access
   List<SongModel> get _accessDirectSongs {
     final shortcutPaths = _shortcutSongs.map((s) => s.data).toList();
@@ -1046,6 +1080,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ];
     return combined.take(100).toList();
   }
+    */
 
   @override
   void initState() {
@@ -1321,6 +1356,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadShortcuts() async {
     final shortcutPaths = await ShortcutsDB().getShortcuts();
+    final localShortcutPaths = shortcutPaths
+        .where((path) => !_isStreamingRecentPath(path))
+        .toList();
     List<SongModel> shortcutSongs = [];
 
     // Asegurar que haya canciones disponibles para hacer el mapeo
@@ -1339,7 +1377,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     // Cargar accesos directos reales
-    for (final path in shortcutPaths) {
+    for (final path in localShortcutPaths) {
       try {
         final song = songsSource.firstWhere((s) => s.data == path);
         shortcutSongs.add(song);
@@ -1566,7 +1604,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }*/
 
   // Mostrar modal con canciones del artista
-  // ignore: unused_element
+  /*
   Future<void> _showArtistSongsModal(
     BuildContext context,
     String artistName,
@@ -2013,6 +2051,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+  */
 
   List<_StreamingRecentItem> _buildStreamingArtistItemsFromMeta(
     String artistName,
@@ -2687,7 +2726,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  // ignore: unused_element
+  /*
   Future<void> _showStreamingArtistSongsModal(
     BuildContext context,
     String artistName,
@@ -3006,6 +3045,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+  */
 
   // Widget para mostrar un artista en círculo
   Widget _buildArtistWidget(Map<String, dynamic> artist, BuildContext context) {
@@ -3106,6 +3146,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> refreshShortcuts() async {
     await _loadShortcuts();
+    await _loadMostPlayed();
     await _fillQuickPickWithRandomSongs(forceReload: true);
     _initQuickPickPages();
     // Limpiar cache cuando se actualizan los shortcuts
@@ -3122,7 +3163,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     BuildContext context,
   ) {
     final id = item.videoId?.trim() ?? item.rawPath;
-    final String shortcutKey = 'streaming_shortcut_$id';
+    final String shortcutKey = 'streaming_shortcut_${id}_${item.isPinned}';
 
     Widget cachedVisual;
     if (_streamingShortcutWidgetCache.containsKey(shortcutKey)) {
@@ -3143,6 +3184,24 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ).colorScheme.surfaceContainer,
                   iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
+                if (item.isPinned)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(4),
+                      child: const Icon(
+                        Icons.push_pin,
+                        color: Colors.white,
+                        size: 14,
+                        shadows: [Shadow(blurRadius: 4, color: Colors.black)],
+                      ),
+                    ),
+                  ),
                 Positioned(
                   left: 0,
                   right: 0,
@@ -3286,7 +3345,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // Método optimizado para construir widgets de accesos directos: cachea solo la parte visual, handlers frescos
-  // ignore: unused_element
+  /*
   Widget _buildShortcutWidget(SongModel song, BuildContext context) {
     final String shortcutKey = 'shortcut_${song.id}_${song.data}';
 
@@ -3401,7 +3460,9 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       },
     );
   }
+  */
 
+  /*
   Widget _buildOptimizedShortcutTile({
     required SongModel song,
     required BuildContext context,
@@ -3481,7 +3542,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       onLongPress: () async {
         HapticFeedback.mediumImpact();
         if (!context.mounted) return;
-        final isPinned = _shortcutSongs.any((s) => s.data == song.data);
         final isFavorite = await FavoritesDB().isFavorite(song.data);
         if (!context.mounted) return;
         showModalBottomSheet(
@@ -3605,18 +3665,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       await audioHandler.myHandler?.addSongsToQueueEnd([song]);
                     },
                   ),
-                  if (isPinned)
-                    ListTile(
-                      leading: const Icon(Icons.push_pin),
-                      title: TranslatedText('unpin_shortcut'),
-                      onTap: () async {
-                        if (!context.mounted) return;
-                        Navigator.of(context).pop();
-                        await ShortcutsDB().removeShortcut(song.data);
-                        shortcutsShouldReload.value =
-                            !shortcutsShouldReload.value;
-                      },
-                    ),
                   ListTile(
                     leading: Icon(
                       isFavorite
@@ -3710,6 +3758,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return widget;
   }
+  */
 
   // Método optimizado para selección rápida: cachea solo el leading (carátula), handlers frescos
   Widget _buildQuickPickWidget(
@@ -3963,6 +4012,15 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     int limit = _quickAccessSlots,
     int maxMostPlayed = _quickAccessSlots,
   }) async {
+    final shortcutPaths = await ShortcutsDB().getShortcuts();
+    final pinnedStreamingPaths = shortcutPaths
+        .where(_isStreamingRecentPath)
+        .toList();
+    final pinnedItems = await _buildStreamingShortcutsFromPinnedPaths(
+      pinnedStreamingPaths,
+      maxItems: limit,
+    );
+
     final mostPlayedPaths = await MostPlayedDB().getMostPlayedPaths(
       limit: maxMostPlayed + 40,
     );
@@ -3989,6 +4047,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (key.isEmpty || used.contains(key)) return;
       used.add(key);
       combined.add(item);
+    }
+
+    for (final item in pinnedItems) {
+      if (combined.length >= limit) break;
+      addIfUnique(item);
     }
 
     for (final item in mostPlayedItems) {
@@ -4544,6 +4607,40 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return items;
   }
 
+  Future<List<_StreamingRecentItem>> _buildStreamingShortcutsFromPinnedPaths(
+    List<String> paths, {
+    int? maxItems,
+  }) async {
+    final items = <_StreamingRecentItem>[];
+    final db = ShortcutsDB();
+    for (final path in paths) {
+      if (maxItems != null && items.length >= maxItems) break;
+      final normalizedPath = path.trim();
+      if (normalizedPath.isEmpty) continue;
+      final meta = await db.getShortcutMeta(normalizedPath);
+      final item = await _buildStreamingItemFromPath(
+        normalizedPath,
+        meta: meta,
+        useMetaDurationText: true,
+      );
+      if (item != null) {
+        items.add(
+          _StreamingRecentItem(
+            rawPath: item.rawPath,
+            title: item.title,
+            artist: item.artist,
+            videoId: item.videoId,
+            artUri: item.artUri,
+            durationText: item.durationText,
+            durationMs: item.durationMs,
+            isPinned: true,
+          ),
+        );
+      }
+    }
+    return items;
+  }
+
   Future<List<_StreamingRecentItem>> _buildStreamingPlaylistsForShortcuts(
     List<hive_model.PlaylistModel> playlists, {
     int? maxItems,
@@ -4766,6 +4863,22 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
       unawaited(_ensureQuickPickYtFallbackLoaded());
     }
+  }
+
+  void _openRecentsFast() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    if (!_showingRecents || _showingPlaylistSongs || _showingDiscovery) {
+      setState(() {
+        _showingRecents = true;
+        _showingPlaylistSongs = false;
+        _showingDiscovery = false;
+        _gradientAlphaNotifier.value = 1.0;
+      });
+    }
+    _onSearchRecentsChanged();
+    _recentsWarmLoad ??= _loadRecentsData().whenComplete(() {
+      _recentsWarmLoad = null;
+    });
   }
 
   void _onSearchRecentsChanged() {
@@ -5197,7 +5310,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     favoritesShouldReload.value = !favoritesShouldReload.value;
   }
 
-  // ignore: unused_element
+  /*
   Future<void> _handleLongPress(BuildContext context, SongModel song) async {
     HapticFeedback.mediumImpact();
     final isFavorite = await FavoritesDB().isFavorite(song.data);
@@ -5400,6 +5513,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
   }
+  */
 
   Future<void> _removeFromPlaylistMassive() async {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
@@ -6199,7 +6313,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 IconButton(
                   icon: const Icon(Icons.history, size: 28),
                   tooltip: LocaleProvider.tr('recent_songs'),
-                  onPressed: _loadRecents,
+                  onPressed: _openRecentsFast,
                 ),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined, size: 28),
@@ -8047,8 +8161,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           }
                                         });
                                       } else {
-                                        final isPinned = await ShortcutsDB()
-                                            .isShortcut(song.data);
                                         final isFav = await FavoritesDB()
                                             .isFavorite(song.data);
                                         if (!context.mounted) return;
@@ -8389,42 +8501,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                       },
                                                     ),
                                                   ListTile(
-                                                    leading: Icon(
-                                                      isPinned
-                                                          ? Icons.push_pin
-                                                          : Icons
-                                                                .push_pin_outlined,
-                                                    ),
-                                                    title: TranslatedText(
-                                                      isPinned
-                                                          ? 'unpin_shortcut'
-                                                          : 'pin_shortcut',
-                                                    ),
-                                                    onTap: () async {
-                                                      if (!context.mounted) {
-                                                        return;
-                                                      }
-                                                      Navigator.of(
-                                                        context,
-                                                      ).pop();
-                                                      if (isPinned) {
-                                                        await ShortcutsDB()
-                                                            .removeShortcut(
-                                                              song.data,
-                                                            );
-                                                      } else {
-                                                        await ShortcutsDB()
-                                                            .addShortcut(
-                                                              song.data,
-                                                            );
-                                                      }
-                                                      shortcutsShouldReload
-                                                              .value =
-                                                          !shortcutsShouldReload
-                                                              .value;
-                                                    },
-                                                  ),
-                                                  ListTile(
                                                     leading: const Icon(
                                                       Icons.check_box_outlined,
                                                     ),
@@ -8629,8 +8705,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       }
                                     });
                                   } else {
-                                    final isPinned = await ShortcutsDB()
-                                        .isShortcut(song.data);
                                     final isFav = await FavoritesDB()
                                         .isFavorite(song.data);
                                     if (!context.mounted) return;
@@ -8880,36 +8954,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                                   await _loadPlaylistSongs(
                                                     _selectedPlaylist!,
                                                   );
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: Icon(
-                                                  isPinned
-                                                      ? Icons.push_pin
-                                                      : Icons.push_pin_outlined,
-                                                ),
-                                                title: TranslatedText(
-                                                  isPinned
-                                                      ? 'unpin_shortcut'
-                                                      : 'pin_shortcut',
-                                                ),
-                                                onTap: () async {
-                                                  if (!context.mounted) {
-                                                    return;
-                                                  }
-                                                  Navigator.of(context).pop();
-                                                  if (isPinned) {
-                                                    await ShortcutsDB()
-                                                        .removeShortcut(
-                                                          song.data,
-                                                        );
-                                                  } else {
-                                                    await ShortcutsDB()
-                                                        .addShortcut(song.data);
-                                                  }
-                                                  shortcutsShouldReload.value =
-                                                      !shortcutsShouldReload
-                                                          .value;
                                                 },
                                               ),
                                               if (song.displayArtist
