@@ -583,6 +583,74 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
     );
   }
 
+  Future<void> _downloadTracks(List<_RadioTrack> tracks) async {
+    final deduped = <_RadioTrack>[];
+    final seenVideoIds = <String>{};
+    for (final track in tracks) {
+      final videoId = track.videoId.trim();
+      if (videoId.isEmpty) continue;
+      if (!seenVideoIds.add(videoId)) continue;
+      deduped.add(track);
+    }
+    if (deduped.isEmpty) return;
+
+    for (final track in deduped) {
+      await _downloadTrack(track);
+    }
+  }
+
+  List<_RadioTrack> _resolveHeaderMenuTracks() {
+    if (_radioTracks.isNotEmpty) {
+      return List<_RadioTrack>.from(_radioTracks);
+    }
+    if (_seed == null) return const [];
+    return <_RadioTrack>[
+      _RadioTrack(
+        videoId: _seed!.videoId,
+        title: _seed!.title,
+        artist: _seed!.artist,
+        artUri: _seed!.artUri,
+      ),
+    ];
+  }
+
+  Future<void> _addTracksToFavorites(List<_RadioTrack> tracks) async {
+    final deduped = <_RadioTrack>[];
+    final seenVideoIds = <String>{};
+    for (final track in tracks) {
+      final videoId = track.videoId.trim();
+      if (videoId.isEmpty) continue;
+      if (!seenVideoIds.add(videoId)) continue;
+      deduped.add(track);
+    }
+    if (deduped.isEmpty) return;
+
+    // Favorites se muestran en orden inverso de insercion; insertamos al reves
+    // para mantener el orden visual original.
+    for (final track in deduped.reversed) {
+      final videoId = track.videoId.trim();
+      final title = track.title.trim().isNotEmpty
+          ? track.title.trim()
+          : LocaleProvider.tr('title_unknown');
+      final artist = track.artist.trim().isNotEmpty
+          ? track.artist.trim()
+          : LocaleProvider.tr('artist_unknown');
+      final artUri =
+          _applyStreamingArtworkQuality(track.artUri, videoId: videoId) ??
+          _qualityFallbackArtworkUrl(videoId);
+
+      await FavoritesDB().addFavoritePath(
+        'yt:$videoId',
+        title: title,
+        artist: artist,
+        videoId: videoId,
+        artUri: artUri,
+        durationMs: track.durationMs,
+      );
+    }
+    favoritesShouldReload.value = !favoritesShouldReload.value;
+  }
+
   Future<void> _showTrackOptions(_RadioTrack track) async {
     final videoId = track.videoId.trim();
     if (videoId.isEmpty || !mounted) return;
@@ -976,6 +1044,159 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
     );
   }
 
+  Future<void> _showAddTracksToPlaylistDialog(List<_RadioTrack> tracks) async {
+    final validTracks = tracks
+        .where((t) => t.videoId.trim().isNotEmpty)
+        .toList();
+    if (validTracks.isEmpty) return;
+
+    final allPlaylists = await PlaylistsDB().getAllPlaylists();
+    final TextEditingController textController = TextEditingController();
+    if (!mounted) return;
+
+    Future<void> addItemsToPlaylist(String playlistId) async {
+      final deduped = <_RadioTrack>[];
+      final seenVideoIds = <String>{};
+      for (final track in validTracks) {
+        final videoId = track.videoId.trim();
+        if (videoId.isEmpty) continue;
+        if (!seenVideoIds.add(videoId)) continue;
+        deduped.add(track);
+      }
+
+      for (final track in deduped) {
+        final videoId = track.videoId.trim();
+        final title = track.title.trim().isNotEmpty
+            ? track.title.trim()
+            : LocaleProvider.tr('title_unknown');
+        final artist = track.artist.trim().isNotEmpty
+            ? track.artist.trim()
+            : LocaleProvider.tr('artist_unknown');
+        final artUri =
+            _applyStreamingArtworkQuality(track.artUri, videoId: videoId) ??
+            _qualityFallbackArtworkUrl(videoId);
+
+        await PlaylistsDB().addSongPathToPlaylist(
+          playlistId,
+          'yt:$videoId',
+          title: title,
+          artist: artist,
+          videoId: videoId,
+          artUri: artUri,
+          durationMs: track.durationMs,
+          durationText: track.durationMs != null && track.durationMs! > 0
+              ? _formatDuration(track.durationMs)
+              : null,
+        );
+      }
+      playlistsShouldReload.value = !playlistsShouldReload.value;
+    }
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        final barColor = isDark
+            ? Theme.of(context).colorScheme.secondary.withValues(alpha: 0.06)
+            : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                left: 16,
+                right: 16,
+                top: 12,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    LocaleProvider.tr('save_to_playlist'),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (allPlaylists.isNotEmpty)
+                    Flexible(
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        itemCount: allPlaylists.length,
+                        itemBuilder: (context, i) {
+                          final pl = allPlaylists[i];
+                          return Card(
+                            color: barColor,
+                            margin: EdgeInsets.only(
+                              bottom: i == allPlaylists.length - 1 ? 0 : 4,
+                            ),
+                            elevation: 0,
+                            child: ListTile(
+                              leading: const Icon(Icons.queue_music_rounded),
+                              title: Text(pl.name),
+                              onTap: () async {
+                                await addItemsToPlaylist(pl.id);
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: textController,
+                    decoration: InputDecoration(
+                      hintText: LocaleProvider.tr('new_playlist'),
+                      prefixIcon: const Icon(Icons.playlist_add),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.check_rounded),
+                        onPressed: () async {
+                          final name = textController.text.trim();
+                          if (name.isEmpty) return;
+                          final playlistId = await PlaylistsDB().createPlaylist(
+                            name,
+                          );
+                          await addItemsToPlaylist(playlistId);
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                      ),
+                      filled: true,
+                      fillColor: barColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (value) async {
+                      final name = value.trim();
+                      if (name.isEmpty) return;
+                      final playlistId = await PlaylistsDB().createPlaylist(
+                        name,
+                      );
+                      await addItemsToPlaylist(playlistId);
+                      if (context.mounted) Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _searchTrackOnYouTube(_RadioTrack track) async {
     try {
       String searchQuery = track.title.trim();
@@ -1163,6 +1384,7 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
       builder: (context, overlayVisible, child) {
         final bottomPadding = MediaQuery.of(context).padding.bottom;
         final space = (overlayVisible ? 100.0 : 0.0) + bottomPadding;
+        final headerMenuTracks = _resolveHeaderMenuTracks();
         if (_isLoading) {
           return Center(child: LoadingIndicator());
         }
@@ -1170,6 +1392,103 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
           padding: EdgeInsets.fromLTRB(16, 12, 16, space),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
+            if (headerMenuTracks.isNotEmpty) ...[
+              SizedBox(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      LocaleProvider.tr('discover_day'),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: PopupMenuButton<String>(
+                        color: isAmoled
+                            ? Colors.grey.shade900
+                            : Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHigh,
+                        tooltip: LocaleProvider.tr('want_more_options'),
+                        icon: Icon(
+                          Icons.more_vert,
+                          size: 22,
+                          color: isAmoled && isDark
+                              ? Colors.black
+                              : Theme.of(context).colorScheme.onPrimary,
+                        ),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        onSelected: (value) async {
+                          if (value == 'favorites') {
+                            await _addTracksToFavorites(headerMenuTracks);
+                          } else if (value == 'playlist') {
+                            await _showAddTracksToPlaylistDialog(
+                              headerMenuTracks,
+                            );
+                          } else if (value == 'download') {
+                            await _downloadTracks(headerMenuTracks);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem<String>(
+                            value: 'favorites',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.favorite_outline_rounded),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    LocaleProvider.tr('add_to_favorites'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'playlist',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.playlist_add_rounded),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    LocaleProvider.tr('add_to_playlist'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'download',
+                            child: Row(
+                              children: [
+                                const Icon(Icons.download_rounded),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(LocaleProvider.tr('download')),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),

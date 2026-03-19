@@ -27,6 +27,7 @@ import 'package:music/utils/db/artist_images_cache_db.dart';
 import 'package:music/utils/db/artist_songs_cache_db.dart';
 import 'package:music/utils/db/streaming_artists_db.dart';
 import 'package:music/utils/db/download_history_hive.dart';
+import 'package:music/utils/db/home_youtube_cache_db.dart';
 import 'package:music/utils/yt_search/service.dart';
 // import 'package:music/widgets/hero_cached.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
@@ -223,6 +224,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<_StreamingRecentItem> _quickPickYtFallbackSongs = [];
   List<_StreamingRecentItem> _sharedYtFallbackPool = [];
   Future<void>? _sharedYtFallbackLoading;
+  bool _homeYtCacheLoaded = false;
   bool _randomSongsLoaded = false; // Bandera para evitar cargas duplicadas
   List<Map<String, dynamic>> _artists = []; // Lista de artistas populares
 
@@ -1135,6 +1137,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Inicializa todos los datos necesarios para la pantalla de inicio
   Future<void> _initializeData() async {
     try {
+      await _loadHomeYoutubeCache();
+
       // Cargar filtros de orden
       await _loadOrderFilter();
       await _loadRecentsSourceFilter();
@@ -4250,6 +4254,87 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return items;
   }
 
+  Map<String, dynamic> _streamingItemToCacheMap(_StreamingRecentItem item) {
+    return <String, dynamic>{
+      'rawPath': item.rawPath,
+      'title': item.title,
+      'artist': item.artist,
+      if (item.videoId != null && item.videoId!.trim().isNotEmpty)
+        'videoId': item.videoId!.trim(),
+      if (item.artUri != null && item.artUri!.trim().isNotEmpty)
+        'artUri': item.artUri!.trim(),
+      if (item.durationText != null && item.durationText!.trim().isNotEmpty)
+        'durationText': item.durationText!.trim(),
+      if (item.durationMs != null && item.durationMs! > 0)
+        'durationMs': item.durationMs,
+      if (item.isPinned) 'isPinned': true,
+    };
+  }
+
+  _StreamingRecentItem? _streamingItemFromCacheMap(Map<String, dynamic> raw) {
+    final rawPath = raw['rawPath']?.toString().trim() ?? '';
+    final videoIdRaw = raw['videoId']?.toString().trim();
+    final videoId = (videoIdRaw != null && videoIdRaw.isNotEmpty)
+        ? videoIdRaw
+        : _extractVideoIdFromPath(rawPath);
+    if (videoId == null || videoId.isEmpty) return null;
+
+    final title = raw['title']?.toString().trim();
+    final artist = raw['artist']?.toString().trim();
+    final artUri = raw['artUri']?.toString().trim();
+    final durationText = raw['durationText']?.toString().trim();
+    final durationMs = _parseDurationMs(raw['durationMs']);
+    final isPinnedRaw = raw['isPinned'];
+    final isPinned = isPinnedRaw is bool ? isPinnedRaw : false;
+
+    return _StreamingRecentItem(
+      rawPath: rawPath.isNotEmpty ? rawPath : 'yt:$videoId',
+      title: (title != null && title.isNotEmpty)
+          ? title
+          : LocaleProvider.tr('title_unknown'),
+      artist: (artist != null && artist.isNotEmpty)
+          ? artist
+          : LocaleProvider.tr('artist_unknown'),
+      videoId: videoId,
+      artUri: (artUri != null && artUri.isNotEmpty) ? artUri : null,
+      durationText: (durationText != null && durationText.isNotEmpty)
+          ? durationText
+          : null,
+      durationMs: durationMs,
+      isPinned: isPinned,
+    );
+  }
+
+  Future<void> _loadHomeYoutubeCache() async {
+    if (_homeYtCacheLoaded) return;
+    _homeYtCacheLoaded = true;
+
+    try {
+      final cached = await HomeYoutubeCacheDB().getSharedPool();
+      if (cached.isEmpty) return;
+      final shared = cached
+          .map(_streamingItemFromCacheMap)
+          .whereType<_StreamingRecentItem>()
+          .toList();
+      if (shared.isEmpty) return;
+      if (!mounted) return;
+      setState(() {
+        _sharedYtFallbackPool = shared;
+      });
+    } catch (_) {
+      // Ignorar errores de cache para no bloquear la carga.
+    }
+  }
+
+  Future<void> _saveHomeYoutubeCache(List<_StreamingRecentItem> shared) async {
+    try {
+      final payload = shared.map(_streamingItemToCacheMap).toList();
+      await HomeYoutubeCacheDB().saveSharedPool(payload);
+    } catch (_) {
+      // Ignorar errores de persistencia para no interrumpir la UI.
+    }
+  }
+
   Future<void> _ensureQuickPickYtFallbackLoaded({
     bool forceReload = false,
   }) async {
@@ -4302,6 +4387,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       );
       if (!mounted) return;
+      await _saveHomeYoutubeCache(shared);
       setState(() {
         _sharedYtFallbackPool = shared;
       });
@@ -4801,7 +4887,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _shuffledStreamingRecentsQuickPick = quickPickPool;
         if (_shuffledStreamingRecentsQuickPick.isNotEmpty) {
           _quickPickYtFallbackSongs = [];
-          _sharedYtFallbackPool = [];
         }
         _showingRecents = true;
         _gradientAlphaNotifier.value = 1.0;
@@ -4818,7 +4903,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _streamingRecents = [];
         _shuffledStreamingRecentsQuickPick = [];
         _quickPickYtFallbackSongs = [];
-        _sharedYtFallbackPool = [];
         _showingRecents = true;
         _gradientAlphaNotifier.value = 1.0;
       });
@@ -4842,7 +4926,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _shuffledStreamingRecentsQuickPick = quickPickPool;
         if (_shuffledStreamingRecentsQuickPick.isNotEmpty) {
           _quickPickYtFallbackSongs = [];
-          _sharedYtFallbackPool = [];
         }
         // No cambiamos _showingRecents aquí
       });
@@ -4858,7 +4941,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _streamingRecents = [];
         _shuffledStreamingRecentsQuickPick = [];
         _quickPickYtFallbackSongs = [];
-        _sharedYtFallbackPool = [];
         // No cambiamos _showingRecents aquí
       });
       unawaited(_ensureQuickPickYtFallbackLoaded());
@@ -9212,6 +9294,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               : ExpressiveRefreshIndicator(
                   onRefresh: () async {
                     // print('🔄 Iniciando refresh completo...');
+                    await _ensureSharedYtFallbackPoolLoaded(forceReload: true);
                     // Actualizar accesos directos y selección rápida
                     await _loadAllSongs();
                     await _loadRecentsData();

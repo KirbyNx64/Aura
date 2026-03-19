@@ -140,15 +140,6 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/fading_edge_scrollview',
       '^4.1.1',
     ),
-    'sqflite': _DependencyInfo('https://pub.dev/packages/sqflite', '^2.4.2'),
-    'dynamic_color': _DependencyInfo(
-      'https://pub.dev/packages/dynamic_color',
-      '^1.8.1',
-    ),
-    'sqflite_android': _DependencyInfo(
-      'https://pub.dev/packages/sqflite_android',
-      '^2.4.2+2',
-    ),
     'flutter_sharing_intent': _DependencyInfo(
       'https://pub.dev/packages/flutter_sharing_intent',
       '^1.1.1',

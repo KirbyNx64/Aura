@@ -90,6 +90,7 @@ const Map<String, String> appLocalizationsEn = {
   'explode': 'Explode',
   'direct': 'Direct',
   'discovery': 'Discovery',
+  'discover_day': 'Discovery of the Day',
   'discovery_info_desc':
       'This screen shows recommendations based on your plays. It refreshes automatically every 24 hours.',
   'added_to_favorites': 'Added to favorites',

@@ -94,6 +94,7 @@ const Map<String, String> appLocalizationsEs = {
   'explode': 'Explode',
   'direct': 'Directo',
   'discovery': 'Descubrimiento',
+  'discover_day': 'Descubrimiento del día',
   'discovery_info_desc':
       'Esta pantalla te muestra recomendaciones basadas en tus reproducciones. Se renueva automáticamente cada 24 horas.',
   'added_to_favorites': 'Añadido a me gusta',

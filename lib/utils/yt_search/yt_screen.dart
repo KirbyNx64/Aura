@@ -309,6 +309,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   final ScrollController _albumScrollController = ScrollController();
   final ScrollController _playlistScrollController = ScrollController();
   final ScrollController _tabScrollController = ScrollController();
+  final ScrollController _urlPlaylistResultScrollController =
+      ScrollController();
   int _songPage = 1;
   int _videoPage = 1;
   int _artistLimit = 10;
@@ -1035,6 +1037,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     _albumScrollController.dispose();
     _playlistScrollController.dispose();
     _tabScrollController.dispose();
+    _urlPlaylistResultScrollController.dispose();
     _imageCache.clear();
     super.dispose();
   }
@@ -1775,7 +1778,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            Icons.bookmark_add_outlined,
+                            Icons.playlist_add,
                             color: Theme.of(context).colorScheme.onPrimary,
                           ),
                           const SizedBox(width: 8),
@@ -1868,12 +1871,15 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             : Theme.of(context).colorScheme.secondary.withValues(alpha: 0.07);
 
         return RawScrollbar(
+          controller: _urlPlaylistResultScrollController,
           thumbColor: Theme.of(context).colorScheme.primary,
           thickness: 6,
           radius: const Radius.circular(8),
           interactive: true,
           padding: EdgeInsets.only(bottom: bottomSpace),
           child: ListView.builder(
+            controller: _urlPlaylistResultScrollController,
+            primary: false,
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.only(
               left: 16,
@@ -3460,7 +3466,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               ? fallbackThumbUrl!.trim()
               : null);
     final videoId = item.videoId?.trim();
-    final rawPath = videoId != null && videoId.isNotEmpty ? 'yt:$videoId' : null;
+    final rawPath = videoId != null && videoId.isNotEmpty
+        ? 'yt:$videoId'
+        : null;
     final isPinned = rawPath == null
         ? false
         : await ShortcutsDB().isShortcut(rawPath);
@@ -3640,7 +3648,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           durationMs: item.durationMs,
                         );
                       }
-                      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                      shortcutsShouldReload.value =
+                          !shortcutsShouldReload.value;
                     },
                   ),
                 if (artist.trim().isNotEmpty &&
