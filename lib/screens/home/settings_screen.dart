@@ -5641,8 +5641,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       if (options['mostPlayed'] == true) {
-        final mostPlayed = await MostPlayedDB().getMostPlayed(limit: 10000);
-        backup['mostPlayed'] = mostPlayed.map((s) => s.data).toList();
+        final boxMost = await MostPlayedDB().box;
+        final boxMostMeta = await MostPlayedDB().metaBox;
+        final mostPlayedEntries =
+            boxMost
+                .toMap()
+                .entries
+                .whereType<MapEntry<dynamic, dynamic>>()
+                .map((entry) {
+                  final path = entry.key?.toString().trim() ?? '';
+                  if (path.isEmpty) return null;
+                  final rawValue = entry.value;
+                  int playCount = 1;
+                  if (rawValue is Map) {
+                    final parsed =
+                        int.tryParse(
+                          rawValue['play_count']?.toString() ?? '',
+                        ) ??
+                        1;
+                    playCount = parsed > 0 ? parsed : 1;
+                  }
+                  final meta = _toSerializableMetaMap(boxMostMeta.get(path));
+                  return {
+                    'path': path,
+                    'play_count': playCount,
+                    if (meta != null && meta.isNotEmpty) 'meta': meta,
+                  };
+                })
+                .whereType<Map<String, dynamic>>()
+                .toList()
+              ..sort((a, b) {
+                final aCount =
+                    int.tryParse(a['play_count']?.toString() ?? '') ?? 1;
+                final bCount =
+                    int.tryParse(b['play_count']?.toString() ?? '') ?? 1;
+                return bCount.compareTo(aCount);
+              });
+        backup['mostPlayed'] = mostPlayedEntries;
       }
 
       if (options['playlists'] == true) {
@@ -6071,10 +6106,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       if (options['mostPlayed'] == true) {
         final boxMost = await MostPlayedDB().box;
+        final boxMostMeta = await MostPlayedDB().metaBox;
         await boxMost.clear();
+        await boxMostMeta.clear();
         if (data['mostPlayed'] is List) {
-          for (final path in data['mostPlayed']) {
-            await boxMost.put(path, {'play_count': 1});
+          for (final item in data['mostPlayed']) {
+            final path = _extractPathFromBackupItem(item);
+            if (path == null) continue;
+
+            int playCount = 1;
+            if (item is Map) {
+              final rawCount = item['play_count'];
+              final parsedCount = int.tryParse(rawCount?.toString() ?? '') ?? 1;
+              playCount = parsedCount > 0 ? parsedCount : 1;
+            }
+
+            await boxMost.put(path, {'play_count': playCount});
+
+            final itemMeta = _extractMetaFromBackupItem(item);
+            final backupMeta = _metaFromLookupByPath(
+              data['mostPlayed_meta'],
+              path,
+            );
+            final mergedMeta = itemMeta ?? backupMeta;
+            if (mergedMeta != null && mergedMeta.isNotEmpty) {
+              await boxMostMeta.put(path, mergedMeta);
+            }
           }
         }
       }
