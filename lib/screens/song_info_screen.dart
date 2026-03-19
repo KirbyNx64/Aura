@@ -537,6 +537,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     final mediaPath = _mediaPath();
     final resolvedVideoId = _normalizeText(_videoId);
     final hasVideoId = resolvedVideoId != null && resolvedVideoId.isNotEmpty;
+    final resolvedStreamUrl = _normalizeText(widget.mediaItem.extras?['streamUrl']);
     final resolvedArtworkUrl = _normalizeText(_streamArtworkUrl);
     final artworkUrlForInfoBox = (resolvedArtworkUrl != null)
         ? _artworkUrlForInfoBox(resolvedArtworkUrl)
@@ -998,6 +999,65 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                       ],
                     ),
                   ),
+                  if (_isStreaming &&
+                      resolvedStreamUrl != null &&
+                      resolvedStreamUrl.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isAmoled
+                            ? Colors.white.withAlpha(20)
+                            : isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.06)
+                            : Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Audio Stream',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  resolvedStreamUrl,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(fontFamily: 'monospace'),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              IconButton(
+                                icon: const Icon(Icons.copy, size: 20),
+                                onPressed: () {
+                                  Clipboard.setData(
+                                    ClipboardData(text: resolvedStreamUrl),
+                                  );
+                                },
+                                style: IconButton.styleFrom(
+                                  backgroundColor: colorScheme.primaryContainer,
+                                  foregroundColor:
+                                      colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   if (_isStreaming &&
                       artworkUrlForInfoBox != null &&
                       artworkUrlForInfoBox.isNotEmpty) ...[

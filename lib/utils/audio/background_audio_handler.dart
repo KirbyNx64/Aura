@@ -73,7 +73,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          // androidStopForegroundOnPause: false,
+          androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -506,6 +506,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Exponemos wrappers broadcast para permitir múltiples listeners de UI.
     _positionStream = _player.positionStream.asBroadcastStream();
     _durationStream = _player.durationStream.asBroadcastStream();
+  }
+
+  void _releaseLog(String message) {
+    // ignore: avoid_print
+    print('[AURA_STREAM] $message');
+  }
+
+  String _clipForLog(String? value, {int max = 180}) {
+    final text = value?.replaceAll('\n', ' ').trim() ?? '';
+    if (text.isEmpty) return '<empty>';
+    if (text.length <= max) return text;
+    return '${text.substring(0, max)}...';
   }
 
   // Finalizar el AudioPlayer con AndroidLoudnessEnhancer
@@ -1812,6 +1824,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // 2. Crear AudioSources sin verificación de archivos (just_audio maneja errores)
     // ignore: deprecated_member_use
     _concat = ConcatenatingAudioSource(
+      useLazyPreparation: true,
       children: [
         for (final song in validSongs) AudioSource.uri(Uri.file(song.data)),
       ],
@@ -1923,7 +1936,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             // ignore: deprecated_member_use
             await _player.setAudioSource(
               // ignore: deprecated_member_use
-              ConcatenatingAudioSource(children: [firstSource]),
+              ConcatenatingAudioSource(
+                useLazyPreparation: true,
+                children: [firstSource],
+              ),
             );
             if (_mediaQueue.isNotEmpty) {
               mediaItem.add(_mediaQueue.first);
@@ -2274,6 +2290,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }) async {
     if (!_deferredStreamingQueueMode) return false;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return false;
+    _releaseLog(
+      'resolve:start index=$targetIndex playAfterResolve=$playAfterResolve expectedGen=${expectedGeneration ?? 'null'} queueSize=${_mediaQueue.length}',
+    );
 
     // Capturar la generación actual. Si el usuario salta de nuevo antes de que
     // terminemos, _resolveGeneration habrá cambiado y abortamos gracefully.
@@ -2335,32 +2354,54 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
         ? rawVideoId
         : currentItem.id.replaceFirst('yt:', '').trim();
-    if (videoId.isEmpty) return false;
+    if (videoId.isEmpty) {
+      _releaseLog('resolve:abort missing_video_id itemId=${currentItem.id}');
+      return false;
+    }
 
     var streamUrl = currentItem.extras?['streamUrl']?.toString().trim();
+    _releaseLog(
+      'resolve:video videoId=$videoId hasInlineUrl=${streamUrl != null && streamUrl.isNotEmpty} itemId=${currentItem.id}',
+    );
     if (streamUrl == null || streamUrl.isEmpty) {
       // Reusar prefetch en curso si lo hay, para no lanzar una petición de red duplicada.
       final inFlight = _streamUrlPrefetchTasks[videoId];
       if (inFlight != null) {
+        _releaseLog('resolve:waiting_prefetch videoId=$videoId');
         streamUrl = await inFlight.timeout(
           const Duration(seconds: 5),
           onTimeout: () => null,
         );
+        _releaseLog(
+          'resolve:prefetch_done videoId=$videoId gotUrl=${streamUrl != null && streamUrl.isNotEmpty}',
+        );
       }
       // Si el prefetch no tenía nada o no había empezado, resolver ahora.
       if (streamUrl == null || streamUrl.isEmpty) {
+        _releaseLog('resolve:requesting_stream_service videoId=$videoId');
         streamUrl = await StreamService.getBestAudioUrl(
           videoId,
           reportError: true,
         ).timeout(const Duration(seconds: 5), onTimeout: () => null);
+        _releaseLog(
+          'resolve:stream_service_done videoId=$videoId gotUrl=${streamUrl != null && streamUrl.isNotEmpty} url=${_clipForLog(streamUrl)}',
+        );
       }
     }
 
     // Verificar que no hayamos sido superados mientras esperábamos la URL.
-    if (isSuperseded() || !isStillSelectedTarget()) return false;
+    if (isSuperseded() || !isStillSelectedTarget()) {
+      _releaseLog(
+        'resolve:aborted_superseded videoId=$videoId index=$targetIndex currentIndex=$_deferredStreamingQueueIndex generation=$myGeneration activeGeneration=$_resolveGeneration',
+      );
+      return false;
+    }
 
     if (streamUrl == null || streamUrl.isEmpty) {
       playLoadingNotifier.value = false;
+      _releaseLog(
+        'resolve:failed_missing_stream_url videoId=$videoId index=$targetIndex',
+      );
       return false;
     }
 
@@ -2380,9 +2421,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     mediaItem.add(updatedItem);
 
     try {
+      _releaseLog(
+        'resolve:load_audio_source begin videoId=$videoId url=${_clipForLog(streamUrl)} hasConcat=${_concat != null}',
+      );
       // Verificar una última vez antes de cargar el audio en el player.
       if (isSuperseded() || !isStillSelectedTarget()) {
         _isSwappingSource = false;
+        _releaseLog(
+          'resolve:load_audio_source aborted_superseded videoId=$videoId',
+        );
         return false;
       }
 
@@ -2403,33 +2450,60 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } else {
         // Fallback: crear concat si no existe (primer uso o tras dispose).
         // ignore: deprecated_member_use
-        _concat = ConcatenatingAudioSource(
+        final newConcat = ConcatenatingAudioSource(
           children: [AudioSource.uri(Uri.parse(streamUrl))],
         );
-        await _player
-            .setAudioSource(
-              // ignore: deprecated_member_use
-              _concat!,
-              initialIndex: 0,
-              initialPosition: Duration.zero,
-            )
-            .timeout(const Duration(seconds: 6));
+        try {
+          await _player
+              .setAudioSource(
+                // ignore: deprecated_member_use
+                newConcat,
+                initialIndex: 0,
+                initialPosition: Duration.zero,
+              )
+              .timeout(const Duration(seconds: 20));
+          _concat = newConcat;
+        } on TimeoutException {
+          _releaseLog(
+            'resolve:setAudioSource timeout videoId=$videoId -> trying direct setUrl fallback',
+          );
+          await _player
+              .setUrl(streamUrl, initialPosition: Duration.zero)
+              .timeout(const Duration(seconds: 12));
+          _concat = null;
+          _releaseLog(
+            'resolve:setAudioSource fallback setUrl success videoId=$videoId',
+          );
+        }
       }
       _isSwappingSource = false;
+      _releaseLog(
+        'resolve:load_audio_source success videoId=$videoId processingState=${_player.processingState}',
+      );
     } on PlayerInterruptedException {
       // El player fue interrumpido por un skip más reciente — es esperado, ignorar.
       _isSwappingSource = false;
+      _releaseLog(
+        'resolve:load_audio_source interrupted videoId=$videoId generation=$myGeneration activeGeneration=$_resolveGeneration',
+      );
       return false;
-    } catch (_) {
+    } catch (e, st) {
       // Timeout, error de red u otro fallo al cargar el stream — no relanzar
       // porque esta función se llama con unawaited y causaría una excepción no capturada.
       _isSwappingSource = false;
+      _releaseLog(
+        'resolve:load_audio_source error videoId=$videoId error=$e',
+      );
+      _releaseLog('resolve:load_audio_source stack=$st');
       reportStreamPlaybackError('unknown', videoId: videoId);
       return false;
     }
 
     // Verificar nuevamente después del setUrl.
-    if (isSuperseded() || !isStillSelectedTarget()) return false;
+    if (isSuperseded() || !isStillSelectedTarget()) {
+      _releaseLog('resolve:post_load aborted_superseded videoId=$videoId');
+      return false;
+    }
 
     // En cola streaming diferida, liberar loader después de enlazar el stream
     // para evitar que se apague antes de que PlayerScreen llegue a pintarlo.
@@ -2455,7 +2529,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
 
     if (playAfterResolve) {
+      _releaseLog('resolve:play begin videoId=$videoId');
       await _player.play();
+      _releaseLog(
+        'resolve:play success videoId=$videoId playing=${_player.playing} state=${_player.processingState}',
+      );
     }
 
     // Sincronizar flag solo para la canción que realmente se reproduce,
@@ -2464,6 +2542,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Prefetch ligero: solo resuelve URL del siguiente item en background.
     unawaited(_prefetchDeferredNextStreamUrl(targetIndex));
+    _releaseLog(
+      'resolve:done ok=true videoId=$videoId index=$targetIndex playAfterResolve=$playAfterResolve',
+    );
 
     return true;
   }
@@ -4802,8 +4883,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final videoId = (explicitVideoId != null && explicitVideoId.isNotEmpty)
           ? explicitVideoId
           : (currentVideoId ?? '');
+      _releaseLog(
+        'retryCurrentStream:start videoId=$videoId hasForcedUrl=${forcedStreamUrl != null && forcedStreamUrl.isNotEmpty}',
+      );
 
       if (videoId.isEmpty) {
+        _releaseLog('retryCurrentStream:abort missing_video_id');
         return {'ok': false, 'reason': 'missing_video_id'};
       }
 
@@ -4816,8 +4901,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         reportError: true,
         fastFail: true,
       );
+      _releaseLog(
+        'retryCurrentStream:resolved_url gotUrl=${streamUrl != null && streamUrl.isNotEmpty} url=${_clipForLog(streamUrl)}',
+      );
 
       if (streamUrl == null || streamUrl.isEmpty) {
+        _releaseLog('retryCurrentStream:failed missing_stream_url');
         return {'ok': false, 'reason': 'missing_stream_url'};
       }
 
@@ -4848,17 +4937,28 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         );
         _mediaQueue[targetIndex] = updatedItem;
         queue.add(List<MediaItem>.from(_mediaQueue));
+        _releaseLog(
+          'retryCurrentStream:deferred_schedule index=$targetIndex videoId=$videoId',
+        );
         _scheduleStreamingSkip(targetIndex, playAfterResolve: true);
         return {'ok': true, 'mode': 'deferred', 'queueIndex': targetIndex};
       }
 
       try {
+        _releaseLog(
+          'retryCurrentStream:direct_setUrl begin videoId=$videoId url=${_clipForLog(streamUrl)}',
+        );
         await _player
             .setUrl(streamUrl, initialPosition: Duration.zero)
             .timeout(const Duration(seconds: 6));
         await _player.play();
+        _releaseLog(
+          'retryCurrentStream:direct_setUrl success videoId=$videoId playing=${_player.playing} state=${_player.processingState}',
+        );
         return {'ok': true, 'mode': 'direct'};
-      } catch (_) {
+      } catch (e, st) {
+        _releaseLog('retryCurrentStream:direct_setUrl error videoId=$videoId error=$e');
+        _releaseLog('retryCurrentStream:direct_setUrl stack=$st');
         return {'ok': false, 'reason': 'set_url_failed'};
       }
     }
