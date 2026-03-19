@@ -5,6 +5,35 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:isolate';
 
+String _normalizeStreamingQuality(String? rawQuality) {
+  final quality = rawQuality?.trim().toLowerCase();
+  if (quality == 'high' || quality == 'low') {
+    return quality!;
+  }
+  return 'low';
+}
+
+AudioOnlyStreamInfo? _selectAudioByQuality(
+  Iterable<AudioOnlyStreamInfo> source, {
+  required String quality,
+}) {
+  final candidates = source.toList()
+    ..sort(
+      (a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond),
+    );
+  if (candidates.isEmpty) return null;
+
+  final normalized = _normalizeStreamingQuality(quality);
+  if (normalized == 'low') {
+    return candidates.first; // Menor bitrate disponible
+  }
+  if (normalized == 'high') {
+    return candidates.last; // Máxima calidad disponible
+  }
+
+  return candidates.first;
+}
+
 String _classifyIsolateResolveError(String message) {
   final lower = message.toLowerCase();
 
@@ -61,6 +90,7 @@ String _classifyIsolateResolveError(String message) {
 Future<Map<String, dynamic>?> _resolveBestAudioStreamInfoInIsolate(
   String videoId,
   RootIsolateToken? token,
+  String quality,
 ) async {
   if (token != null) {
     BackgroundIsolateBinaryMessenger.ensureInitialized(token);
@@ -72,25 +102,15 @@ Future<Map<String, dynamic>?> _resolveBestAudioStreamInfoInIsolate(
     final preferredAudioCandidates = manifest.audioOnly.where((s) {
       return s.codec.mimeType == 'audio/mp4' ||
           s.codec.toString().contains('mp4a');
-    });
+    }).toList();
 
-    AudioOnlyStreamInfo? bestAudio;
-    for (final candidate in preferredAudioCandidates) {
-      if (bestAudio == null ||
-          candidate.bitrate.compareTo(bestAudio.bitrate) > 0) {
-        bestAudio = candidate;
-      }
-    }
+    AudioOnlyStreamInfo? bestAudio = _selectAudioByQuality(
+      preferredAudioCandidates,
+      quality: quality,
+    );
 
     // Fallback: algunos videos no exponen mp4a; intentar cualquier audio-only.
-    if (bestAudio == null) {
-      for (final candidate in manifest.audioOnly) {
-        if (bestAudio == null ||
-            candidate.bitrate.compareTo(bestAudio.bitrate) > 0) {
-          bestAudio = candidate;
-        }
-      }
-    }
+    bestAudio ??= _selectAudioByQuality(manifest.audioOnly, quality: quality);
 
     if (bestAudio == null) {
       return <String, dynamic>{
@@ -98,6 +118,12 @@ Future<Map<String, dynamic>?> _resolveBestAudioStreamInfoInIsolate(
         'errorMessage': 'No audio streams available in manifest',
       };
     }
+
+    // ignore: avoid_print
+    print(
+      '[STREAM_QUALITY] videoId=$videoId quality=${_normalizeStreamingQuality(quality)} '
+      'bitrate=${bestAudio.bitrate.bitsPerSecond} itag=${bestAudio.tag} codec=${bestAudio.codec}',
+    );
 
     return <String, dynamic>{
       'url': bestAudio.url.toString(),
@@ -453,6 +479,9 @@ class StreamService {
     bool fastFail = false,
     required int requestGeneration,
   }) async {
+    final preferredQuality = _normalizeStreamingQuality(
+      streamingAudioQualityNotifier.value,
+    );
     final maxAttempts = fastFail ? 1 : 2;
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
       if (_isResolveCancelled(requestGeneration)) return null;
@@ -462,7 +491,11 @@ class StreamService {
           final token = RootIsolateToken.instance;
           // Mover parse/seleccion de manifest a otro isolate reduce jank en UI.
           streamInfo = await Isolate.run<Map<String, dynamic>?>(
-            () => _resolveBestAudioStreamInfoInIsolate(videoId, token),
+            () => _resolveBestAudioStreamInfoInIsolate(
+              videoId,
+              token,
+              preferredQuality,
+            ),
           );
         } catch (e) {
           // Fallback defensivo: si el isolate falla por plataforma/estado,
@@ -475,6 +508,7 @@ class StreamService {
           streamInfo = await _resolveBestAudioStreamInfoInIsolate(
             videoId,
             null,
+            preferredQuality,
           );
         }
 

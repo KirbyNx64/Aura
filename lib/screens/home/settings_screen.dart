@@ -53,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _downloadDirectory;
   bool _downloadTypeExplode = false; // true: Explode, false: Directo
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
+  String _streamAudioQuality = 'low'; // 'high', 'low'
   String _downloadCoverQuality = 'medium'; // 'high', 'medium', 'low'
   String _streamingCoverQuality = 'medium'; // 'high', 'medium', 'low'
   AppColorScheme _currentColorScheme = AppColorScheme.amoled;
@@ -68,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadDownloadDirectory();
     _loadDownloadType();
     _loadAudioQuality();
+    _loadStreamingAudioQuality();
     _loadDownloadCoverQuality();
     _loadStreamingCoverQuality();
     _loadColorScheme();
@@ -1695,6 +1697,142 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
     // Actualizar el notifier global
     audioQualityNotifier.value = quality;
+  }
+
+  Future<void> _loadStreamingAudioQuality() async {
+    final prefs = await SharedPreferences.getInstance();
+    final quality = prefs.getString('stream_audio_quality') ?? 'low';
+    final normalized = (quality == 'high' || quality == 'low')
+        ? quality
+        : 'low';
+    setState(() {
+      _streamAudioQuality = normalized;
+    });
+    streamingAudioQualityNotifier.value = normalized;
+  }
+
+  Future<void> _setStreamingAudioQuality(String quality) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('stream_audio_quality', quality);
+    setState(() {
+      _streamAudioQuality = quality;
+    });
+    streamingAudioQualityNotifier.value = quality;
+  }
+
+  String _streamAudioQualityLabel(String quality) {
+    switch (quality) {
+      case 'high':
+        return LocaleProvider.tr('audio_quality_high');
+      default:
+        return LocaleProvider.tr('audio_quality_low');
+    }
+  }
+
+  Future<void> _showStreamingAudioQualitySelection() async {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.graphic_eq_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'audio_quality',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'audio_quality_streaming_desc',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_high'),
+                      subtitle: LocaleProvider.tr(
+                        'audio_quality_streaming_high_desc',
+                      ),
+                      value: 'high',
+                      isSelected: _streamAudioQuality == 'high',
+                      onSelected: _setStreamingAudioQuality,
+                    ),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_low'),
+                      subtitle: LocaleProvider.tr(
+                        'audio_quality_streaming_low_desc',
+                      ),
+                      value: 'low',
+                      isSelected: _streamAudioQuality == 'low',
+                      onSelected: _setStreamingAudioQuality,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showAudioQualitySelection() async {
@@ -3988,6 +4126,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 onTap: _showStreamingCoverQualityDialog,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: ListTile(
+                leading: Icon(
+                  Icons.audiotrack_rounded,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                title: Text(
+                  LocaleProvider.tr('audio_quality_streaming'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _streamAudioQualityLabel(_streamAudioQuality),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      LocaleProvider.tr('audio_quality_streaming_desc'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+                onTap: _showStreamingAudioQualitySelection,
               ),
             ),
             const SizedBox(height: 4),

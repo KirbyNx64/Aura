@@ -141,8 +141,13 @@ const Map<String, String> appLocalizationsEs = {
   'khz_short': 'kHz',
   'db': 'dB',
   'audio_quality_desc': 'Elige la calidad del audio al descargar',
+  'audio_quality_streaming': 'Calidad de audio en streaming',
+  'audio_quality_streaming_desc':
+      'Elige la calidad del audio al reproducir en streaming',
   'audio_quality_high': 'Alta calidad',
   'audio_quality_high_desc': 'Mejor calidad disponible (mayor tamaño)',
+  'audio_quality_streaming_high_desc': 'Mejor calidad (mayor bitrate)',
+  'audio_quality_streaming_low_desc': 'Calidad reducida (menor bitrate)',
   'audio_quality_medium': 'Calidad media',
   'audio_quality_medium_desc': 'Calidad balanceada (tamaño moderado)',
   'audio_quality_low': 'Baja calidad',
@@ -667,6 +672,7 @@ const Map<String, String> appLocalizationsEs = {
   'save_to_playlist': 'Guardar en lista de reproducción',
   'no_playlists_yet':
       'No tienes listas de reproducción aún.\nCrea una nueva abajo.',
+  'no_streaming_yet': 'No tienes canciones streaming aún.',
 
   // OTA Update screen
   'checking_update': 'Buscando actualización...',

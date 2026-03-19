@@ -420,6 +420,14 @@ void main() async {
       : (legacyCoverHigh == true ? 'high' : 'medium');
   coverQualityNotifier.value = resolvedCoverQuality;
 
+  final storedStreamingAudioQuality = prefs.getString('stream_audio_quality');
+  final resolvedStreamingAudioQuality =
+      (storedStreamingAudioQuality == 'high' ||
+          storedStreamingAudioQuality == 'low')
+      ? storedStreamingAudioQuality!
+      : 'low';
+  streamingAudioQualityNotifier.value = resolvedStreamingAudioQuality;
+
   bool permisosOk = false;
 
   if (!isFirstRun) {

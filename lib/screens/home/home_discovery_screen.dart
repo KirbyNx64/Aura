@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:music/main.dart'
     show
@@ -1162,16 +1163,14 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
       builder: (context, overlayVisible, child) {
         final bottomPadding = MediaQuery.of(context).padding.bottom;
         final space = (overlayVisible ? 100.0 : 0.0) + bottomPadding;
+        if (_isLoading) {
+          return Center(child: LoadingIndicator());
+        }
         return ListView(
           padding: EdgeInsets.fromLTRB(16, 12, 16, space),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_error != null)
+            if (_error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Center(child: Text(_error!)),
@@ -1208,7 +1207,7 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          LocaleProvider.tr('no_recent_streaming_yet'),
+                          LocaleProvider.tr('no_streaming_yet'),
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
