@@ -153,6 +153,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  static const int _quickAccessSlots = 18;
   List<SongModel> _recentSongs = [];
   List<_StreamingRecentItem> _streamingRecents = [];
   bool _showingRecents = false;
@@ -206,6 +207,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final Set<int> _selectedPlaylistSongIds = {};
 
   List<SongModel> _shortcutSongs = [];
+  List<_StreamingRecentItem> _streamingShortcutSongs = [];
   List<SongModel> _randomSongs =
       []; // Canciones aleatorias para llenar espacios vacíos
   List<SongModel> _shuffledQuickPick = [];
@@ -214,6 +216,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   // Cache para los widgets de accesos directos para evitar reconstrucciones
   final Map<String, Widget> _shortcutWidgetCache = {};
+  final Map<String, Widget> _streamingShortcutWidgetCache = {};
 
   // Cache para los widgets de selección rápida para evitar reconstrucciones
   final Map<String, Widget> _quickPickWidgetCache = {};
@@ -516,6 +519,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initializeData();
     playlistsShouldReload.addListener(_onPlaylistsShouldReload);
+    favoritesShouldReload.addListener(_onFavoritesShouldReload);
     shortcutsShouldReload.addListener(_onShortcutsShouldReload);
     mostPlayedShouldReload.addListener(_onMostPlayedShouldReload);
     colorSchemeNotifier.addListener(_onThemeChanged);
@@ -604,6 +608,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   void _onPlaylistsShouldReload() {
     _loadPlaylists();
+    _loadMostPlayed();
   }
 
   void _onShortcutsShouldReload() {
@@ -614,10 +619,15 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadMostPlayed();
   }
 
+  void _onFavoritesShouldReload() {
+    _loadMostPlayed();
+  }
+
   void _onThemeChanged() {
     // Limpiar cachés de widgets cuando cambia el tema para forzar reconstrucción
     _artistWidgetCache.clear();
     _shortcutWidgetCache.clear();
+    _streamingShortcutWidgetCache.clear();
     _quickPickWidgetCache.clear();
     if (mounted) {
       setState(() {});
@@ -1627,12 +1637,179 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _initQuickPickPages();
     // Limpiar cache cuando se actualizan los shortcuts
     _shortcutWidgetCache.clear();
+    _streamingShortcutWidgetCache.clear();
     _quickPickWidgetCache.clear();
     _artistWidgetCache.clear();
     setState(() {});
   }
 
   // Método optimizado para construir widgets de accesos directos: cachea solo la parte visual, handlers frescos
+  Widget _buildStreamingShortcutWidget(
+    _StreamingRecentItem item,
+    BuildContext context,
+  ) {
+    final id = item.videoId?.trim() ?? item.rawPath;
+    final String shortcutKey = 'streaming_shortcut_$id';
+
+    Widget cachedVisual;
+    if (_streamingShortcutWidgetCache.containsKey(shortcutKey)) {
+      cachedVisual = _streamingShortcutWidgetCache[shortcutKey]!;
+    } else {
+      final artworkSources = _streamingArtworkSources(item);
+      cachedVisual = RepaintBoundary(
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              children: [
+                _StreamingArtwork(
+                  sources: artworkSources,
+                  backgroundColor: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainer,
+                  iconColor: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withAlpha(140),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                    child: Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        shadows: const [
+                          Shadow(
+                            blurRadius: 8,
+                            color: Colors.black54,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      _streamingShortcutWidgetCache[shortcutKey] = cachedVisual;
+    }
+
+    return ValueListenableBuilder<MediaItem?>(
+      valueListenable: _currentMediaItemNotifier,
+      builder: (context, currentMediaItem, child) {
+        final itemVideoId = item.videoId?.trim();
+        final currentVideoId = currentMediaItem?.extras?['videoId']
+            ?.toString()
+            .trim();
+        final isCurrent =
+            (itemVideoId != null &&
+                itemVideoId.isNotEmpty &&
+                currentVideoId == itemVideoId) ||
+            currentMediaItem?.id == item.rawPath ||
+            (itemVideoId != null && currentMediaItem?.id == 'yt:$itemVideoId');
+
+        return ValueListenableBuilder<bool>(
+          valueListenable: _isPlayingNotifier,
+          builder: (context, playing, child) {
+            return _buildOptimizedStreamingShortcutTile(
+              item: item,
+              context: context,
+              cachedVisual: cachedVisual,
+              isCurrent: isCurrent,
+              playing: isCurrent ? playing : false,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildOptimizedStreamingShortcutTile({
+    required _StreamingRecentItem item,
+    required BuildContext context,
+    required Widget cachedVisual,
+    required bool isCurrent,
+    required bool playing,
+  }) {
+    Widget finalVisual = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(opacity: animation, child: child);
+      },
+      child: Container(
+        key: ValueKey('${item.rawPath}_$isCurrent'),
+        child: Stack(
+          children: [
+            cachedVisual,
+            if (isCurrent)
+              Positioned(
+                top: 6,
+                left: 6,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: MiniMusicVisualizer(
+                    color: Colors.white,
+                    width: 3,
+                    height: 12,
+                    radius: 3,
+                    animate: playing,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    final childWidget = AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeInOut,
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isCurrent
+              ? Theme.of(context).colorScheme.primary
+              : Colors.transparent,
+          width: 3,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: finalVisual,
+    );
+
+    return AnimatedTapButton(
+      onTap: () => _playStreamingShortcut(item),
+      child: childWidget,
+    );
+  }
+
+  // Método optimizado para construir widgets de accesos directos: cachea solo la parte visual, handlers frescos
+  // ignore: unused_element
   Widget _buildShortcutWidget(SongModel song, BuildContext context) {
     final String shortcutKey = 'shortcut_${song.id}_${song.data}';
 
@@ -2277,8 +2454,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadMostPlayed() async {
     final songs = await MostPlayedDB().getMostPlayed(limit: 40);
+    final streamingShortcuts = await _buildStreamingShortcutPool(
+      limit: _quickAccessSlots,
+      maxMostPlayed: _quickAccessSlots,
+    );
     setState(() {
       _mostPlayed = songs;
+      _streamingShortcutSongs = streamingShortcuts;
+      _streamingShortcutWidgetCache.clear();
     });
     _shuffleQuickPick();
 
@@ -2287,6 +2470,147 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     // Precargar carátulas de canciones más reproducidas
     unawaited(_preloadArtworksForSongs(songs));
+  }
+
+  Future<List<_StreamingRecentItem>> _buildStreamingShortcutPool({
+    int limit = _quickAccessSlots,
+    int maxMostPlayed = _quickAccessSlots,
+  }) async {
+    final mostPlayedPaths = await MostPlayedDB().getMostPlayedPaths(
+      limit: maxMostPlayed + 40,
+    );
+    final mostPlayedStreaming = mostPlayedPaths
+        .where(_isStreamingRecentPath)
+        .toList();
+    final mostPlayedItems = await _buildStreamingMostPlayed(
+      mostPlayedStreaming,
+    );
+
+    final combined = <_StreamingRecentItem>[];
+    final used = <String>{};
+
+    String itemKey(_StreamingRecentItem item) {
+      final videoId = item.videoId?.trim();
+      if (videoId != null && videoId.isNotEmpty) {
+        return 'yt:$videoId';
+      }
+      return item.rawPath.trim();
+    }
+
+    void addIfUnique(_StreamingRecentItem item) {
+      final key = itemKey(item);
+      if (key.isEmpty || used.contains(key)) return;
+      used.add(key);
+      combined.add(item);
+    }
+
+    for (final item in mostPlayedItems) {
+      if (combined.length >= limit) break;
+      addIfUnique(item);
+    }
+
+    if (combined.length < limit) {
+      final missing = limit - combined.length;
+      final favoritePaths = await FavoritesDB().getFavoritePaths();
+      final favoriteStreaming =
+          favoritePaths.where(_isStreamingRecentPath).toList()..shuffle();
+      final favoriteItems = await _buildStreamingFavoritesForShortcuts(
+        favoriteStreaming,
+        maxItems: missing + 24,
+      );
+      for (final item in favoriteItems) {
+        if (combined.length >= limit) break;
+        addIfUnique(item);
+      }
+    }
+
+    if (combined.length < limit) {
+      final missing = limit - combined.length;
+      final playlists = await PlaylistsDB().getAllPlaylists();
+      playlists.shuffle();
+      final playlistItems = await _buildStreamingPlaylistsForShortcuts(
+        playlists,
+        maxItems: missing + 24,
+      );
+      for (final item in playlistItems) {
+        if (combined.length >= limit) break;
+        addIfUnique(item);
+      }
+    }
+
+    // Fallback: completar huecos restantes con búsquedas aleatorias en YouTube Music.
+    if (combined.length < limit) {
+      final ytFallback = await _buildStreamingFallbackFromYt(
+        limit: limit - combined.length,
+      );
+      for (final item in ytFallback) {
+        if (combined.length >= limit) break;
+        addIfUnique(item);
+      }
+    }
+
+    return combined;
+  }
+
+  Future<List<_StreamingRecentItem>> _buildStreamingFallbackFromYt({
+    int limit = _quickAccessSlots,
+  }) async {
+    final queryPool = <String>[
+      'música',
+      'música tendencias',
+      'música del momento',
+      'música 2026',
+      'Música exitos de los 70, 80, 90',
+      'top hits',
+      'canciones virales',
+      'música popular',
+      'hits latinos',
+      'top songs',
+    ]..shuffle();
+
+    final selectedQueries = queryPool.take(4).toList();
+    final items = <_StreamingRecentItem>[];
+    final usedVideoIds = <String>{};
+
+    for (final query in selectedQueries) {
+      if (items.length >= limit) break;
+      try {
+        final results = await searchSongsOnly(query, cancelPrevious: false);
+        for (final result in results) {
+          if (items.length >= limit) break;
+          final videoId = result.videoId?.trim();
+          if (videoId == null || videoId.isEmpty) continue;
+          if (!usedVideoIds.add(videoId)) continue;
+
+          final title = result.title?.trim();
+          final artist = result.artist?.trim();
+          final artUri = result.thumbUrl?.trim();
+          final durationMs = result.durationMs;
+          final durationText = result.durationText?.trim();
+          items.add(
+            _StreamingRecentItem(
+              rawPath: 'yt:$videoId',
+              title: (title != null && title.isNotEmpty)
+                  ? title
+                  : LocaleProvider.tr('title_unknown'),
+              artist: (artist != null && artist.isNotEmpty)
+                  ? artist
+                  : LocaleProvider.tr('artist_unknown'),
+              videoId: videoId,
+              artUri: (artUri != null && artUri.isNotEmpty) ? artUri : null,
+              durationText: (durationText != null && durationText.isNotEmpty)
+                  ? durationText
+                  : null,
+              durationMs: durationMs,
+            ),
+          );
+        }
+      } catch (_) {
+        // Ignorar errores de red/parsing y continuar con la siguiente query.
+      }
+    }
+
+    return items;
   }
 
   Future<void> _preloadArtworksForSongs(List<SongModel> songs) async {
@@ -2456,6 +2780,72 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return urls.toSet().toList();
   }
 
+  Future<_StreamingRecentItem?> _buildStreamingItemFromPath(
+    String path, {
+    Map<String, dynamic>? meta,
+    bool useMetaDurationText = true,
+  }) async {
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return null;
+
+    final metaVideoId = meta?['videoId']?.toString().trim();
+    final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
+        ? metaVideoId
+        : _extractVideoIdFromPath(normalizedPath);
+
+    final byPath = await DownloadHistoryHive.getDownloadByPath(normalizedPath);
+    final byVideo = videoId == null
+        ? null
+        : await DownloadHistoryHive.getDownloadByVideoId(videoId);
+    final history = byPath ?? byVideo;
+
+    final metaTitle = meta?['title']?.toString().trim();
+    final metaArtist = meta?['artist']?.toString().trim();
+    final metaArtUri = meta?['artUri']?.toString().trim();
+    final resolvedMetaArtUri = _applyStreamingArtworkQuality(
+      metaArtUri,
+      videoId: videoId,
+    );
+    final metaDurationText = meta?['durationText']?.toString().trim();
+    final metaDurationMs = _parseDurationMs(meta?['durationMs']);
+    final historyDurationMs = (history != null && history.duration > 0)
+        ? history.duration * 1000
+        : null;
+    final durationMs = metaDurationMs ?? historyDurationMs;
+
+    final durationText =
+        useMetaDurationText &&
+            metaDurationText != null &&
+            metaDurationText.isNotEmpty
+        ? metaDurationText
+        : (durationMs != null && durationMs > 0)
+        ? _formatDurationMs(durationMs)
+        : null;
+
+    final title = (metaTitle != null && metaTitle.isNotEmpty)
+        ? metaTitle
+        : (history?.title.trim().isNotEmpty ?? false)
+        ? history!.title.trim()
+        : videoId != null && videoId.isNotEmpty
+        ? 'YouTube Music ($videoId)'
+        : normalizedPath;
+    final artist = (metaArtist != null && metaArtist.isNotEmpty)
+        ? metaArtist
+        : (history?.artist.trim().isNotEmpty ?? false)
+        ? history!.artist.trim()
+        : LocaleProvider.tr('artist_unknown');
+
+    return _StreamingRecentItem(
+      rawPath: normalizedPath,
+      title: title,
+      artist: artist,
+      videoId: videoId,
+      artUri: resolvedMetaArtUri,
+      durationText: durationText,
+      durationMs: durationMs,
+    );
+  }
+
   Future<List<_StreamingRecentItem>> _buildStreamingRecents(
     List<String> paths,
   ) async {
@@ -2463,64 +2853,81 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     for (final path in paths) {
       final normalizedPath = path.trim();
       if (normalizedPath.isEmpty) continue;
-
       final meta = await RecentsDB().getRecentMeta(normalizedPath);
-      final metaVideoId = meta?['videoId']?.toString().trim();
-      final videoId = (metaVideoId != null && metaVideoId.isNotEmpty)
-          ? metaVideoId
-          : _extractVideoIdFromPath(normalizedPath);
-      final byPath = await DownloadHistoryHive.getDownloadByPath(
+      final item = await _buildStreamingItemFromPath(
         normalizedPath,
+        meta: meta,
+        useMetaDurationText: true,
       );
-      final byVideo = videoId == null
-          ? null
-          : await DownloadHistoryHive.getDownloadByVideoId(videoId);
-      final history = byPath ?? byVideo;
+      if (item != null) items.add(item);
+    }
+    return items;
+  }
 
-      final metaTitle = meta?['title']?.toString().trim();
-      final metaArtist = meta?['artist']?.toString().trim();
-      final metaArtUri = meta?['artUri']?.toString().trim();
-      final resolvedMetaArtUri = _applyStreamingArtworkQuality(
-        metaArtUri,
-        videoId: videoId,
+  Future<List<_StreamingRecentItem>> _buildStreamingMostPlayed(
+    List<String> paths, {
+    int? maxItems,
+  }) async {
+    final items = <_StreamingRecentItem>[];
+    final db = MostPlayedDB();
+    for (final path in paths) {
+      if (maxItems != null && items.length >= maxItems) break;
+      final normalizedPath = path.trim();
+      if (normalizedPath.isEmpty) continue;
+      final meta = await db.getMostPlayedMeta(normalizedPath);
+      final item = await _buildStreamingItemFromPath(
+        normalizedPath,
+        meta: meta,
+        useMetaDurationText: false,
       );
-      final metaDurationText = meta?['durationText']?.toString().trim();
-      final metaDurationMs = _parseDurationMs(meta?['durationMs']);
-      final historyDurationMs = (history != null && history.duration > 0)
-          ? history.duration * 1000
-          : null;
-      final durationMs = metaDurationMs ?? historyDurationMs;
-      final durationText =
-          (metaDurationText != null && metaDurationText.isNotEmpty)
-          ? metaDurationText
-          : (durationMs != null && durationMs > 0)
-          ? _formatDurationMs(durationMs)
-          : null;
+      if (item != null) items.add(item);
+    }
+    return items;
+  }
 
-      final title = (metaTitle != null && metaTitle.isNotEmpty)
-          ? metaTitle
-          : (history?.title.trim().isNotEmpty ?? false)
-          ? history!.title.trim()
-          : videoId != null && videoId.isNotEmpty
-          ? 'YouTube Music ($videoId)'
-          : normalizedPath;
-      final artist = (metaArtist != null && metaArtist.isNotEmpty)
-          ? metaArtist
-          : (history?.artist.trim().isNotEmpty ?? false)
-          ? history!.artist.trim()
-          : LocaleProvider.tr('artist_unknown');
-
-      items.add(
-        _StreamingRecentItem(
-          rawPath: normalizedPath,
-          title: title,
-          artist: artist,
-          videoId: videoId,
-          artUri: resolvedMetaArtUri,
-          durationText: durationText,
-          durationMs: durationMs,
-        ),
+  Future<List<_StreamingRecentItem>> _buildStreamingFavoritesForShortcuts(
+    List<String> paths, {
+    int? maxItems,
+  }) async {
+    final items = <_StreamingRecentItem>[];
+    final db = FavoritesDB();
+    for (final path in paths) {
+      if (maxItems != null && items.length >= maxItems) break;
+      final normalizedPath = path.trim();
+      if (normalizedPath.isEmpty) continue;
+      final meta = await db.getFavoriteMeta(normalizedPath);
+      final item = await _buildStreamingItemFromPath(
+        normalizedPath,
+        meta: meta,
+        useMetaDurationText: true,
       );
+      if (item != null) items.add(item);
+    }
+    return items;
+  }
+
+  Future<List<_StreamingRecentItem>> _buildStreamingPlaylistsForShortcuts(
+    List<hive_model.PlaylistModel> playlists, {
+    int? maxItems,
+  }) async {
+    final db = PlaylistsDB();
+    final items = <_StreamingRecentItem>[];
+    for (final playlist in playlists) {
+      for (final rawPath in playlist.songPaths) {
+        if (maxItems != null && items.length >= maxItems) break;
+        final normalizedPath = rawPath.trim();
+        if (normalizedPath.isEmpty || !_isStreamingRecentPath(normalizedPath)) {
+          continue;
+        }
+        final meta = await db.getPlaylistSongMeta(playlist.id, normalizedPath);
+        final item = await _buildStreamingItemFromPath(
+          normalizedPath,
+          meta: meta,
+          useMetaDurationText: true,
+        );
+        if (item != null) items.add(item);
+      }
+      if (maxItems != null && items.length >= maxItems) break;
     }
     return items;
   }
@@ -2548,7 +2955,13 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return sources.toSet().toList();
   }
 
-  Future<void> _playStreamingRecent(_StreamingRecentItem item) async {
+  Future<void> _playStreamingEntry({
+    required _StreamingRecentItem item,
+    required List<_StreamingRecentItem> sourceItems,
+    required String queueSource,
+    bool playOnlyTapped = false,
+    bool autoStartRadio = false,
+  }) async {
     final videoId = item.videoId?.trim();
     if (videoId == null || videoId.isEmpty) return;
     if (playLoadingNotifier.value) return;
@@ -2563,10 +2976,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // En recientes streaming, siempre enviar la lista completa al reproductor,
-      // aunque la selección provenga de resultados filtrados.
-      if (_streamingRecents.isEmpty) return;
-      final queueItems = _streamingRecents
+      final playbackSource = playOnlyTapped
+          ? <_StreamingRecentItem>[item]
+          : sourceItems;
+      if (playbackSource.isEmpty) return;
+      final queueItems = playbackSource
           .where((entry) => (entry.videoId?.trim().isNotEmpty ?? false))
           .map((entry) {
             final entryVideoId = entry.videoId!.trim();
@@ -2603,22 +3017,38 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        'last_queue_source',
-        LocaleProvider.tr('recent_songs_title'),
-      );
+      await prefs.setString('last_queue_source', queueSource);
 
       await handler
           .customAction('playYtStreamQueue', {
             'items': queueItems,
             'initialIndex': initialQueueIndex,
             'autoPlay': true,
+            if (autoStartRadio) 'autoStartRadio': true,
           })
           .timeout(const Duration(seconds: 20));
     } catch (_) {
       // Ignorar para no mostrar error si inició correctamente entre transiciones.
       playLoadingNotifier.value = false;
     }
+  }
+
+  Future<void> _playStreamingRecent(_StreamingRecentItem item) async {
+    await _playStreamingEntry(
+      item: item,
+      sourceItems: _streamingRecents,
+      queueSource: LocaleProvider.tr('recent_songs_title'),
+    );
+  }
+
+  Future<void> _playStreamingShortcut(_StreamingRecentItem item) async {
+    await _playStreamingEntry(
+      item: item,
+      sourceItems: _streamingShortcutSongs,
+      queueSource: LocaleProvider.tr('quick_access_songs'),
+      playOnlyTapped: true,
+      autoStartRadio: true,
+    );
   }
 
   Future<void> _loadRecents() async {
@@ -2925,6 +3355,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     playlistsShouldReload.removeListener(_onPlaylistsShouldReload);
+    favoritesShouldReload.removeListener(_onFavoritesShouldReload);
     shortcutsShouldReload.removeListener(_onShortcutsShouldReload);
     mostPlayedShouldReload.removeListener(_onMostPlayedShouldReload);
     colorSchemeNotifier.removeListener(_onThemeChanged);
@@ -7106,15 +7537,11 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   ).colorScheme.onSurface,
                                 ),
                                 tooltip: LocaleProvider.tr('play_all'),
-                                onPressed: () {
-                                  _playSongAndOpenPlayer(
-                                    _accessDirectSongs.first,
-                                    _accessDirectSongs,
-                                    queueSource: LocaleProvider.tr(
-                                      'quick_access_songs',
-                                    ),
-                                  );
-                                },
+                                onPressed: _streamingShortcutSongs.isEmpty
+                                    ? null
+                                    : () => _playStreamingShortcut(
+                                        _streamingShortcutSongs.first,
+                                      ),
                               ),
                             ],
                           ),
@@ -7144,7 +7571,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                   controller: _pageController,
                                   onPageChanged: (_) {},
                                   children: List.generate(3, (pageIndex) {
-                                    final items = _accessDirectSongs
+                                    final items = _streamingShortcutSongs
                                         .skip(pageIndex * 6)
                                         .take(6)
                                         .toList();
@@ -7171,27 +7598,21 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                             ),
                                         itemBuilder: (context, index) {
                                           if (index < items.length) {
-                                            final song = items[index];
-                                            // Usar el método optimizado que cachea los widgets
-                                            return _buildShortcutWidget(
-                                              song,
+                                            final item = items[index];
+                                            return _buildStreamingShortcutWidget(
+                                              item,
                                               context,
                                             );
                                           } else {
                                             return Container(
                                               decoration: BoxDecoration(
-                                                color: Theme.of(
-                                                  context,
-                                                ).colorScheme.surfaceContainer,
+                                                color: Colors.transparent,
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                               ),
                                               child: Icon(
                                                 Icons.music_note,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface
-                                                    .withValues(alpha: 0.6),
+                                                color: Colors.transparent,
                                                 size:
                                                     itemWidth *
                                                     0.3, // Tamaño del ícono adaptativo

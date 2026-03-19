@@ -875,26 +875,39 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _resetTracking();
   }
 
-  /// Función para actualizar más reproducidas desde el background
-  Future<void> _updateMostPlayedAsync(String path) async {
+  /// Función para actualizar más reproducidas desde MediaItem (solo streaming).
+  Future<void> _updateMostPlayedFromMediaItem(
+    MediaItem item,
+    String recentKey,
+  ) async {
     try {
-      final query = OnAudioQuery();
-      final allSongs = await query.querySongs();
-      final match = allSongs.where((s) => s.data == path);
-      if (match.isNotEmpty) {
-        await MostPlayedDB().incrementPlayCount(match.first);
-      } else {
-        // Error de que la canción no se encontró en la base de datos
+      if (_isStreamingMediaItem(item)) {
+        // Para streaming, usar el método que acepta metadata.
+        final extras = item.extras;
+        final videoId = extras?['videoId']?.toString().trim();
+        final artUri =
+            extras?['displayArtUri']?.toString().trim().isNotEmpty == true
+            ? extras!['displayArtUri'].toString().trim()
+            : item.artUri?.toString();
+        await MostPlayedDB().incrementPlayCountByPath(
+          recentKey,
+          title: item.title,
+          artist: item.artist,
+          videoId: (videoId != null && videoId.isNotEmpty) ? videoId : null,
+          artUri: (artUri != null && artUri.trim().isNotEmpty)
+              ? artUri.trim()
+              : null,
+          durationMs: item.duration?.inMilliseconds,
+        );
       }
     } catch (e) {
-      // Error de que la canción no se encontró en la base de datos
+      // Error al actualizar más reproducidas
     }
   }
 
   /// Función para guardar la canción después de 10 segundos
   void _startTrackingPlaytime(String trackId, MediaItem currentItem) {
     final songPath = currentItem.extras?['data']?.toString().trim();
-    final isStreaming = _isStreamingMediaItem(currentItem);
     final recentKey = (songPath != null && songPath.isNotEmpty)
         ? songPath
         : currentItem.id;
@@ -908,9 +921,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (_currentTrackingId == trackId && !_hasBeenTracked) {
         _hasBeenTracked = true;
         unawaited(_saveRecentFromMediaItem(currentItem, recentKey));
-        if (!isStreaming) {
-          unawaited(_updateMostPlayedAsync(recentKey));
-        }
+        // Actualizar más reproducidas (ahora soporta tanto locales como streaming)
+        unawaited(_updateMostPlayedFromMediaItem(currentItem, recentKey));
       }
     } else {
       _trackingTimer = Timer(remainingTime, () {
@@ -918,10 +930,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _hasBeenTracked = true;
           // Actualizar recientes de forma asíncrona
           unawaited(_saveRecentFromMediaItem(currentItem, recentKey));
-          // Actualizar más reproducidas de forma asíncrona
-          if (!isStreaming) {
-            unawaited(_updateMostPlayedAsync(recentKey));
-          }
+          // Actualizar más reproducidas (ahora soporta tanto locales como streaming)
+          unawaited(_updateMostPlayedFromMediaItem(currentItem, recentKey));
         }
       });
     }
