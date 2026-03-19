@@ -1296,10 +1296,15 @@ void parseSongs(List items, List<YtMusicResult> results) {
 Future<List<YtMusicResult>> searchSongsOnly(
   String query, {
   String? continuationToken,
+  bool cancelPrevious = true,
 }) async {
-  // Cancela la búsqueda anterior si existe
-  _searchCancelToken?.cancel();
-  _searchCancelToken = CancelToken();
+  CancelToken? requestCancelToken;
+  if (cancelPrevious) {
+    // Cancela la búsqueda anterior si existe
+    _searchCancelToken?.cancel();
+    _searchCancelToken = CancelToken();
+    requestCancelToken = _searchCancelToken;
+  }
 
   final data = {
     ...ytServiceContext,
@@ -1315,7 +1320,7 @@ Future<List<YtMusicResult>> searchSongsOnly(
     final response = (await sendRequest(
       "search",
       data,
-      cancelToken: _searchCancelToken,
+      cancelToken: requestCancelToken,
     )).data;
     final results = <YtMusicResult>[];
 
@@ -3555,8 +3560,13 @@ Map<String, dynamic>? _parseArtistItem(Map<String, dynamic> item) {
   };
 }
 
-// Función para obtener Sencillos (Singles) de un artista
-Future<Map<String, dynamic>> getArtistSingles(String browseId) async {
+// Función para obtener Sencillos (Singles) de un artista.
+// Por defecto trae colección completa; en modo rápido devuelve solo preview.
+Future<Map<String, dynamic>> getArtistSingles(
+  String browseId, {
+  bool loadFullCollection = true,
+  int previewLimit = 20,
+}) async {
   String normalizedId = browseId;
   if (normalizedId.startsWith('MPLA')) {
     normalizedId = normalizedId.substring(4);
@@ -3596,6 +3606,26 @@ Future<Map<String, dynamic>> getArtistSingles(String browseId) async {
 
     Map<String, dynamic>? singlesEndpoint;
     List<dynamic>? topSinglesPreview;
+    String? previewContinuationToken;
+
+    List<Map<String, String>> parseSinglesPreview(List<dynamic> previewItems) {
+      final results = <Map<String, String>>[];
+      for (var item in previewItems) {
+        if (item['musicTwoRowItemRenderer'] != null) {
+          final parsed = _parseTwoRowItem(item['musicTwoRowItemRenderer']);
+          if (parsed != null) results.add(parsed);
+        } else if (item['musicResponsiveListItemRenderer'] != null) {
+          final parsed = _parseAlbumItem(
+            item['musicResponsiveListItemRenderer'],
+          );
+          if (parsed != null) results.add(parsed);
+        }
+      }
+      if (previewLimit > 0 && results.length > previewLimit) {
+        return results.take(previewLimit).toList();
+      }
+      return results;
+    }
 
     // Palabras clave para buscar la sección
     final keywords = [
@@ -3616,6 +3646,12 @@ Future<Map<String, dynamic>> getArtistSingles(String browseId) async {
         if (title != null &&
             keywords.any((k) => title.toString().toLowerCase().contains(k))) {
           singlesEndpoint = nav(shelf, ['bottomEndpoint', 'browseEndpoint']);
+          previewContinuationToken = nav(shelf, [
+            'continuations',
+            0,
+            'nextContinuationData',
+            'continuation',
+          ]);
 
           final contentList = nav(shelf, ['contents']);
           if (contentList is List) {
@@ -3657,22 +3693,19 @@ Future<Map<String, dynamic>> getArtistSingles(String browseId) async {
       }
     }
 
+    // Modo rápido para carga inicial: usar preview y evitar segunda petición pesada.
+    if (!loadFullCollection && topSinglesPreview != null) {
+      final results = parseSinglesPreview(topSinglesPreview);
+      return {
+        'results': results,
+        'continuationToken': previewContinuationToken,
+        'browseEndpoint': singlesEndpoint,
+      };
+    }
+
     // Si solo hay preview sin botón "Ver más", devolver el preview
     if (singlesEndpoint == null && topSinglesPreview != null) {
-      final results = <Map<String, String>>[];
-
-      for (var item in topSinglesPreview) {
-        if (item['musicTwoRowItemRenderer'] != null) {
-          final parsed = _parseTwoRowItem(item['musicTwoRowItemRenderer']);
-          if (parsed != null) results.add(parsed);
-        } else if (item['musicResponsiveListItemRenderer'] != null) {
-          final parsed = _parseAlbumItem(
-            item['musicResponsiveListItemRenderer'],
-          );
-          if (parsed != null) results.add(parsed);
-        }
-      }
-
+      final results = parseSinglesPreview(topSinglesPreview);
       return {
         'results': results,
         'continuationToken': null,
@@ -3802,6 +3835,61 @@ Future<Map<String, dynamic>> getArtistAlbumsOrSinglesContinuation({
       ]);
 
       return {'results': results, 'continuationToken': nextToken};
+    }
+
+    return {'results': <Map<String, String>>[], 'continuationToken': null};
+  } catch (e) {
+    return {'results': <Map<String, String>>[], 'continuationToken': null};
+  }
+}
+
+// Obtiene la primera página de álbumes/sencillos a partir de su browseEndpoint.
+Future<Map<String, dynamic>> getArtistAlbumsOrSinglesFirstPage({
+  required Map<String, dynamic> browseEndpoint,
+}) async {
+  try {
+    final data = {...ytServiceContext};
+    data['browseId'] = browseEndpoint['browseId'];
+    if (browseEndpoint['params'] != null) {
+      data['params'] = browseEndpoint['params'];
+    }
+
+    final response = (await sendRequest("browse", data)).data;
+    final results = <Map<String, String>>[];
+
+    final contents = nav(response, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+      0,
+    ]);
+
+    if (contents != null) {
+      final gridItems = nav(contents, ['gridRenderer', 'items']);
+
+      if (gridItems is List) {
+        for (var item in gridItems) {
+          if (item['musicTwoRowItemRenderer'] != null) {
+            final parsed = _parseTwoRowItem(item['musicTwoRowItemRenderer']);
+            if (parsed != null) results.add(parsed);
+          }
+        }
+      }
+
+      final continuationToken = nav(contents, [
+        'gridRenderer',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]);
+
+      return {'results': results, 'continuationToken': continuationToken};
     }
 
     return {'results': <Map<String, String>>[], 'continuationToken': null};

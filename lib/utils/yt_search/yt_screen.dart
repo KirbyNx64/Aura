@@ -22,7 +22,6 @@ import 'package:music/utils/yt_search/stream_provider.dart';
 import 'package:image/image.dart' as img;
 import 'dart:async';
 import 'package:http/http.dart' as http;
-import 'package:dio/dio.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/utils/notification_service.dart';
 import 'package:music/widgets/image_viewer.dart';
@@ -261,7 +260,14 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   bool _noInternet = false; // Nuevo estado para internet
   bool _loadingMoreSongs = false;
   bool _loadingMoreVideos = false;
+  bool _loadingMoreArtists = false;
   bool _loadingMorePlaylists = false;
+  bool _loadingFullSongs = false;
+  bool _loadingFullVideos = false;
+  bool _loadingFullAlbums = false;
+  bool _loadingExtendedSearch = false;
+  bool _loadedFullSongsForCurrentSearch = false;
+  bool _loadedFullVideosForCurrentSearch = false;
   List<YtMusicResult> _albumSongs = [];
   Map<String, dynamic>? _currentAlbum;
   bool _loadingAlbumSongs = false;
@@ -298,35 +304,238 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   // ScrollControllers para paginación incremental
   final ScrollController _songScrollController = ScrollController();
   final ScrollController _videoScrollController = ScrollController();
+  final ScrollController _artistScrollController = ScrollController();
+  final ScrollController _albumScrollController = ScrollController();
   final ScrollController _playlistScrollController = ScrollController();
   final ScrollController _tabScrollController = ScrollController();
   int _songPage = 1;
   int _videoPage = 1;
+  int _artistLimit = 10;
+  int _albumPage = 1;
   int _playlistPage = 1;
   bool _hasMoreSongs = true;
   bool _hasMoreVideos = true;
+  bool _hasMoreArtists = true;
+  bool _hasMoreAlbums = true;
   bool _hasMorePlaylists = true;
 
   Future<List<YtMusicResult>> _searchVideosOnly(String query) async {
     return searchVideosWithPagination(query, maxPages: 1);
   }
 
+  void _logSearchPerf(String message) {
+    final now = DateTime.now().toIso8601String();
+    debugPrint('[YT_SEARCH_PERF][$now] $message');
+  }
+
+  List<YtMusicResult> _parseQuickVideoItems(List<dynamic> items) {
+    final results = <YtMusicResult>[];
+    for (var item in items) {
+      final renderer = item['musicResponsiveListItemRenderer'];
+      if (renderer == null) continue;
+
+      final videoType = nav(renderer, [
+        'overlay',
+        'musicItemThumbnailOverlayRenderer',
+        'content',
+        'musicPlayButtonRenderer',
+        'playNavigationEndpoint',
+        'watchEndpoint',
+        'watchEndpointMusicSupportedConfigs',
+        'watchEndpointMusicConfig',
+        'musicVideoType',
+      ]);
+
+      if (videoType != 'MUSIC_VIDEO_TYPE_MV' &&
+          videoType != 'MUSIC_VIDEO_TYPE_OMV' &&
+          videoType != 'MUSIC_VIDEO_TYPE_UGC') {
+        continue;
+      }
+
+      final title =
+          renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
+      final subtitleRuns =
+          renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+
+      String? artist;
+      if (subtitleRuns is List) {
+        for (var run in subtitleRuns) {
+          if (run['navigationEndpoint']?['browseEndpoint']?['browseEndpointContextSupportedConfigs'] !=
+                  null ||
+              run['navigationEndpoint']?['browseEndpoint']?['browseId']
+                      ?.startsWith('UC') ==
+                  true) {
+            artist = run['text'];
+            break;
+          }
+        }
+        artist ??= subtitleRuns.firstWhere(
+          (run) => run['text'] != ' • ',
+          orElse: () => {'text': null},
+        )['text'];
+      }
+
+      String? thumbUrl;
+      final thumbnails =
+          renderer['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'];
+      if (thumbnails is List && thumbnails.isNotEmpty) {
+        thumbUrl = thumbnails.last['url'];
+      }
+
+      final videoId =
+          renderer['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'];
+      String? durationText;
+      final durationRuns =
+          renderer['flexColumns']?[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'];
+      if (durationRuns is List) {
+        for (final run in durationRuns) {
+          final txt = run['text']?.toString().trim();
+          if (txt != null &&
+              RegExp(r'^\d{1,2}:\d{2}(:\d{2})?$').hasMatch(txt)) {
+            durationText = txt;
+            break;
+          }
+        }
+      }
+      final durationMs = _parseDurationTextToMilliseconds(durationText);
+
+      if (videoId != null && title != null) {
+        results.add(
+          YtMusicResult(
+            title: title,
+            artist: artist,
+            thumbUrl: thumbUrl,
+            videoId: videoId,
+            durationText: durationText,
+            durationMs: durationMs,
+          ),
+        );
+      }
+    }
+
+    return results;
+  }
+
+  Future<Map<String, List<YtMusicResult>>> _searchQuickSongsAndVideos(
+    String query,
+  ) async {
+    final sw = Stopwatch()..start();
+    _logSearchPerf('quickPreview start query="$query"');
+    final data = {...ytServiceContext, 'query': query};
+    final response = (await sendRequest('search', data)).data;
+
+    final sections =
+        nav(response, [
+          'contents',
+          'tabbedSearchResultsRenderer',
+          'tabs',
+          0,
+          'tabRenderer',
+          'content',
+          'sectionListRenderer',
+          'contents',
+        ]) ??
+        nav(response, ['contents', 'sectionListRenderer', 'contents']);
+
+    final songs = <YtMusicResult>[];
+    final videos = <YtMusicResult>[];
+
+    if (sections is List) {
+      for (final section in sections) {
+        final shelf = section['musicShelfRenderer'];
+        if (shelf == null) continue;
+        final contents = shelf['contents'];
+        if (contents is! List) continue;
+
+        if (songs.length < 3) {
+          final parsedSongs = <YtMusicResult>[];
+          parseSongs(contents, parsedSongs);
+          for (final item in parsedSongs) {
+            if (songs.any((e) => e.videoId == item.videoId)) continue;
+            songs.add(item);
+            if (songs.length >= 3) break;
+          }
+        }
+
+        if (videos.length < 3) {
+          final parsedVideos = _parseQuickVideoItems(contents);
+          for (final item in parsedVideos) {
+            if (videos.any((e) => e.videoId == item.videoId)) continue;
+            videos.add(item);
+            if (videos.length >= 3) break;
+          }
+        }
+
+        if (songs.length >= 3 && videos.length >= 3) {
+          break;
+        }
+      }
+    }
+
+    // Top-up defensivo por categoria: si el parseo mixto no llega a 3,
+    // intentamos completar con las busquedas filtradas.
+    if (songs.length < 3 || videos.length < 3) {
+      _logSearchPerf(
+        'quickPreview top-up triggered after ${sw.elapsedMilliseconds}ms songs=${songs.length} videos=${videos.length}',
+      );
+
+      final fallback = await Future.wait<List<YtMusicResult>>([
+        songs.length < 3
+            ? searchSongsOnly(query)
+            : Future.value(<YtMusicResult>[]),
+        videos.length < 3
+            ? _searchVideosOnly(query)
+            : Future.value(<YtMusicResult>[]),
+      ]);
+
+      if (songs.length < 3) {
+        for (final item in fallback[0]) {
+          if (songs.any((e) => e.videoId == item.videoId)) continue;
+          songs.add(item);
+          if (songs.length >= 3) break;
+        }
+      }
+
+      if (videos.length < 3) {
+        for (final item in fallback[1]) {
+          if (videos.any((e) => e.videoId == item.videoId)) continue;
+          videos.add(item);
+          if (videos.length >= 3) break;
+        }
+      }
+
+      _logSearchPerf(
+        'quickPreview top-up done in ${sw.elapsedMilliseconds}ms songs=${songs.length} videos=${videos.length}',
+      );
+    }
+
+    _logSearchPerf(
+      'quickPreview done in ${sw.elapsedMilliseconds}ms songs=${songs.length} videos=${videos.length}',
+    );
+
+    return {'songs': songs, 'videos': videos};
+  }
+
   Future<void> _search() async {
-    if (_controller.text.trim().isEmpty) {
+    final query = _controller.text.trim();
+    if (query.isEmpty) {
       return;
     }
 
+    final totalSw = Stopwatch()..start();
+    _logSearchPerf('search start query="$query"');
+
     // Verificar si es un enlace de playlist de YouTube
-    if (_isYouTubePlaylistUrl(_controller.text)) {
+    if (_isYouTubePlaylistUrl(query)) {
       _focusNode.unfocus();
-      await _processUrlPlaylist(_controller.text);
+      await _processUrlPlaylist(query);
       return;
     }
 
     // Verificar si es un enlace de video de YouTube
-    if (_isYouTubeUrl(_controller.text)) {
+    if (_isYouTubeUrl(query)) {
       _focusNode.unfocus();
-      await _processUrlVideo(_controller.text);
+      await _processUrlVideo(query);
       return;
     }
 
@@ -341,28 +550,34 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _selectedIndexes.clear();
       _isSelectionMode = false;
       _noInternet = false;
-      _songResults = [];
-      _videoResults = [];
-      _albumResults = [];
-      _playlistResults = [];
-      _artistResults = [];
-      _albumSongs = [];
-      _currentAlbum = null;
-      _playlistSongs = [];
-      _currentPlaylist = null;
       _songPage = 1;
       _videoPage = 1;
+      _artistLimit = 10;
+      _albumPage = 1;
       _playlistPage = 1;
       _hasMoreSongs = true;
       _hasMoreVideos = true;
+      _hasMoreArtists = true;
+      _hasMoreAlbums = true;
       _hasMorePlaylists = true;
-      _loadingMoreSongs = true;
-      _loadingMoreVideos = true;
-      _loadingMorePlaylists = true;
+      _loadingMoreSongs = false;
+      _loadingMoreVideos = false;
+      _loadingMoreArtists = false;
+      _loadingFullAlbums = false;
+      _loadingMorePlaylists = false;
+      _loadedFullSongsForCurrentSearch = false;
+      _loadedFullVideosForCurrentSearch = false;
       _searchSessionId++;
     });
+    final int currentSearchSessionId = _searchSessionId;
+
+    bool isCurrentSearch() {
+      return mounted && currentSearchSessionId == _searchSessionId;
+    }
+
     final List<ConnectivityResult> connectivityResult = await Connectivity()
         .checkConnectivity();
+    if (!isCurrentSearch()) return;
     if (connectivityResult.contains(ConnectivityResult.none)) {
       if (mounted) {
         setState(() {
@@ -383,118 +598,107 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       return;
     }
     _focusNode.unfocus();
-    await SearchHistory.addToHistory(_controller.text.trim());
+    await SearchHistory.addToHistory(query);
+    if (!isCurrentSearch()) return;
     setState(() {
       _loading = true;
-      _songResults = [];
-      _videoResults = [];
-      _albumResults = [];
-      _playlistResults = [];
-      _artistResults = [];
-      _albumSongs = [];
-      _currentAlbum = null;
-      _playlistSongs = [];
-      _currentPlaylist = null;
       _error = null;
       _hasSearched = true;
+      _loadingExtendedSearch = false;
       _loadingMoreSongs = false;
       _loadingMoreVideos = false;
       _loadingMorePlaylists = false;
       _showSuggestions = false;
     });
-    try {
-      // 1. Obtener los primeros 20 resultados rápidamente
-      final songFuture = searchSongsOnly(_controller.text);
-      final videoFuture = _searchVideosOnly(_controller.text);
-      final albumFuture = searchAlbumsOnly(_controller.text);
-      final playlistFuture = searchPlaylistsOnly(_controller.text);
-      final artistFuture = searchArtists(_controller.text, limit: 10);
-      final results = await Future.wait([
-        songFuture,
-        videoFuture,
-        albumFuture,
-        playlistFuture,
-        artistFuture,
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _songResults = (results[0] as List).cast<YtMusicResult>();
-        _videoResults = (results[1] as List).cast<YtMusicResult>();
-        _albumResults = (results[2] as List); // No cast<YtMusicResult> aquí
-        _playlistResults = (results[3] as List).cast<Map<String, String>>();
-        _artistResults = (results[4] as List).cast<Map<String, dynamic>>();
-        // print('Álbumes encontrados:  [32m${_albumResults.length} [0m');
-        _loading = false;
-        _updateTabs();
-      });
-      // 2. En segundo plano, cargar más resultados (hasta 100)
-      // Para canciones
-      searchSongsWithPagination(_controller.text, maxPages: 5).then((
-        moreSongs,
-      ) {
-        if (!mounted) return;
-        setState(() {
-          final existingIds = _songResults.map((e) => e.videoId).toSet();
-          final newOnes = moreSongs
-              .where((e) => !existingIds.contains(e.videoId))
-              .toList();
-          _songResults.addAll(newOnes);
-          _loadingMoreSongs = false;
-        });
-      });
-      // Para videos: si tienes paginación, implementa aquí la llamada extendida
-      searchVideosWithPagination(_controller.text, maxPages: 5).then((
-        moreVideos,
-      ) {
-        if (!mounted) return;
-        setState(() {
-          _mergeVideoResultsInPlace(moreVideos);
-          _loadingMoreVideos = false;
-        });
-      });
-      // Para listas de reproducción
-      searchPlaylistsWithPagination(_controller.text, maxPages: 5).then((
-        morePlaylists,
-      ) {
-        if (!mounted) return;
-        setState(() {
-          final existingIds = _playlistResults
-              .map((e) => e['browseId'])
-              .toSet();
-          final newOnes = morePlaylists
-              .where((e) => !existingIds.contains(e['browseId']))
-              .toList();
-          _playlistResults.addAll(newOnes);
-          _loadingMorePlaylists = false;
-        });
-      });
-      // Para álbumes: (puedes agregar paginación extendida aquí si lo deseas)
-    } catch (e) {
-      if (e is DioException) {
-        if (mounted) {
-          setState(() {
-            _noInternet = true;
-            _loading = false;
-            _songResults = [];
-            _videoResults = [];
-            _albumResults = [];
-            _artistResults = [];
-            _hasSearched = false;
-            _error = null;
-          });
-        }
-      } else {
-        setState(() {
-          _error = 'Error: $e';
-          _loading = false;
-        });
+
+    Future<Map<String, List<YtMusicResult>>> quickPreviewTask() async {
+      final sw = Stopwatch()..start();
+      try {
+        final result = await _searchQuickSongsAndVideos(query);
+        _logSearchPerf(
+          'task quickPreview ${sw.elapsedMilliseconds}ms songs=${result['songs']?.length ?? 0} videos=${result['videos']?.length ?? 0}',
+        );
+        return result;
+      } catch (_) {
+        _logSearchPerf(
+          'task quickPreview ERROR after ${sw.elapsedMilliseconds}ms',
+        );
+        return {'songs': <YtMusicResult>[], 'videos': <YtMusicResult>[]};
       }
-      setState(() {
-        _loadingMoreSongs = false;
-        _loadingMoreVideos = false;
-        _albumResults = [];
-      });
     }
+
+    Future<List<dynamic>> albumsTask() async {
+      final sw = Stopwatch()..start();
+      try {
+        final result = await searchAlbumsWithPagination(query, maxPages: 1);
+        _logSearchPerf(
+          'task albums ${sw.elapsedMilliseconds}ms count=${result.length}',
+        );
+        return result;
+      } catch (_) {
+        _logSearchPerf('task albums ERROR after ${sw.elapsedMilliseconds}ms');
+        return <dynamic>[];
+      }
+    }
+
+    Future<List<Map<String, String>>> playlistsTask() async {
+      final sw = Stopwatch()..start();
+      try {
+        final result = await searchPlaylistsOnly(query);
+        _logSearchPerf(
+          'task playlists ${sw.elapsedMilliseconds}ms count=${result.length}',
+        );
+        return result;
+      } catch (_) {
+        _logSearchPerf(
+          'task playlists ERROR after ${sw.elapsedMilliseconds}ms',
+        );
+        return <Map<String, String>>[];
+      }
+    }
+
+    Future<List<Map<String, dynamic>>> artistsTask() async {
+      final sw = Stopwatch()..start();
+      try {
+        final result = await searchArtists(query, limit: 10);
+        _logSearchPerf(
+          'task artists ${sw.elapsedMilliseconds}ms count=${result.length}',
+        );
+        return result;
+      } catch (_) {
+        _logSearchPerf('task artists ERROR after ${sw.elapsedMilliseconds}ms');
+        return <Map<String, dynamic>>[];
+      }
+    }
+
+    _logSearchPerf('waiting all tasks...');
+    final results = await Future.wait([
+      quickPreviewTask(),
+      albumsTask(),
+      playlistsTask(),
+      artistsTask(),
+    ]);
+    _logSearchPerf('all tasks completed in ${totalSw.elapsedMilliseconds}ms');
+
+    if (!isCurrentSearch()) return;
+
+    final quickPreview = results[0] as Map<String, List<YtMusicResult>>;
+    setState(() {
+      _songResults = quickPreview['songs'] ?? <YtMusicResult>[];
+      _videoResults = quickPreview['videos'] ?? <YtMusicResult>[];
+      _albumResults = results[1] as List<dynamic>;
+      _playlistResults = results[2] as List<Map<String, String>>;
+      _artistResults = results[3] as List<Map<String, dynamic>>;
+      _artistLimit = 10;
+      _hasMoreArtists = _artistResults.length >= _artistLimit;
+      _albumPage = 1;
+      _hasMoreAlbums = _albumResults.isNotEmpty;
+      _loading = false;
+      _updateTabs();
+    });
+    _logSearchPerf(
+      'UI updated in ${totalSw.elapsedMilliseconds}ms songs=${_songResults.length} videos=${_videoResults.length} albums=${_albumResults.length} playlists=${_playlistResults.length} artists=${_artistResults.length}',
+    );
   }
 
   void _animateToCategory(String categoryId) {
@@ -505,32 +709,178 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   }
 
   void _handleTabSelection() {
+    String? currentTabId;
     if (mounted) {
       setState(() {
         if (_tabController.index >= 0 && _tabController.index < _tabs.length) {
           _expandedCategory = _tabs[_tabController.index].id;
+          currentTabId = _expandedCategory;
         } else {
           _expandedCategory = null;
+          currentTabId = null;
         }
       });
+    }
+
+    if (currentTabId == 'songs') {
+      unawaited(_ensureFullSongResultsLoaded());
+    } else if (currentTabId == 'videos') {
+      unawaited(_ensureFullVideoResultsLoaded());
+    } else if (currentTabId == 'artists') {
+      unawaited(_loadMoreArtists(initialLoad: true));
+    }
+  }
+
+  Future<void> _ensureFullSongResultsLoaded() async {
+    final query = _controller.text.trim();
+    if (query.isEmpty ||
+        _loadingFullSongs ||
+        _loadedFullSongsForCurrentSearch) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _loadingFullSongs = true;
+      });
+    } else {
+      _loadingFullSongs = true;
+    }
+    final sw = Stopwatch()..start();
+    _logSearchPerf('full songs load start query="$query"');
+
+    try {
+      final fullSongs = await searchSongsWithPagination(query, maxPages: 1);
+      if (!mounted) return;
+
+      setState(() {
+        final existingIds = _songResults.map((e) => e.videoId).toSet();
+        final newOnes = fullSongs
+            .where((e) => !existingIds.contains(e.videoId))
+            .toList();
+        _songResults.addAll(newOnes);
+        _songPage = 1;
+        _hasMoreSongs = fullSongs.isNotEmpty;
+      });
+
+      _loadedFullSongsForCurrentSearch = true;
+      _logSearchPerf(
+        'full songs load done ${sw.elapsedMilliseconds}ms total=${_songResults.length}',
+      );
+    } catch (_) {
+      _logSearchPerf('full songs load ERROR after ${sw.elapsedMilliseconds}ms');
+    } finally {
+      if (!mounted) {
+        _loadingFullSongs = false;
+      } else {
+        setState(() {
+          _loadingFullSongs = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _ensureFullVideoResultsLoaded() async {
+    final query = _controller.text.trim();
+    if (query.isEmpty ||
+        _loadingFullVideos ||
+        _loadedFullVideosForCurrentSearch) {
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _loadingFullVideos = true;
+      });
+    } else {
+      _loadingFullVideos = true;
+    }
+    final sw = Stopwatch()..start();
+    _logSearchPerf('full videos load start query="$query"');
+
+    try {
+      final fullVideos = await searchVideosWithPagination(query, maxPages: 1);
+      if (!mounted) return;
+
+      setState(() {
+        _mergeVideoResultsInPlace(fullVideos);
+        _videoPage = 1;
+        _hasMoreVideos = fullVideos.isNotEmpty;
+      });
+
+      _loadedFullVideosForCurrentSearch = true;
+      _logSearchPerf(
+        'full videos load done ${sw.elapsedMilliseconds}ms total=${_videoResults.length}',
+      );
+    } catch (_) {
+      _logSearchPerf(
+        'full videos load ERROR after ${sw.elapsedMilliseconds}ms',
+      );
+    } finally {
+      if (!mounted) {
+        _loadingFullVideos = false;
+      } else {
+        setState(() {
+          _loadingFullVideos = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadMoreAlbums() async {
+    if (_loadingFullAlbums || !_hasMoreAlbums) return;
+
+    setState(() {
+      _loadingFullAlbums = true;
+    });
+
+    final nextPage = _albumPage + 1;
+    _logSearchPerf(
+      'loadMore albums start currentPage=$_albumPage nextPage=$nextPage currentCount=${_albumResults.length}',
+    );
+    try {
+      final moreAlbums = await searchAlbumsWithPagination(
+        _controller.text,
+        maxPages: nextPage,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        final existingIds = _albumResults
+            .map((e) => (e is Map ? e['browseId']?.toString() : null))
+            .whereType<String>()
+            .toSet();
+
+        final newOnes = moreAlbums
+            .where((e) => !existingIds.contains(e['browseId']))
+            .toList();
+
+        _albumResults.addAll(newOnes);
+        _albumPage = nextPage;
+        _hasMoreAlbums = newOnes.isNotEmpty;
+        _loadingFullAlbums = false;
+      });
+      _logSearchPerf(
+        'loadMore albums done nextPage=$nextPage fetched=${moreAlbums.length} total=${_albumResults.length} hasMore=$_hasMoreAlbums',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingFullAlbums = false;
+      });
+      _logSearchPerf('loadMore albums ERROR nextPage=$nextPage');
     }
   }
 
   void _updateTabs() {
-    final List<TabItem> newTabs = [TabItem(LocaleProvider.tr('results'), null)];
-
-    if (_songResults.isNotEmpty) {
-      newTabs.add(TabItem(LocaleProvider.tr('songs_search'), 'songs'));
-    }
-    if (_videoResults.isNotEmpty) {
-      newTabs.add(TabItem(LocaleProvider.tr('videos'), 'videos'));
-    }
-    if (_playlistResults.isNotEmpty) {
-      newTabs.add(TabItem(LocaleProvider.tr('playlists'), 'playlists'));
-    }
-    if (_albumResults.isNotEmpty) {
-      newTabs.add(TabItem(LocaleProvider.tr('albums'), 'albums'));
-    }
+    final List<TabItem> newTabs = [
+      TabItem(LocaleProvider.tr('results'), null),
+      TabItem(LocaleProvider.tr('songs_search'), 'songs'),
+      TabItem(LocaleProvider.tr('videos'), 'videos'),
+      TabItem(LocaleProvider.tr('playlists'), 'playlists'),
+      TabItem(LocaleProvider.tr('albums'), 'albums'),
+      TabItem(LocaleProvider.tr('artists'), 'artists'),
+    ];
 
     // Check if tabs have changed
     bool changed = false;
@@ -582,6 +932,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       TabItem(LocaleProvider.tr('videos'), 'videos'),
       TabItem(LocaleProvider.tr('playlists'), 'playlists'),
       TabItem(LocaleProvider.tr('albums'), 'albums'),
+      TabItem(LocaleProvider.tr('artists'), 'artists'),
     ];
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(_handleTabSelection);
@@ -617,6 +968,23 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
           _videoScrollController.position.pixels >=
               _videoScrollController.position.maxScrollExtent - 10) {
         _loadMoreVideos();
+      }
+    });
+    _artistScrollController.addListener(() {
+      if (_expandedCategory == 'artists' &&
+          !_loadingMoreArtists &&
+          _hasMoreArtists &&
+          _artistScrollController.position.pixels >=
+              _artistScrollController.position.maxScrollExtent - 10) {
+        _loadMoreArtists();
+      }
+    });
+    _albumScrollController.addListener(() {
+      if (_expandedCategory == 'albums' &&
+          !_loadingFullAlbums &&
+          _albumScrollController.position.pixels >=
+              _albumScrollController.position.maxScrollExtent - 10) {
+        _loadMoreAlbums();
       }
     });
     _playlistScrollController.addListener(() {
@@ -662,6 +1030,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     queueLengthNotifier.dispose();
     _songScrollController.dispose();
     _videoScrollController.dispose();
+    _artistScrollController.dispose();
+    _albumScrollController.dispose();
     _playlistScrollController.dispose();
     _tabScrollController.dispose();
     _imageCache.clear();
@@ -1010,6 +1380,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       _currentPlaylist = null;
       _selectedIndexes.clear();
       _isSelectionMode = false;
+      _artistLimit = 10;
+      _hasMoreArtists = true;
+      _loadingMoreArtists = false;
+      _loadedFullSongsForCurrentSearch = false;
+      _loadedFullVideosForCurrentSearch = false;
       _searchSessionId++;
     });
     if (_tabScrollController.hasClients) {
@@ -3667,6 +4042,36 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     });
   }
 
+  Future<void> _loadMoreArtists({bool initialLoad = false}) async {
+    if (_loadingMoreArtists) return;
+    if (!initialLoad && !_hasMoreArtists) return;
+
+    setState(() {
+      _loadingMoreArtists = true;
+    });
+
+    final nextLimit = _artistLimit + 20;
+    try {
+      final moreArtists = await searchArtists(
+        _controller.text,
+        limit: nextLimit,
+      );
+      if (!mounted) return;
+
+      setState(() {
+        _artistResults = moreArtists;
+        _artistLimit = nextLimit;
+        _hasMoreArtists = moreArtists.length >= nextLimit;
+        _loadingMoreArtists = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMoreArtists = false;
+      });
+    }
+  }
+
   Future<void> _loadMorePlaylists() async {
     if (_loadingMorePlaylists || !_hasMorePlaylists) return;
     setState(() {
@@ -3739,6 +4144,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     final menuColor = isAmoledTheme
         ? Colors.grey.shade900
         : Theme.of(context).colorScheme.surfaceContainerHigh;
+    final hasAnyStandardSearchResults =
+        _songResults.isNotEmpty ||
+        _videoResults.isNotEmpty ||
+        _albumResults.isNotEmpty ||
+        _playlistResults.isNotEmpty ||
+        _artistResults.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -4155,12 +4566,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                       (mediaItem != null ? 100.0 : 0.0) + bottomPadding;
                   return Column(
                     children: [
-                      if (!_loading &&
-                          (_songResults.isNotEmpty ||
-                              _videoResults.isNotEmpty ||
-                              _albumResults.isNotEmpty ||
-                              _playlistResults.isNotEmpty) &&
-                          _hasSearched)
+                      if (!_loading && _hasSearched)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 6),
                           child: SingleChildScrollView(
@@ -4480,13 +4886,16 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                           ),
                         )
                       else if (!_loading &&
-                          (_songResults.isNotEmpty ||
-                              _videoResults.isNotEmpty) &&
+                          hasAnyStandardSearchResults &&
                           _hasSearched)
                         Expanded(
                           child: Builder(
                             builder: (context) {
                               if (_expandedCategory == 'songs') {
+                                if (_loadingFullSongs &&
+                                    !_loadedFullSongsForCurrentSearch) {
+                                  return Center(child: LoadingIndicator());
+                                }
                                 // Mostrar solo todas las canciones con botón de volver
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -4785,6 +5194,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                   ],
                                 );
                               } else if (_expandedCategory == 'videos') {
+                                if (_loadingFullVideos &&
+                                    !_loadedFullVideosForCurrentSearch) {
+                                  return Center(child: LoadingIndicator());
+                                }
                                 // Mostrar solo todos los videos con botón de volver
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -5082,41 +5495,57 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                     ),
                                   ],
                                 );
-                              } else if (_expandedCategory == 'albums') {
-                                // Mostrar solo álbumes con botón de volver
+                              } else if (_expandedCategory == 'artists') {
                                 return Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
                                       child: ListView.builder(
                                         key: PageStorageKey(
-                                          'yt_albums_list_$_searchSessionId',
+                                          'yt_artists_list_$_searchSessionId',
                                         ),
+                                        controller: _artistScrollController,
                                         padding: EdgeInsets.only(
                                           bottom: bottomSpace,
                                         ),
-                                        itemCount: _albumResults.length,
-                                        itemBuilder: (context, index) {
-                                          final item = _albumResults[index];
-                                          YtMusicResult album;
-                                          if (item is YtMusicResult) {
-                                            album = item;
-                                          } else if (item is Map) {
-                                            final map =
-                                                item as Map<String, dynamic>;
-                                            album = YtMusicResult(
-                                              title: map['title'] as String?,
-                                              artist: map['artist'] as String?,
-                                              thumbUrl:
-                                                  map['thumbUrl'] as String?,
-                                              videoId:
-                                                  map['browseId'] as String?,
+                                        itemCount:
+                                            _artistResults.length +
+                                            (_loadingMoreArtists ? 1 : 0),
+                                        itemBuilder: (context, idx) {
+                                          if (_loadingMoreArtists &&
+                                              idx == _artistResults.length) {
+                                            return Container(
+                                              padding: const EdgeInsets.all(16),
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child: LoadingIndicator(),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  TranslatedText(
+                                                    'loading_more',
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
                                             );
-                                          } else {
-                                            album = YtMusicResult();
                                           }
 
-                                          // Lógica de diseño de tarjetas
+                                          final artist = _artistResults[idx];
+                                          final artistName =
+                                              artist['name'] ??
+                                              LocaleProvider.tr(
+                                                'artist_unknown',
+                                              );
+                                          final thumbUrl = artist['thumbUrl'];
+                                          final browseId = artist['browseId'];
+
                                           final isDark =
                                               Theme.of(context).brightness ==
                                               Brightness.dark;
@@ -5132,11 +5561,11 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                     .secondary
                                                     .withValues(alpha: 0.07);
 
-                                          final bool isFirst = index == 0;
+                                          final bool isFirst = idx == 0;
                                           final bool isLast =
-                                              index == _albumResults.length - 1;
+                                              idx == _artistResults.length - 1;
                                           final bool isOnly =
-                                              _albumResults.length == 1;
+                                              _artistResults.length == 1;
 
                                           BorderRadius borderRadius;
                                           if (isOnly) {
@@ -5186,154 +5615,461 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                               ),
                                               child: InkWell(
                                                 borderRadius: borderRadius,
-                                                onTap: () async {
-                                                  if (album.videoId == null) {
-                                                    return;
-                                                  }
-                                                  setState(() {
-                                                    _expandedCategory = 'album';
-                                                    _loadingAlbumSongs = true;
-                                                    _albumSongs = [];
-                                                    _currentAlbum = {
-                                                      'id': album.videoId,
-                                                      'title': album.title,
-                                                      'artist': album.artist,
-                                                      'thumbUrl':
-                                                          album.thumbUrl,
-                                                    };
-                                                  });
-                                                  final songs =
-                                                      await getAlbumSongs(
-                                                        album.videoId!,
-                                                      );
-                                                  if (!mounted) return;
-                                                  setState(() {
-                                                    _albumSongs = songs;
-                                                    _loadingAlbumSongs = false;
-                                                  });
+                                                onTap: () {
+                                                  Navigator.of(context).push(
+                                                    PageRouteBuilder(
+                                                      settings:
+                                                          const RouteSettings(
+                                                            name: '/artist',
+                                                          ),
+                                                      pageBuilder:
+                                                          (
+                                                            context,
+                                                            animation,
+                                                            secondaryAnimation,
+                                                          ) => ArtistScreen(
+                                                            artistName:
+                                                                artistName,
+                                                            browseId: browseId,
+                                                          ),
+                                                      transitionsBuilder:
+                                                          (
+                                                            context,
+                                                            animation,
+                                                            secondaryAnimation,
+                                                            child,
+                                                          ) {
+                                                            const begin =
+                                                                Offset(
+                                                                  1.0,
+                                                                  0.0,
+                                                                );
+                                                            const end =
+                                                                Offset.zero;
+                                                            const curve = Curves
+                                                                .easeInOutCubic;
+                                                            var tween =
+                                                                Tween(
+                                                                  begin: begin,
+                                                                  end: end,
+                                                                ).chain(
+                                                                  CurveTween(
+                                                                    curve:
+                                                                        curve,
+                                                                  ),
+                                                                );
+                                                            return SlideTransition(
+                                                              position:
+                                                                  animation
+                                                                      .drive(
+                                                                        tween,
+                                                                      ),
+                                                              child: child,
+                                                            );
+                                                          },
+                                                      transitionDuration:
+                                                          const Duration(
+                                                            milliseconds: 300,
+                                                          ),
+                                                    ),
+                                                  );
                                                 },
                                                 child: ListTile(
                                                   contentPadding:
-                                                      const EdgeInsets.symmetric(
+                                                      EdgeInsets.symmetric(
                                                         horizontal: 16,
-                                                        vertical: 4,
+                                                        vertical:
+                                                            artist['subscribers'] ==
+                                                                null
+                                                            ? 12
+                                                            : 5,
                                                       ),
                                                   leading: ClipRRect(
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                          8,
+                                                          25,
                                                         ),
                                                     child:
-                                                        album.thumbUrl != null
-                                                        ? CachedNetworkImage(
-                                                            imageUrl:
-                                                                album.thumbUrl!,
-                                                            width: 56,
-                                                            height: 56,
+                                                        thumbUrl != null &&
+                                                            thumbUrl.isNotEmpty
+                                                        ? _buildSafeNetworkImage(
+                                                            thumbUrl,
+                                                            width: 50,
+                                                            height: 50,
                                                             fit: BoxFit.cover,
-                                                            fadeInDuration:
-                                                                Duration.zero,
-                                                            fadeOutDuration:
-                                                                Duration.zero,
-                                                            errorWidget:
-                                                                (
-                                                                  context,
-                                                                  url,
-                                                                  error,
-                                                                ) => Container(
-                                                                  width: 56,
-                                                                  height: 56,
-                                                                  decoration: BoxDecoration(
-                                                                    color: Colors
-                                                                        .grey[300],
-                                                                    borderRadius:
-                                                                        BorderRadius.circular(
-                                                                          12,
-                                                                        ),
-                                                                  ),
-                                                                  child: const Icon(
-                                                                    Icons.album,
-                                                                    size: 32,
-                                                                    color: Colors
-                                                                        .grey,
-                                                                  ),
-                                                                ),
                                                           )
                                                         : Container(
-                                                            width: 56,
-                                                            height: 56,
-                                                            decoration:
-                                                                BoxDecoration(
-                                                                  color: Colors
-                                                                      .grey[300],
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        12,
-                                                                      ),
-                                                                ),
+                                                            width: 50,
+                                                            height: 50,
+                                                            decoration: BoxDecoration(
+                                                              color: isSystem
+                                                                  ? Theme.of(
+                                                                          context,
+                                                                        )
+                                                                        .colorScheme
+                                                                        .secondaryContainer
+                                                                  : Theme.of(
+                                                                          context,
+                                                                        )
+                                                                        .colorScheme
+                                                                        .surfaceContainer,
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                            ),
                                                             child: const Icon(
-                                                              Icons.album,
-                                                              size: 32,
-                                                              color:
-                                                                  Colors.grey,
+                                                              Icons.person,
+                                                              size: 28,
                                                             ),
                                                           ),
                                                   ),
                                                   title: Text(
-                                                    album.title ??
-                                                        'Álbum desconocido',
+                                                    artistName,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
                                                     style: Theme.of(
                                                       context,
                                                     ).textTheme.titleMedium,
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
                                                   ),
-                                                  subtitle: Text(
-                                                    album.artist ??
-                                                        'Artista desconocido',
-                                                    maxLines: 1,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: isAmoled
-                                                          ? Colors.white
-                                                                .withValues(
-                                                                  alpha: 0.8,
-                                                                )
-                                                          : null,
-                                                    ),
-                                                  ),
-                                                  trailing: IconButton(
-                                                    style: IconButton.styleFrom(
-                                                      backgroundColor:
-                                                          Theme.of(context)
-                                                              .colorScheme
-                                                              .primary
-                                                              .withAlpha(20),
-                                                    ),
-                                                    icon: const Icon(
-                                                      Icons.link_rounded,
-                                                      size: 20,
-                                                    ),
-                                                    tooltip: 'Copiar enlace',
-                                                    onPressed: () {
-                                                      if (album.videoId !=
-                                                          null) {
-                                                        Clipboard.setData(
-                                                          ClipboardData(
-                                                            text:
-                                                                'https://music.youtube.com/browse/${album.videoId}',
+                                                  subtitle:
+                                                      artist['subscribers'] !=
+                                                          null
+                                                      ? Text(
+                                                          _formatArtistSubtitle(
+                                                            artist['subscribers'],
+                                                          )!,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                          style: TextStyle(
+                                                            color: isAmoled
+                                                                ? Colors.white
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.8,
+                                                                      )
+                                                                : null,
                                                           ),
-                                                        );
-                                                      }
-                                                    },
-                                                  ),
+                                                        )
+                                                      : null,
                                                 ),
                                               ),
                                             ),
                                           );
                                         },
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              } else if (_expandedCategory == 'albums') {
+                                // Mostrar solo álbumes con botón de volver
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: NotificationListener<ScrollNotification>(
+                                        onNotification: (notification) {
+                                          if (notification.metrics.pixels >=
+                                                  notification
+                                                          .metrics
+                                                          .maxScrollExtent -
+                                                      120 &&
+                                              !_loadingFullAlbums &&
+                                              _hasMoreAlbums) {
+                                            _loadMoreAlbums();
+                                          }
+                                          return false;
+                                        },
+                                        child: ListView.builder(
+                                          key: PageStorageKey(
+                                            'yt_albums_list_$_searchSessionId',
+                                          ),
+                                          controller: _albumScrollController,
+                                          padding: EdgeInsets.only(
+                                            bottom: bottomSpace,
+                                          ),
+                                          itemCount:
+                                              _albumResults.length +
+                                              (_loadingFullAlbums ? 1 : 0),
+                                          itemBuilder: (context, index) {
+                                            if (_loadingFullAlbums &&
+                                                index == _albumResults.length) {
+                                              return Container(
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    SizedBox(
+                                                      width: 20,
+                                                      height: 20,
+                                                      child: LoadingIndicator(),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    TranslatedText(
+                                                      'loading_more',
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }
+
+                                            final item = _albumResults[index];
+                                            YtMusicResult album;
+                                            if (item is YtMusicResult) {
+                                              album = item;
+                                            } else if (item is Map) {
+                                              final map =
+                                                  item as Map<String, dynamic>;
+                                              album = YtMusicResult(
+                                                title: map['title'] as String?,
+                                                artist:
+                                                    map['artist'] as String?,
+                                                thumbUrl:
+                                                    map['thumbUrl'] as String?,
+                                                videoId:
+                                                    map['browseId'] as String?,
+                                              );
+                                            } else {
+                                              album = YtMusicResult();
+                                            }
+
+                                            // Lógica de diseño de tarjetas
+                                            final isDark =
+                                                Theme.of(context).brightness ==
+                                                Brightness.dark;
+                                            final cardColor = isAmoled && isDark
+                                                ? Colors.white.withAlpha(20)
+                                                : isDark
+                                                ? Theme.of(context)
+                                                      .colorScheme
+                                                      .secondary
+                                                      .withValues(alpha: 0.06)
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .secondary
+                                                      .withValues(alpha: 0.07);
+
+                                            final bool isFirst = index == 0;
+                                            final bool isLast =
+                                                index ==
+                                                _albumResults.length - 1;
+                                            final bool isOnly =
+                                                _albumResults.length == 1;
+
+                                            BorderRadius borderRadius;
+                                            if (isOnly) {
+                                              borderRadius =
+                                                  BorderRadius.circular(20);
+                                            } else if (isFirst) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(
+                                                      20,
+                                                    ),
+                                                    topRight: Radius.circular(
+                                                      20,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(4),
+                                                  );
+                                            } else if (isLast) {
+                                              borderRadius =
+                                                  const BorderRadius.only(
+                                                    topLeft: Radius.circular(4),
+                                                    topRight: Radius.circular(
+                                                      4,
+                                                    ),
+                                                    bottomLeft: Radius.circular(
+                                                      20,
+                                                    ),
+                                                    bottomRight:
+                                                        Radius.circular(20),
+                                                  );
+                                            } else {
+                                              borderRadius =
+                                                  BorderRadius.circular(4);
+                                            }
+
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom: isLast ? 0 : 4,
+                                                left: 16,
+                                                right: 16,
+                                              ),
+                                              child: Card(
+                                                color: cardColor,
+                                                margin: EdgeInsets.zero,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: borderRadius,
+                                                ),
+                                                child: InkWell(
+                                                  borderRadius: borderRadius,
+                                                  onTap: () async {
+                                                    if (album.videoId == null) {
+                                                      return;
+                                                    }
+                                                    setState(() {
+                                                      _expandedCategory =
+                                                          'album';
+                                                      _loadingAlbumSongs = true;
+                                                      _albumSongs = [];
+                                                      _currentAlbum = {
+                                                        'id': album.videoId,
+                                                        'title': album.title,
+                                                        'artist': album.artist,
+                                                        'thumbUrl':
+                                                            album.thumbUrl,
+                                                      };
+                                                    });
+                                                    final songs =
+                                                        await getAlbumSongs(
+                                                          album.videoId!,
+                                                        );
+                                                    if (!mounted) return;
+                                                    setState(() {
+                                                      _albumSongs = songs;
+                                                      _loadingAlbumSongs =
+                                                          false;
+                                                    });
+                                                  },
+                                                  child: ListTile(
+                                                    contentPadding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 4,
+                                                        ),
+                                                    leading: ClipRRect(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            8,
+                                                          ),
+                                                      child:
+                                                          album.thumbUrl != null
+                                                          ? CachedNetworkImage(
+                                                              imageUrl: album
+                                                                  .thumbUrl!,
+                                                              width: 56,
+                                                              height: 56,
+                                                              fit: BoxFit.cover,
+                                                              fadeInDuration:
+                                                                  Duration.zero,
+                                                              fadeOutDuration:
+                                                                  Duration.zero,
+                                                              errorWidget:
+                                                                  (
+                                                                    context,
+                                                                    url,
+                                                                    error,
+                                                                  ) => Container(
+                                                                    width: 56,
+                                                                    height: 56,
+                                                                    decoration: BoxDecoration(
+                                                                      color: Colors
+                                                                          .grey[300],
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                            12,
+                                                                          ),
+                                                                    ),
+                                                                    child: const Icon(
+                                                                      Icons
+                                                                          .album,
+                                                                      size: 32,
+                                                                      color: Colors
+                                                                          .grey,
+                                                                    ),
+                                                                  ),
+                                                            )
+                                                          : Container(
+                                                              width: 56,
+                                                              height: 56,
+                                                              decoration: BoxDecoration(
+                                                                color: Colors
+                                                                    .grey[300],
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      12,
+                                                                    ),
+                                                              ),
+                                                              child: const Icon(
+                                                                Icons.album,
+                                                                size: 32,
+                                                                color:
+                                                                    Colors.grey,
+                                                              ),
+                                                            ),
+                                                    ),
+                                                    title: Text(
+                                                      album.title ??
+                                                          'Álbum desconocido',
+                                                      style: Theme.of(
+                                                        context,
+                                                      ).textTheme.titleMedium,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    subtitle: Text(
+                                                      album.artist ??
+                                                          'Artista desconocido',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: TextStyle(
+                                                        color: isAmoled
+                                                            ? Colors.white
+                                                                  .withValues(
+                                                                    alpha: 0.8,
+                                                                  )
+                                                            : null,
+                                                      ),
+                                                    ),
+                                                    trailing: IconButton(
+                                                      style:
+                                                          IconButton.styleFrom(
+                                                            backgroundColor:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .colorScheme
+                                                                    .primary
+                                                                    .withAlpha(
+                                                                      20,
+                                                                    ),
+                                                          ),
+                                                      icon: const Icon(
+                                                        Icons.link_rounded,
+                                                        size: 20,
+                                                      ),
+                                                      tooltip: 'Copiar enlace',
+                                                      onPressed: () {
+                                                        if (album.videoId !=
+                                                            null) {
+                                                          Clipboard.setData(
+                                                            ClipboardData(
+                                                              text:
+                                                                  'https://music.youtube.com/browse/${album.videoId}',
+                                                            ),
+                                                          );
+                                                        }
+                                                      },
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -6720,25 +7456,48 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                             CrossAxisAlignment.start,
                                         children: [
                                           const SizedBox(height: 24),
-                                          Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 4,
-                                              horizontal: 16,
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
                                             ),
-                                            child: Row(
-                                              children: [
-                                                const SizedBox(width: 14),
-                                                Text(
-                                                  LocaleProvider.tr('artists'),
-                                                  style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary,
+                                            onTap: () {
+                                              setState(() {
+                                                _expandedCategory = 'artists';
+                                                _animateToCategory('artists');
+                                              });
+                                            },
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 4,
+                                                    horizontal: 16,
                                                   ),
-                                                ),
-                                              ],
+                                              child: Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      const SizedBox(width: 14),
+                                                      Text(
+                                                        LocaleProvider.tr(
+                                                          'artists',
+                                                        ),
+                                                        style: TextStyle(
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Theme.of(
+                                                            context,
+                                                          ).colorScheme.primary,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  Icon(Icons.chevron_right),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                           const SizedBox(height: 12),
@@ -8186,7 +8945,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                                 'yt_albums_horizontal_$_searchSessionId',
                                               ),
                                               scrollDirection: Axis.horizontal,
-                                              itemCount: _albumResults.length,
+                                              itemCount:
+                                                  _albumResults.length > 5
+                                                  ? 5
+                                                  : _albumResults.length,
                                               separatorBuilder: (_, _) =>
                                                   const SizedBox(width: 12),
                                               itemBuilder: (context, index) {
@@ -8346,8 +9108,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                         ),
                       if (!_loading &&
                           _hasSearched &&
-                          _songResults.isEmpty &&
-                          _videoResults.isEmpty &&
+                          !hasAnyStandardSearchResults &&
+                          !_loadingExtendedSearch &&
                           _error == null)
                         Expanded(
                           child: Center(
@@ -8733,7 +9495,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     try {
       for (final query in queries) {
-        final songResults = await searchSongsOnly(query);
+        final songResults = await searchSongsOnly(query, cancelPrevious: false);
         final songLh3 = _firstMatchingLh3Thumb(songResults, normalizedVideoId);
         if (songLh3 != null && songLh3.isNotEmpty) {
           _resolvedLh3ThumbByVideoId[normalizedVideoId] = songLh3;

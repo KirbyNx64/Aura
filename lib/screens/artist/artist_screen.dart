@@ -154,6 +154,17 @@ class _ArtistScreenState extends State<ArtistScreen> {
   bool _loadingMoreVideos = false;
   bool _hasMoreVideos = true;
 
+  // Estado para paginación de sencillos
+  String? _singlesContinuationToken;
+  Map<String, dynamic>? _singlesBrowseEndpoint;
+  bool _loadingMoreSingles = false;
+  bool _hasMoreSingles = true;
+
+  // Estado para paginación de álbumes
+  bool _loadingMoreAlbums = false;
+  bool _hasMoreAlbums = true;
+  int _albumsPage = 1;
+
   // ScrollController para detectar el final del scroll
   late ScrollController _scrollController;
   final overlay_panel.PanelController _overlayPanelController =
@@ -161,6 +172,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
   final ValueNotifier<double> _panelPositionNotifier = ValueNotifier(0.0);
   bool _playlistOpen = false;
   Widget? _playerScreenWidget;
+
+  void _logArtistPerf(String message) {
+    final now = DateTime.now().toIso8601String();
+    debugPrint('[ARTIST_PERF][$now] $message');
+  }
 
   @override
   void initState() {
@@ -600,6 +616,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
             _hasMoreVideos &&
             !_loadingMoreVideos) {
           _loadMoreVideos();
+        } else if (_expandedCategory == 'singles' &&
+            _hasMoreSingles &&
+            !_loadingMoreSingles) {
+          _loadMoreSingles();
+        } else if (_expandedCategory == 'albums' &&
+            _hasMoreAlbums &&
+            !_loadingMoreAlbums) {
+          _loadMoreAlbums();
         }
       }
     } catch (e) {
@@ -616,6 +640,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
   }
 
   Future<void> _load() async {
+    final totalSw = Stopwatch()..start();
+    _logArtistPerf(
+      'load start artist="${widget.artistName}" browseId=${widget.browseId}',
+    );
     try {
       // ignore: avoid_print
       // print('ArtistScreen._load start for: ${widget.artistName}');
@@ -623,7 +651,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
       // Si tenemos browseId específico, usarlo directamente
       if (widget.browseId != null) {
         // print('🎯 ArtistScreen usando browseId específico: ${widget.browseId} para artista: ${widget.artistName}');
+        final sw = Stopwatch()..start();
         final detailed = await getArtistDetails(widget.browseId!);
+        _logArtistPerf(
+          'getArtistDetails(by browseId) ${sw.elapsedMilliseconds}ms hasData=${detailed != null}',
+        );
         if (detailed != null) {
           // print('✅ Artista cargado con browseId: ${widget.browseId} - Nombre: ${detailed['name']} - Thumb: ${detailed['thumbUrl'] != null ? 'Sí' : 'No'}');
           if (mounted) {
@@ -645,6 +677,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
       final cached = await ArtistImagesCacheDB.getCachedArtistImage(
         widget.artistName,
       );
+      _logArtistPerf(
+        'cache lookup done ${totalSw.elapsedMilliseconds}ms hit=${cached != null}',
+      );
       Map<String, dynamic>? info;
       if (cached != null) {
         info = {
@@ -655,7 +690,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
         };
         // 2) Si hay browseId, completar descripción desde browse
         if (cached['browseId'] != null) {
+          final sw = Stopwatch()..start();
           final detailed = await getArtistDetails(cached['browseId']);
+          _logArtistPerf(
+            'getArtistDetails(from cache browseId) ${sw.elapsedMilliseconds}ms hasData=${detailed != null}',
+          );
           if (detailed != null) {
             info = {
               ...info,
@@ -670,17 +709,28 @@ class _ArtistScreenState extends State<ArtistScreen> {
               final wiki = await getArtistWikipediaDescription(
                 widget.artistName,
               );
+              _logArtistPerf(
+                'wikipedia fallback (cache branch) ${sw.elapsedMilliseconds}ms hasData=${wiki != null && wiki.trim().isNotEmpty}',
+              );
               if (wiki != null) info['description'] = wiki;
             }
           }
         } else {
           // Si hay caché sin browseId, buscar para obtener browseId y forzar browse (para activar prints)
+          final swSearch = Stopwatch()..start();
           final yt = await searchArtists(widget.artistName, limit: 1);
+          _logArtistPerf(
+            'searchArtists(cache without browseId) ${swSearch.elapsedMilliseconds}ms count=${yt.length}',
+          );
           if (yt.isNotEmpty && yt.first['browseId'] != null) {
             final bid = yt.first['browseId'];
             // ignore: avoid_print
             // print('ArtistScreen._load fetched browseId from search: $bid');
+            final sw = Stopwatch()..start();
             final detailed = await getArtistDetails(bid);
+            _logArtistPerf(
+              'getArtistDetails(from searched browseId) ${sw.elapsedMilliseconds}ms hasData=${detailed != null}',
+            );
             if (detailed != null) {
               info = {
                 ...info,
@@ -695,6 +745,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 final wiki = await getArtistWikipediaDescription(
                   widget.artistName,
                 );
+                _logArtistPerf(
+                  'wikipedia fallback (searched browseId branch) ${sw.elapsedMilliseconds}ms hasData=${wiki != null && wiki.trim().isNotEmpty}',
+                );
                 if (wiki != null) info['description'] = wiki;
               }
             }
@@ -702,7 +755,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
         }
       } else {
         // 3) Buscar en YouTube Music y cachear como hace home_screen
+        final swSearch = Stopwatch()..start();
         final yt = await searchArtists(widget.artistName, limit: 1);
+        _logArtistPerf(
+          'searchArtists(no cache) ${swSearch.elapsedMilliseconds}ms count=${yt.length}',
+        );
         if (yt.isNotEmpty) {
           final a = yt.first;
           await ArtistImagesCacheDB.cacheArtistImage(
@@ -718,7 +775,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
             'browseId': a['browseId'],
           };
           if (a['browseId'] != null) {
+            final sw = Stopwatch()..start();
             final detailed = await getArtistDetails(a['browseId']);
+            _logArtistPerf(
+              'getArtistDetails(no cache branch) ${sw.elapsedMilliseconds}ms hasData=${detailed != null}',
+            );
             if (detailed != null) {
               info = {
                 ...info,
@@ -730,17 +791,28 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 final wiki = await getArtistWikipediaDescription(
                   widget.artistName,
                 );
+                _logArtistPerf(
+                  'wikipedia fallback (no cache branch) ${sw.elapsedMilliseconds}ms hasData=${wiki != null && wiki.trim().isNotEmpty}',
+                );
                 if (wiki != null) info['description'] = wiki;
               }
             }
           }
         } else {
           // 4) Fallback directo al helper por nombre
+          final sw = Stopwatch()..start();
           info = await getArtistInfoByName(widget.artistName);
+          _logArtistPerf(
+            'getArtistInfoByName fallback ${sw.elapsedMilliseconds}ms hasData=${info != null}',
+          );
           if (info != null &&
               (info['description'] == null ||
                   info['description'].toString().trim().isEmpty)) {
+            final swWiki = Stopwatch()..start();
             final wiki = await getArtistWikipediaDescription(widget.artistName);
+            _logArtistPerf(
+              'wikipedia fallback (getArtistInfoByName branch) ${swWiki.elapsedMilliseconds}ms hasData=${wiki != null && wiki.trim().isNotEmpty}',
+            );
             if (wiki != null) info['description'] = wiki;
           }
         }
@@ -753,7 +825,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
       if (result == null ||
           result['description'] == null ||
           result['description'].toString().trim().isEmpty) {
+        final swWiki = Stopwatch()..start();
         final wiki = await getArtistWikipediaDescription(widget.artistName);
+        _logArtistPerf(
+          'final wikipedia fallback ${swWiki.elapsedMilliseconds}ms hasData=${wiki != null && wiki.trim().isNotEmpty}',
+        );
         if (wiki != null && wiki.trim().isNotEmpty) {
           result = {
             ...(result ?? {}),
@@ -774,12 +850,18 @@ class _ArtistScreenState extends State<ArtistScreen> {
           _loadingContent = true;
         }
       });
+      _logArtistPerf(
+        'load metadata done ${totalSw.elapsedMilliseconds}ms hasArtist=${result != null}',
+      );
 
       // Cargar contenido del artista simulando búsqueda como yt_screen
       if (result != null) {
         _loadArtistContent(result);
       }
-    } catch (_) {
+    } catch (e) {
+      _logArtistPerf(
+        'load ERROR after ${totalSw.elapsedMilliseconds}ms error=$e',
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
@@ -789,32 +871,69 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   // Función para cargar contenido del artista (canciones, videos, álbumes)
   Future<void> _loadArtistContent(Map<String, dynamic> artistInfo) async {
+    final totalSw = Stopwatch()..start();
     try {
       // Buscar canciones, videos y álbumes del artista
       final String? browseId = artistInfo['browseId'];
+      _logArtistPerf('content load start browseId=$browseId');
 
       // Si tenemos browseId, usar getArtistSongs (ahora con paginación)
       // sino, usar búsqueda general como fallback
-      final songFuture = (browseId != null && browseId.isNotEmpty)
-          ? getArtistSongs(browseId, initialLimit: 20)
-          : _loadSongsWithPagination(widget.artistName);
+      Future<Map<String, dynamic>> songsTask() async {
+        final sw = Stopwatch()..start();
+        final result = (browseId != null && browseId.isNotEmpty)
+            ? await getArtistSongs(browseId, initialLimit: 20)
+            : await _loadSongsWithPagination(widget.artistName);
+        _logArtistPerf('content task songs ${sw.elapsedMilliseconds}ms');
+        return result;
+      }
 
-      final videoFuture = _loadVideosWithPagination(widget.artistName);
-      final albumFuture = searchAlbumsOnly(widget.artistName);
-      final singlesFuture = (browseId != null && browseId.isNotEmpty)
-          ? getArtistSingles(browseId)
-          : Future.value({
-              'results': <Map<String, String>>[],
-              'continuationToken': null,
-              'browseEndpoint': null,
-            });
+      Future<Map<String, dynamic>> videosTask() async {
+        final sw = Stopwatch()..start();
+        final result = await _loadVideosWithPagination(widget.artistName);
+        _logArtistPerf('content task videos ${sw.elapsedMilliseconds}ms');
+        return result;
+      }
+
+      Future<List<Map<String, String>>> albumsTask() async {
+        final sw = Stopwatch()..start();
+        final result = await searchAlbumsWithPagination(
+          widget.artistName,
+          maxPages: 1,
+        );
+        _logArtistPerf(
+          'content task albums ${sw.elapsedMilliseconds}ms count=${result.length}',
+        );
+        return result.cast<Map<String, String>>();
+      }
+
+      Future<Map<String, dynamic>> singlesTask() async {
+        final sw = Stopwatch()..start();
+        final result = (browseId != null && browseId.isNotEmpty)
+            ? await getArtistSingles(
+                browseId,
+                loadFullCollection: false,
+                previewLimit: 20,
+              )
+            : {
+                'results': <Map<String, String>>[],
+                'continuationToken': null,
+                'browseEndpoint': null,
+              };
+        final singlesCount = (result['results'] as List?)?.length ?? 0;
+        _logArtistPerf(
+          'content task singles ${sw.elapsedMilliseconds}ms count=$singlesCount',
+        );
+        return result;
+      }
 
       final searchResults = await Future.wait([
-        songFuture,
-        videoFuture,
-        albumFuture,
-        singlesFuture,
+        songsTask(),
+        videosTask(),
+        albumsTask(),
+        singlesTask(),
       ]);
+      _logArtistPerf('content all tasks done ${totalSw.elapsedMilliseconds}ms');
 
       if (mounted) {
         final videosData = searchResults[1] as Map<String, dynamic>;
@@ -850,11 +969,26 @@ class _ArtistScreenState extends State<ArtistScreen> {
           _hasMoreVideos = _videosContinuationToken != null;
 
           _albums = allAlbums;
+          _albumsPage = 1;
+          _loadingMoreAlbums = false;
+          _hasMoreAlbums = _albums.length >= 20;
           _singles = singlesData['results'] as List<Map<String, String>>;
+          _singlesContinuationToken =
+              singlesData['continuationToken'] as String?;
+          _singlesBrowseEndpoint =
+              singlesData['browseEndpoint'] as Map<String, dynamic>?;
+          _hasMoreSingles = _singlesBrowseEndpoint != null;
+          _loadingMoreSingles = false;
           _loadingContent = false;
         });
+        _logArtistPerf(
+          'content UI updated ${totalSw.elapsedMilliseconds}ms songs=${_songs.length} videos=${_videos.length} albums=${_albums.length} singles=${_singles.length}',
+        );
       }
     } catch (e) {
+      _logArtistPerf(
+        'content load ERROR after ${totalSw.elapsedMilliseconds}ms error=$e',
+      );
       if (mounted) {
         setState(() {
           _loadingContent = false;
@@ -1387,6 +1521,114 @@ class _ArtistScreenState extends State<ArtistScreen> {
           _loadingMoreVideos = false;
         });
       }
+    }
+  }
+
+  // Función para cargar más sencillos
+  Future<void> _loadMoreSingles() async {
+    if (_loadingMoreSingles ||
+        !_hasMoreSingles ||
+        _singlesBrowseEndpoint == null) {
+      return;
+    }
+
+    setState(() {
+      _loadingMoreSingles = true;
+    });
+
+    try {
+      final Map<String, dynamic> singlesData;
+      if (_singlesContinuationToken == null) {
+        // Primer "load more" cuando venimos de preview sin token.
+        singlesData = await getArtistAlbumsOrSinglesFirstPage(
+          browseEndpoint: _singlesBrowseEndpoint!,
+        );
+      } else {
+        singlesData = await getArtistAlbumsOrSinglesContinuation(
+          browseEndpoint: _singlesBrowseEndpoint!,
+          continuationToken: _singlesContinuationToken!,
+        );
+      }
+
+      if (!mounted) return;
+
+      final newSingles = (singlesData['results'] as List)
+          .cast<Map<String, String>>();
+
+      setState(() {
+        final existingIds = _singles
+            .map((e) => e['browseId'])
+            .whereType<String>()
+            .toSet();
+        final singlesToAdd = newSingles
+            .where((e) => !existingIds.contains(e['browseId']))
+            .toList();
+
+        _singles.addAll(singlesToAdd);
+        _singlesContinuationToken = singlesData['continuationToken'] as String?;
+        _hasMoreSingles =
+            _singlesContinuationToken != null || newSingles.isNotEmpty;
+        _loadingMoreSingles = false;
+      });
+
+      _logArtistPerf(
+        'singles pagination loaded added=${newSingles.length} total=${_singles.length} hasMore=$_hasMoreSingles',
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadingMoreSingles = false;
+        });
+      }
+      _logArtistPerf('singles pagination ERROR error=$e');
+    }
+  }
+
+  // Función para cargar más álbumes
+  Future<void> _loadMoreAlbums() async {
+    if (_loadingMoreAlbums || !_hasMoreAlbums) {
+      return;
+    }
+
+    setState(() {
+      _loadingMoreAlbums = true;
+    });
+
+    try {
+      final nextPage = _albumsPage + 1;
+      final moreAlbums = await searchAlbumsWithPagination(
+        widget.artistName,
+        maxPages: nextPage,
+      );
+
+      if (!mounted) return;
+
+      final existingIds = _albums
+          .map((e) => e['browseId'])
+          .whereType<String>()
+          .toSet();
+      final newOnes = moreAlbums
+          .cast<Map<String, String>>()
+          .where((e) => !existingIds.contains(e['browseId']))
+          .toList();
+
+      setState(() {
+        _albums.addAll(newOnes);
+        _albumsPage = nextPage;
+        _loadingMoreAlbums = false;
+        _hasMoreAlbums = newOnes.isNotEmpty;
+      });
+
+      _logArtistPerf(
+        'albums pagination loaded added=${newOnes.length} total=${_albums.length} hasMore=$_hasMoreAlbums',
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loadingMoreAlbums = false;
+        });
+      }
+      _logArtistPerf('albums pagination ERROR error=$e');
     }
   }
 
@@ -3870,187 +4112,218 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         SliverPadding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              final single = _singles[index];
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                if (_loadingMoreSingles &&
+                                    index == _singles.length) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: LoadingIndicator(),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        TranslatedText(
+                                          'loading_more',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
 
-                              final cardColor = isAmoled
-                                  ? Colors.white.withAlpha(20)
-                                  : isDark
-                                  ? Theme.of(context).colorScheme.secondary
-                                        .withValues(alpha: 0.06)
-                                  : Theme.of(context).colorScheme.secondary
-                                        .withValues(alpha: 0.07);
+                                final single = _singles[index];
 
-                              final bool isFirst = index == 0;
-                              final bool isLast = index == _singles.length - 1;
-                              final bool isOnly = _singles.length == 1;
+                                final cardColor = isAmoled
+                                    ? Colors.white.withAlpha(20)
+                                    : isDark
+                                    ? Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.06)
+                                    : Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.07);
 
-                              BorderRadius borderRadius;
-                              if (isOnly) {
-                                borderRadius = BorderRadius.circular(20);
-                              } else if (isFirst) {
-                                borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(20),
-                                  topRight: Radius.circular(20),
-                                  bottomLeft: Radius.circular(4),
-                                  bottomRight: Radius.circular(4),
-                                );
-                              } else if (isLast) {
-                                borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                  bottomLeft: Radius.circular(20),
-                                  bottomRight: Radius.circular(20),
-                                );
-                              } else {
-                                borderRadius = BorderRadius.circular(4);
-                              }
+                                final bool isFirst = index == 0;
+                                final bool isLast =
+                                    index == _singles.length - 1;
+                                final bool isOnly = _singles.length == 1;
 
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: isLast ? 0 : 4,
-                                ),
-                                child: Card(
-                                  color: cardColor,
-                                  margin: EdgeInsets.zero,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: borderRadius,
+                                BorderRadius borderRadius;
+                                if (isOnly) {
+                                  borderRadius = BorderRadius.circular(20);
+                                } else if (isFirst) {
+                                  borderRadius = const BorderRadius.only(
+                                    topLeft: Radius.circular(20),
+                                    topRight: Radius.circular(20),
+                                    bottomLeft: Radius.circular(4),
+                                    bottomRight: Radius.circular(4),
+                                  );
+                                } else if (isLast) {
+                                  borderRadius = const BorderRadius.only(
+                                    topLeft: Radius.circular(4),
+                                    topRight: Radius.circular(4),
+                                    bottomLeft: Radius.circular(20),
+                                    bottomRight: Radius.circular(20),
+                                  );
+                                } else {
+                                  borderRadius = BorderRadius.circular(4);
+                                }
+
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: isLast ? 0 : 4,
                                   ),
-                                  child: InkWell(
-                                    borderRadius: borderRadius,
-                                    onLongPress: () {
-                                      HapticFeedback.selectionClick();
-                                      // todo: impl selection
-                                    },
-                                    onTap: () async {
-                                      if (single['browseId'] == null) {
-                                        return;
-                                      }
-                                      setState(() {
-                                        _previousCategory = 'singles';
-                                        _expandedCategory = 'album';
-                                        _loadingAlbumSongs = true;
-                                        _albumSongs = [];
-                                        _currentAlbum = {
-                                          'title': single['title'],
-                                          'artist': single['artist'],
-                                          'thumbUrl': single['thumbUrl'],
-                                        };
-                                        _resetScroll();
-                                      });
-                                      final songs = await getAlbumSongs(
-                                        single['browseId']!,
-                                      );
-                                      if (!mounted) return;
-                                      setState(() {
-                                        _albumSongs = songs;
-                                        _loadingAlbumSongs = false;
-                                      });
-                                    },
-                                    child: ListTile(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 4,
+                                  child: Card(
+                                    color: cardColor,
+                                    margin: EdgeInsets.zero,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: borderRadius,
+                                    ),
+                                    child: InkWell(
+                                      borderRadius: borderRadius,
+                                      onLongPress: () {
+                                        HapticFeedback.selectionClick();
+                                        // todo: impl selection
+                                      },
+                                      onTap: () async {
+                                        if (single['browseId'] == null) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          _previousCategory = 'singles';
+                                          _expandedCategory = 'album';
+                                          _loadingAlbumSongs = true;
+                                          _albumSongs = [];
+                                          _currentAlbum = {
+                                            'title': single['title'],
+                                            'artist': single['artist'],
+                                            'thumbUrl': single['thumbUrl'],
+                                          };
+                                          _resetScroll();
+                                        });
+                                        final songs = await getAlbumSongs(
+                                          single['browseId']!,
+                                        );
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _albumSongs = songs;
+                                          _loadingAlbumSongs = false;
+                                        });
+                                      },
+                                      child: ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 4,
+                                            ),
+                                        leading: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
                                           ),
-                                      leading: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child:
-                                            single['thumbUrl'] != null &&
-                                                single['thumbUrl']!.isNotEmpty
-                                            ? _buildSafeNetworkImage(
-                                                single['thumbUrl']!,
-                                                width: 56,
-                                                height: 56,
-                                                fit: BoxFit.cover,
-                                              )
-                                            : Container(
-                                                width: 56,
-                                                height: 56,
-                                                decoration: BoxDecoration(
-                                                  color: isSystem
-                                                      ? Theme.of(context)
-                                                            .colorScheme
-                                                            .secondaryContainer
-                                                      : Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainer,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
+                                          child:
+                                              single['thumbUrl'] != null &&
+                                                  single['thumbUrl']!.isNotEmpty
+                                              ? _buildSafeNetworkImage(
+                                                  single['thumbUrl']!,
+                                                  width: 56,
+                                                  height: 56,
+                                                  fit: BoxFit.cover,
+                                                )
+                                              : Container(
+                                                  width: 56,
+                                                  height: 56,
+                                                  decoration: BoxDecoration(
+                                                    color: isSystem
+                                                        ? Theme.of(context)
+                                                              .colorScheme
+                                                              .secondaryContainer
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .surfaceContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.album,
+                                                    size: 32,
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
+                                                  ),
                                                 ),
-                                                child: Icon(
-                                                  Icons.album,
-                                                  size: 32,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
-                                                ),
-                                              ),
-                                      ),
-                                      title: Text(
-                                        single['title'] ?? 'Título desconocido',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        (single['year'] != null &&
-                                                single['year']
-                                                    .toString()
-                                                    .isNotEmpty)
-                                            ? '${single['year']} • ${single['type'] == 'EP' ? 'EP' : LocaleProvider.tr('singles')}'
-                                            : single['artist'] ??
-                                                  'Artista desconocido',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: IconButton(
-                                        style: IconButton.styleFrom(
-                                          backgroundColor: Theme.of(
+                                        ),
+                                        title: Text(
+                                          single['title'] ??
+                                              'Título desconocido',
+                                          style: Theme.of(
                                             context,
-                                          ).colorScheme.primary.withAlpha(20),
+                                          ).textTheme.titleMedium,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        icon: const Icon(
-                                          Icons.chevron_right,
-                                          size: 20,
+                                        subtitle: Text(
+                                          (single['year'] != null &&
+                                                  single['year']
+                                                      .toString()
+                                                      .isNotEmpty)
+                                              ? '${single['year']} • ${single['type'] == 'EP' ? 'EP' : LocaleProvider.tr('singles')}'
+                                              : single['artist'] ??
+                                                    'Artista desconocido',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        onPressed: () async {
-                                          if (single['browseId'] == null) {
-                                            return;
-                                          }
-                                          setState(() {
-                                            _previousCategory = 'singles';
-                                            _expandedCategory = 'album';
-                                            _loadingAlbumSongs = true;
-                                            _albumSongs = [];
-                                            _currentAlbum = {
-                                              'title': single['title'],
-                                              'artist': single['artist'],
-                                              'thumbUrl': single['thumbUrl'],
-                                            };
-                                            _resetScroll();
-                                          });
-                                          final songs = await getAlbumSongs(
-                                            single['browseId']!,
-                                          );
-                                          if (!mounted) return;
-                                          setState(() {
-                                            _albumSongs = songs;
-                                            _loadingAlbumSongs = false;
-                                          });
-                                        },
+                                        trailing: IconButton(
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).colorScheme.primary.withAlpha(20),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.chevron_right,
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            if (single['browseId'] == null) {
+                                              return;
+                                            }
+                                            setState(() {
+                                              _previousCategory = 'singles';
+                                              _expandedCategory = 'album';
+                                              _loadingAlbumSongs = true;
+                                              _albumSongs = [];
+                                              _currentAlbum = {
+                                                'title': single['title'],
+                                                'artist': single['artist'],
+                                                'thumbUrl': single['thumbUrl'],
+                                              };
+                                              _resetScroll();
+                                            });
+                                            final songs = await getAlbumSongs(
+                                              single['browseId']!,
+                                            );
+                                            if (!mounted) return;
+                                            setState(() {
+                                              _albumSongs = songs;
+                                              _loadingAlbumSongs = false;
+                                            });
+                                          },
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            }, childCount: _singles.length),
+                                );
+                              },
+                              childCount:
+                                  _singles.length +
+                                  (_loadingMoreSingles ? 1 : 0),
+                            ),
                           ),
                         ),
                       ],
@@ -4117,183 +4390,212 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         SliverPadding(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           sliver: SliverList(
-                            delegate: SliverChildBuilderDelegate((
-                              context,
-                              index,
-                            ) {
-                              final album = _albums[index];
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) {
+                                if (_loadingMoreAlbums &&
+                                    index == _albums.length) {
+                                  return Container(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: LoadingIndicator(),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        TranslatedText(
+                                          'loading_more',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
 
-                              final cardColor = isAmoled
-                                  ? Colors.white.withAlpha(20)
-                                  : isDark
-                                  ? Theme.of(context).colorScheme.secondary
-                                        .withValues(alpha: 0.06)
-                                  : Theme.of(context).colorScheme.secondary
-                                        .withValues(alpha: 0.07);
+                                final album = _albums[index];
 
-                              final bool isFirst = index == 0;
-                              final bool isLast = index == _albums.length - 1;
-                              final bool isOnly = _albums.length == 1;
+                                final cardColor = isAmoled
+                                    ? Colors.white.withAlpha(20)
+                                    : isDark
+                                    ? Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.06)
+                                    : Theme.of(context).colorScheme.secondary
+                                          .withValues(alpha: 0.07);
 
-                              BorderRadius borderRadius;
-                              if (isOnly) {
-                                borderRadius = BorderRadius.circular(20);
-                              } else if (isFirst) {
-                                borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(20),
-                                  topRight: Radius.circular(20),
-                                  bottomLeft: Radius.circular(4),
-                                  bottomRight: Radius.circular(4),
-                                );
-                              } else if (isLast) {
-                                borderRadius = const BorderRadius.only(
-                                  topLeft: Radius.circular(4),
-                                  topRight: Radius.circular(4),
-                                  bottomLeft: Radius.circular(20),
-                                  bottomRight: Radius.circular(20),
-                                );
-                              } else {
-                                borderRadius = BorderRadius.circular(4);
-                              }
+                                final bool isFirst = index == 0;
+                                final bool isLast = index == _albums.length - 1;
+                                final bool isOnly = _albums.length == 1;
 
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: isLast ? 0 : 4,
-                                ),
-                                child: Card(
-                                  color: cardColor,
-                                  margin: EdgeInsets.zero,
-                                  elevation: 0,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: borderRadius,
+                                BorderRadius borderRadius;
+                                if (isOnly) {
+                                  borderRadius = BorderRadius.circular(20);
+                                } else if (isFirst) {
+                                  borderRadius = const BorderRadius.only(
+                                    topLeft: Radius.circular(20),
+                                    topRight: Radius.circular(20),
+                                    bottomLeft: Radius.circular(4),
+                                    bottomRight: Radius.circular(4),
+                                  );
+                                } else if (isLast) {
+                                  borderRadius = const BorderRadius.only(
+                                    topLeft: Radius.circular(4),
+                                    topRight: Radius.circular(4),
+                                    bottomLeft: Radius.circular(20),
+                                    bottomRight: Radius.circular(20),
+                                  );
+                                } else {
+                                  borderRadius = BorderRadius.circular(4);
+                                }
+
+                                return Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: isLast ? 0 : 4,
                                   ),
-                                  child: InkWell(
-                                    borderRadius: borderRadius,
-                                    onTap: () async {
-                                      if (album['browseId'] == null) {
-                                        return;
-                                      }
-                                      setState(() {
-                                        _previousCategory = 'albums';
-                                        _expandedCategory = 'album';
-                                        _loadingAlbumSongs = true;
-                                        _albumSongs = [];
-                                        _currentAlbum = {
-                                          'title': album['title'],
-                                          'artist': album['artist'],
-                                          'thumbUrl': album['thumbUrl'],
-                                        };
-                                        _resetScroll();
-                                      });
-                                      final songs = await getAlbumSongs(
-                                        album['browseId']!,
-                                      );
-                                      if (!mounted) return;
-                                      setState(() {
-                                        _albumSongs = songs;
-                                        _loadingAlbumSongs = false;
-                                      });
-                                    },
-                                    child: ListTile(
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 4,
+                                  child: Card(
+                                    color: cardColor,
+                                    margin: EdgeInsets.zero,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: borderRadius,
+                                    ),
+                                    child: InkWell(
+                                      borderRadius: borderRadius,
+                                      onTap: () async {
+                                        if (album['browseId'] == null) {
+                                          return;
+                                        }
+                                        setState(() {
+                                          _previousCategory = 'albums';
+                                          _expandedCategory = 'album';
+                                          _loadingAlbumSongs = true;
+                                          _albumSongs = [];
+                                          _currentAlbum = {
+                                            'title': album['title'],
+                                            'artist': album['artist'],
+                                            'thumbUrl': album['thumbUrl'],
+                                          };
+                                          _resetScroll();
+                                        });
+                                        final songs = await getAlbumSongs(
+                                          album['browseId']!,
+                                        );
+                                        if (!mounted) return;
+                                        setState(() {
+                                          _albumSongs = songs;
+                                          _loadingAlbumSongs = false;
+                                        });
+                                      },
+                                      child: ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 4,
+                                            ),
+                                        leading: ClipRRect(
+                                          borderRadius: BorderRadius.circular(
+                                            8,
                                           ),
-                                      leading: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child:
-                                            album['thumbUrl'] != null &&
-                                                album['thumbUrl']!.isNotEmpty
-                                            ? _buildSafeNetworkImage(
-                                                album['thumbUrl']!,
-                                                width: 56,
-                                                height: 56,
-                                                fit: BoxFit.cover,
-                                              )
-                                            : Container(
-                                                width: 56,
-                                                height: 56,
-                                                decoration: BoxDecoration(
-                                                  color: isSystem
-                                                      ? Theme.of(context)
-                                                            .colorScheme
-                                                            .secondaryContainer
-                                                      : Theme.of(context)
-                                                            .colorScheme
-                                                            .surfaceContainer,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
+                                          child:
+                                              album['thumbUrl'] != null &&
+                                                  album['thumbUrl']!.isNotEmpty
+                                              ? _buildSafeNetworkImage(
+                                                  album['thumbUrl']!,
+                                                  width: 56,
+                                                  height: 56,
+                                                  fit: BoxFit.cover,
+                                                )
+                                              : Container(
+                                                  width: 56,
+                                                  height: 56,
+                                                  decoration: BoxDecoration(
+                                                    color: isSystem
+                                                        ? Theme.of(context)
+                                                              .colorScheme
+                                                              .secondaryContainer
+                                                        : Theme.of(context)
+                                                              .colorScheme
+                                                              .surfaceContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    Icons.album,
+                                                    size: 32,
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
+                                                  ),
                                                 ),
-                                                child: Icon(
-                                                  Icons.album,
-                                                  size: 32,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onSurface,
-                                                ),
-                                              ),
-                                      ),
-                                      title: Text(
-                                        album['title'] ?? 'Título desconocido',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleMedium,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      subtitle: Text(
-                                        (album['year'] != null &&
-                                                album['year']
-                                                    .toString()
-                                                    .isNotEmpty)
-                                            ? '${album['year']} • ${album['artist'] ?? 'Artista desconocido'}'
-                                            : album['artist'] ??
-                                                  'Artista desconocido',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      trailing: IconButton(
-                                        style: IconButton.styleFrom(
-                                          backgroundColor: Theme.of(
+                                        ),
+                                        title: Text(
+                                          album['title'] ??
+                                              'Título desconocido',
+                                          style: Theme.of(
                                             context,
-                                          ).colorScheme.primary.withAlpha(20),
+                                          ).textTheme.titleMedium,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        icon: const Icon(
-                                          Icons.chevron_right,
-                                          size: 20,
+                                        subtitle: Text(
+                                          (album['year'] != null &&
+                                                  album['year']
+                                                      .toString()
+                                                      .isNotEmpty)
+                                              ? '${album['year']} • ${album['artist'] ?? 'Artista desconocido'}'
+                                              : album['artist'] ??
+                                                    'Artista desconocido',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        onPressed: () async {
-                                          if (album['browseId'] == null) {
-                                            return;
-                                          }
-                                          setState(() {
-                                            _previousCategory = 'albums';
-                                            _expandedCategory = 'album';
-                                            _loadingAlbumSongs = true;
-                                            _albumSongs = [];
-                                            _currentAlbum = {
-                                              'title': album['title'],
-                                              'artist': album['artist'],
-                                              'thumbUrl': album['thumbUrl'],
-                                            };
-                                            _resetScroll();
-                                          });
-                                          final songs = await getAlbumSongs(
-                                            album['browseId']!,
-                                          );
-                                          if (!mounted) return;
-                                          setState(() {
-                                            _albumSongs = songs;
-                                            _loadingAlbumSongs = false;
-                                          });
-                                        },
+                                        trailing: IconButton(
+                                          style: IconButton.styleFrom(
+                                            backgroundColor: Theme.of(
+                                              context,
+                                            ).colorScheme.primary.withAlpha(20),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.chevron_right,
+                                            size: 20,
+                                          ),
+                                          onPressed: () async {
+                                            if (album['browseId'] == null) {
+                                              return;
+                                            }
+                                            setState(() {
+                                              _previousCategory = 'albums';
+                                              _expandedCategory = 'album';
+                                              _loadingAlbumSongs = true;
+                                              _albumSongs = [];
+                                              _currentAlbum = {
+                                                'title': album['title'],
+                                                'artist': album['artist'],
+                                                'thumbUrl': album['thumbUrl'],
+                                              };
+                                              _resetScroll();
+                                            });
+                                            final songs = await getAlbumSongs(
+                                              album['browseId']!,
+                                            );
+                                            if (!mounted) return;
+                                            setState(() {
+                                              _albumSongs = songs;
+                                              _loadingAlbumSongs = false;
+                                            });
+                                          },
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            }, childCount: _albums.length),
+                                );
+                              },
+                              childCount:
+                                  _albums.length + (_loadingMoreAlbums ? 1 : 0),
+                            ),
                           ),
                         ),
                       ],
@@ -5106,7 +5408,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                           horizontal: 16,
                                         ),
                                         scrollDirection: Axis.horizontal,
-                                        itemCount: _albums.length,
+                                        itemCount: _albums.length > 5
+                                            ? 5
+                                            : _albums.length,
                                         separatorBuilder: (_, _) =>
                                             const SizedBox(width: 12),
                                         itemBuilder: (context, index) {

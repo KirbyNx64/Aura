@@ -14,7 +14,7 @@ keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 
 
 android {
-    namespace = "com.example.music"
+    namespace = "com.kirby.aura"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = "29.0.14206865"
 
