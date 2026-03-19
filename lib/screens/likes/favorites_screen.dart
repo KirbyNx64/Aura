@@ -153,7 +153,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
   List<_StreamingFavoriteItem> _streamingFavorites = [];
   List<_StreamingFavoriteItem> _originalStreamingFavorites = [];
   List<_StreamingFavoriteItem> _filteredStreamingFavorites = [];
-  FavoritesSource _favoritesSource = FavoritesSource.local;
+  FavoritesSource _favoritesSource = FavoritesSource.streaming;
   double _lastBottomInset = 0.0;
   final ScrollController _scrollController = ScrollController();
 

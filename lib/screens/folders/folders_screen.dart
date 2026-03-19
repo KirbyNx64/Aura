@@ -179,7 +179,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Variables para la vista de playlists
   bool _showPlaylists = false;
-  PlaylistSource _playlistSource = PlaylistSource.local;
+  PlaylistSource _playlistSource = PlaylistSource.streaming;
   List<hive_model.PlaylistModel> _playlists = [];
   List<hive_model.PlaylistModel> _filteredPlaylists = [];
   List<SongModel> _allSongsForGrid = [];
@@ -224,7 +224,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   static const String _pinnedSongsKey = 'pinned_songs';
   static const String _ignoredSongsKey = 'ignored_songs';
   static const String _ignoredFoldersKey = 'ignored_folders';
-  FoldersRootView _initialRootView = FoldersRootView.folders;
+  FoldersRootView _initialRootView = FoldersRootView.playlists;
 
   // Utilidades para gestionar canciones fijadas
   Future<List<String>> getPinnedSongs() async {

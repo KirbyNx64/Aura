@@ -165,7 +165,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<_StreamingRecentItem> _streamingRecents = [];
   bool _showingRecents = false;
   bool _showingDiscovery = false;
-  RecentSongsSource _recentSongsSource = RecentSongsSource.local;
+  RecentSongsSource _recentSongsSource = RecentSongsSource.streaming;
   Future<void>? _recentsWarmLoad;
   bool _showingPlaylistSongs = false;
   List<SongModel> _playlistSongs = [];
