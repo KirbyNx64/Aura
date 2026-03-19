@@ -340,6 +340,126 @@ class _ArtistScreenState extends State<ArtistScreen> {
     return null;
   }
 
+  String _currentStreamingCoverQuality() {
+    final quality = coverQualityNotifier.value;
+    if (quality == 'high' ||
+        quality == 'medium' ||
+        quality == 'medium_low' ||
+        quality == 'low') {
+      return quality;
+    }
+    return 'medium';
+  }
+
+  String _ytThumbFileForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 'sddefault.jpg';
+      case 'medium_low':
+        return 'hqdefault.jpg';
+      case 'low':
+        return 'hqdefault.jpg';
+      default:
+        return 'maxresdefault.jpg';
+    }
+  }
+
+  String _googleThumbSizeForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 's600';
+      case 'medium_low':
+        return 's450';
+      case 'low':
+        return 's300';
+      default:
+        return 's1200';
+    }
+  }
+
+  String _qualityFallbackArtworkUrl(String videoId) {
+    final qualityFile = _ytThumbFileForQuality(_currentStreamingCoverQuality());
+    return 'https://i.ytimg.com/vi/$videoId/$qualityFile';
+  }
+
+  String? _applyStreamingArtworkQuality(String? rawUrl, {String? videoId}) {
+    final normalized = rawUrl?.trim();
+    if (normalized == null || normalized.isEmpty || normalized == 'null') {
+      if (videoId != null && videoId.isNotEmpty) {
+        return _qualityFallbackArtworkUrl(videoId);
+      }
+      return null;
+    }
+
+    final quality = _currentStreamingCoverQuality();
+    final lower = normalized.toLowerCase();
+
+    if (lower.contains('googleusercontent.com')) {
+      final size = _googleThumbSizeForQuality(quality);
+      final replaced = normalized.replaceFirst(RegExp(r'=s\d+\b'), '=$size');
+      if (replaced != normalized) return replaced;
+
+      final eqIndex = normalized.lastIndexOf('=');
+      if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+        final suffix = normalized.substring(eqIndex + 1);
+        if (!suffix.contains('/')) {
+          return '${normalized.substring(0, eqIndex + 1)}$size';
+        }
+      }
+      return '$normalized=$size';
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) return normalized;
+
+    final host = uri.host.toLowerCase();
+    if (!host.contains('ytimg.com') && !host.contains('img.youtube.com')) {
+      return normalized;
+    }
+
+    final qualityFile = _ytThumbFileForQuality(quality);
+    final qualityWebp = qualityFile.replaceAll('.jpg', '.webp');
+    final segments = List<String>.from(uri.pathSegments);
+    if (segments.isNotEmpty) {
+      final last = segments.last.toLowerCase();
+      final isKnownThumb =
+          last.contains('maxresdefault') ||
+          last.contains('sddefault') ||
+          last.contains('hqdefault') ||
+          last.contains('mqdefault');
+      if (isKnownThumb) {
+        if (last.endsWith('.webp')) {
+          segments[segments.length - 1] = qualityWebp;
+        } else {
+          segments[segments.length - 1] = qualityFile;
+        }
+        return uri.replace(pathSegments: segments).toString();
+      }
+    }
+
+    return normalized;
+  }
+
+  List<String> _streamingArtworkFallbackSources(String videoId) {
+    final primary = _ytThumbFileForQuality(_currentStreamingCoverQuality());
+    final orderedFiles = switch (primary) {
+      'hqdefault.jpg' => [
+        'hqdefault.jpg',
+        'sddefault.jpg',
+        'maxresdefault.jpg',
+      ],
+      'sddefault.jpg' => [
+        'sddefault.jpg',
+        'hqdefault.jpg',
+        'maxresdefault.jpg',
+      ],
+      _ => ['maxresdefault.jpg', 'sddefault.jpg', 'hqdefault.jpg'],
+    };
+    return orderedFiles
+        .map((file) => 'https://i.ytimg.com/vi/$videoId/$file')
+        .toList();
+  }
+
   List<String> _streamingPlaylistArtworkSources(
     String playlistId,
     String path,
@@ -351,11 +471,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
     final videoId = _extractVideoIdFromPlaylistPath(path);
     if (videoId == null || videoId.isEmpty) return const [];
-    return [
-      'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
-      'https://img.youtube.com/vi/$videoId/sddefault.jpg',
-      'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
-    ];
+    return _streamingArtworkFallbackSources(videoId);
   }
 
   Future<Map<String, List<String>>> _buildPlaylistArtworkSourcesCache(
@@ -379,17 +495,15 @@ class _ArtistScreenState extends State<ArtistScreen> {
             : _extractVideoIdFromPlaylistPath(path);
 
         final sources = <String>[];
-        if (metaArtUri != null &&
-            metaArtUri.isNotEmpty &&
-            metaArtUri != 'null') {
-          sources.add(metaArtUri);
+        final normalizedMetaArtUri = _applyStreamingArtworkQuality(
+          metaArtUri,
+          videoId: videoId,
+        );
+        if (normalizedMetaArtUri != null && normalizedMetaArtUri.isNotEmpty) {
+          sources.add(normalizedMetaArtUri);
         }
         if (videoId != null && videoId.isNotEmpty) {
-          sources.addAll([
-            'https://img.youtube.com/vi/$videoId/maxresdefault.jpg',
-            'https://img.youtube.com/vi/$videoId/sddefault.jpg',
-            'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
-          ]);
+          sources.addAll(_streamingArtworkFallbackSources(videoId));
         }
         if (sources.isNotEmpty) {
           cache['${playlist.id}::$path'] = sources.toSet().toList();
@@ -1719,9 +1833,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
             'artist': entry.artist?.trim().isNotEmpty == true
                 ? entry.artist!.trim()
                 : LocaleProvider.tr('artist_unknown'),
-            'artUri': entry.thumbUrl?.trim().isNotEmpty == true
-                ? entry.thumbUrl!.trim()
-                : 'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+            'artUri':
+                _applyStreamingArtworkQuality(entry.thumbUrl, videoId: id) ??
+                _qualityFallbackArtworkUrl(id),
             if (entryDurationMs != null && entryDurationMs > 0)
               'durationMs': entryDurationMs,
             if (entryDurationText != null && entryDurationText.isNotEmpty)
@@ -1737,9 +1851,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
             .timeout(const Duration(seconds: 20));
       } else {
         final selected = results[tappedIndex];
-        final artUri = selected.thumbUrl?.trim().isNotEmpty == true
-            ? selected.thumbUrl!.trim()
-            : 'https://i.ytimg.com/vi/$targetVideoId/hqdefault.jpg';
+        final artUri =
+            _applyStreamingArtworkQuality(
+              selected.thumbUrl,
+              videoId: targetVideoId,
+            ) ??
+            _qualityFallbackArtworkUrl(targetVideoId);
         final title = selected.title?.trim().isNotEmpty == true
             ? selected.title!.trim()
             : LocaleProvider.tr('title_unknown');
@@ -1871,11 +1988,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
         : (fallbackArtist?.trim().isNotEmpty == true
               ? fallbackArtist!.trim()
               : LocaleProvider.tr('artist_unknown'));
-    final artUri = item.thumbUrl?.trim().isNotEmpty == true
-        ? item.thumbUrl!.trim()
-        : (fallbackThumbUrl?.trim().isNotEmpty == true
-              ? fallbackThumbUrl!.trim()
-              : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg');
+    final artUri =
+        _applyStreamingArtworkQuality(item.thumbUrl, videoId: videoId) ??
+        _applyStreamingArtworkQuality(fallbackThumbUrl, videoId: videoId) ??
+        _qualityFallbackArtworkUrl(videoId);
 
     await audioHandler?.customAction('addYtStreamToQueue', {
       'videoId': videoId,
@@ -1904,11 +2020,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
         : (fallbackArtist?.trim().isNotEmpty == true
               ? fallbackArtist!.trim()
               : LocaleProvider.tr('artist_unknown'));
-    final artUri = item.thumbUrl?.trim().isNotEmpty == true
-        ? item.thumbUrl!.trim()
-        : (fallbackThumbUrl?.trim().isNotEmpty == true
-              ? fallbackThumbUrl!.trim()
-              : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg');
+    final artUri =
+        _applyStreamingArtworkQuality(item.thumbUrl, videoId: videoId) ??
+        _applyStreamingArtworkQuality(fallbackThumbUrl, videoId: videoId) ??
+        _qualityFallbackArtworkUrl(videoId);
     await FavoritesDB().addFavoritePath(
       'yt:$videoId',
       title: title,
@@ -1963,11 +2078,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
           ? Duration(milliseconds: durationMs)
           : null,
       artUri: Uri.tryParse(
-        item.thumbUrl?.trim().isNotEmpty == true
-            ? item.thumbUrl!.trim()
-            : (fallbackThumbUrl?.trim().isNotEmpty == true
-                  ? fallbackThumbUrl!.trim()
-                  : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg'),
+        _applyStreamingArtworkQuality(item.thumbUrl, videoId: videoId) ??
+            _applyStreamingArtworkQuality(fallbackThumbUrl, videoId: videoId) ??
+            _qualityFallbackArtworkUrl(videoId),
       ),
       extras: {
         'data': 'yt:$videoId',
@@ -1977,7 +2090,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
         if (durationText != null && durationText.isNotEmpty)
           'durationText': durationText,
         if (item.thumbUrl?.trim().isNotEmpty == true)
-          'displayArtUri': item.thumbUrl!.trim(),
+          'displayArtUri':
+              _applyStreamingArtworkQuality(item.thumbUrl, videoId: videoId) ??
+              item.thumbUrl!.trim(),
       },
     );
     await SongInfoDialog.show(context, mediaItem, colorSchemeNotifier);
@@ -2009,11 +2124,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
         : (fallbackArtist?.trim().isNotEmpty == true
               ? fallbackArtist!.trim()
               : LocaleProvider.tr('artist_unknown'));
-    final artUri = item.thumbUrl?.trim().isNotEmpty == true
-        ? item.thumbUrl!.trim()
-        : (fallbackThumbUrl?.trim().isNotEmpty == true
-              ? fallbackThumbUrl!.trim()
-              : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg');
+    final artUri =
+        _applyStreamingArtworkQuality(item.thumbUrl, videoId: videoId) ??
+        _applyStreamingArtworkQuality(fallbackThumbUrl, videoId: videoId) ??
+        _qualityFallbackArtworkUrl(videoId);
     final path = 'yt:$videoId';
 
     Future<void> addToPlaylist(String playlistId) async {
@@ -2206,11 +2320,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     ? fallbackArtist!.trim()
                     : LocaleProvider.tr('artist_unknown')),
           videoId: videoId,
-          artUri: item.thumbUrl?.trim().isNotEmpty == true
-              ? item.thumbUrl!.trim()
-              : (fallbackThumbUrl?.trim().isNotEmpty == true
-                    ? fallbackThumbUrl!.trim()
-                    : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg'),
+          artUri:
+              _applyStreamingArtworkQuality(item.thumbUrl, videoId: videoId) ??
+              _applyStreamingArtworkQuality(
+                fallbackThumbUrl,
+                videoId: videoId,
+              ) ??
+              _qualityFallbackArtworkUrl(videoId),
           durationText: item.durationText,
           durationMs: item.durationMs,
         );
@@ -2504,7 +2620,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final videoUrl = videoId != null && videoId.isNotEmpty
         ? 'https://music.youtube.com/watch?v=$videoId'
         : null;
-    final rawPath = videoId != null && videoId.isNotEmpty ? 'yt:$videoId' : null;
+    final rawPath = videoId != null && videoId.isNotEmpty
+        ? 'yt:$videoId'
+        : null;
     final isPinned = rawPath == null
         ? false
         : await ShortcutsDB().isShortcut(rawPath);
@@ -2686,9 +2804,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       if (isPinned) {
                         await ShortcutsDB().removeShortcut(rawPath);
                       } else {
-                        final artUri = (thumb?.trim().isNotEmpty ?? false)
-                            ? thumb!.trim()
-                            : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+                        final artUri =
+                            _applyStreamingArtworkQuality(
+                              thumb,
+                              videoId: videoId,
+                            ) ??
+                            _qualityFallbackArtworkUrl(videoId!);
                         await ShortcutsDB().addShortcut(
                           rawPath,
                           title: title,
@@ -2699,7 +2820,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           durationMs: item.durationMs,
                         );
                       }
-                      shortcutsShouldReload.value = !shortcutsShouldReload.value;
+                      shortcutsShouldReload.value =
+                          !shortcutsShouldReload.value;
                     },
                   ),
                 if (artist.trim().isNotEmpty &&
@@ -3728,7 +3850,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               borderRadius:
                                                   BorderRadius.circular(8),
                                               child: _buildSafeNetworkImage(
-                                                item.thumbUrl,
+                                                _applyStreamingArtworkQuality(
+                                                  item.thumbUrl,
+                                                  videoId: item.videoId,
+                                                ),
                                                 width: 56,
                                                 height: 56,
                                                 fit: BoxFit.cover,
@@ -4014,7 +4139,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                               borderRadius:
                                                   BorderRadius.circular(8),
                                               child: _buildSafeNetworkImage(
-                                                item.thumbUrl,
+                                                _applyStreamingArtworkQuality(
+                                                  item.thumbUrl,
+                                                  videoId: item.videoId,
+                                                ),
                                                 width: 56,
                                                 height: 56,
                                                 fit: BoxFit.cover,
@@ -5281,7 +5409,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                               8,
                                                             ),
                                                         child: _buildSafeNetworkImage(
-                                                          item.thumbUrl,
+                                                          _applyStreamingArtworkQuality(
+                                                            item.thumbUrl,
+                                                            videoId:
+                                                                item.videoId,
+                                                          ),
                                                           width: 56,
                                                           height: 56,
                                                           fit: BoxFit.cover,
@@ -5953,7 +6085,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                                                               8,
                                                             ),
                                                         child: _buildSafeNetworkImage(
-                                                          item.thumbUrl,
+                                                          _applyStreamingArtworkQuality(
+                                                            item.thumbUrl,
+                                                            videoId:
+                                                                item.videoId,
+                                                          ),
                                                           width: 56,
                                                           height: 56,
                                                           fit: BoxFit.cover,
@@ -6470,9 +6606,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
               ? item.artist!.trim()
               : LocaleProvider.tr('artist_unknown'),
           videoId: videoId,
-          artUri: item.thumbUrl?.trim().isNotEmpty == true
-              ? item.thumbUrl!.trim()
-              : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          artUri:
+              _applyStreamingArtworkQuality(item.thumbUrl, videoId: videoId) ??
+              _qualityFallbackArtworkUrl(videoId),
           durationText: item.durationText,
           durationMs: item.durationMs,
         );

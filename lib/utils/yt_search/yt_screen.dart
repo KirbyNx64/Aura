@@ -9405,7 +9405,9 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
   String _getCoverQualityPref(SharedPreferences prefs) {
     final q = prefs.getString('cover_quality');
-    if (q == 'high' || q == 'medium' || q == 'low') return q!;
+    if (q == 'high' || q == 'medium' || q == 'medium_low' || q == 'low') {
+      return q!;
+    }
     final old = prefs.getBool('cover_quality_high');
     return old == false ? 'low' : 'medium';
   }
@@ -9414,6 +9416,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     switch (quality) {
       case 'medium':
         return 's600';
+      case 'medium_low':
+        return 's450';
       case 'low':
         return 's300';
       default:
@@ -9425,6 +9429,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     switch (quality) {
       case 'medium':
         return 'sddefault.jpg';
+      case 'medium_low':
+        return 'hqdefault.jpg';
       case 'low':
         return 'hqdefault.jpg';
       default:

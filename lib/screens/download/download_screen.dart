@@ -180,7 +180,9 @@ class _DownloadScreenState extends State<DownloadScreen>
   Future<String> _getCoverQualitySetting() async {
     final prefs = await SharedPreferences.getInstance();
     final q = prefs.getString('download_cover_quality');
-    if (q == 'high' || q == 'medium' || q == 'low') return q!;
+    if (q == 'high' || q == 'medium' || q == 'low') {
+      return q!;
+    }
     final fallback = prefs.getString('cover_quality');
     if (fallback == 'high' || fallback == 'medium' || fallback == 'low') {
       return fallback!;

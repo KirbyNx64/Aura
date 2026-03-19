@@ -151,6 +151,8 @@ const Map<String, String> appLocalizationsEs = {
   'audio_quality_streaming_low_desc': 'Calidad reducida (menor bitrate)',
   'audio_quality_medium': 'Calidad media',
   'audio_quality_medium_desc': 'Calidad balanceada (tamaño moderado)',
+  'audio_quality_medium_low': 'Calidad media-baja',
+  'audio_quality_medium_low_desc': 'Buena calidad con menor tamaño (s=450)',
   'audio_quality_low': 'Baja calidad',
   'audio_quality_low_desc': 'Menor calidad (tamaño reducido)',
   'high_quality': 'Alto (si está disponible)',

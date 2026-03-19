@@ -415,6 +415,7 @@ void main() async {
   final resolvedCoverQuality =
       (storedCoverQuality == 'high' ||
           storedCoverQuality == 'medium' ||
+          storedCoverQuality == 'medium_low' ||
           storedCoverQuality == 'low')
       ? storedCoverQuality!
       : (legacyCoverHigh == true ? 'high' : 'medium');

@@ -314,7 +314,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   String _currentStreamingCoverQuality() {
     final quality = coverQualityNotifier.value;
-    if (quality == 'high' || quality == 'medium' || quality == 'low') {
+    if (quality == 'high' ||
+        quality == 'medium' ||
+        quality == 'medium_low' ||
+        quality == 'low') {
       return quality;
     }
     return 'medium';
@@ -324,6 +327,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     switch (quality) {
       case 'medium':
         return 'sddefault.jpg';
+      case 'medium_low':
+        return 'hqdefault.jpg';
       case 'low':
         return 'hqdefault.jpg';
       default:
@@ -335,6 +340,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     switch (quality) {
       case 'medium':
         return 's600';
+      case 'medium_low':
+        return 's450';
       case 'low':
         return 's300';
       default:
@@ -1935,8 +1942,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       builder: (context, snapshot) {
                                         final isCurrentlyPinned =
                                             snapshot.data ?? false;
-                                        final path =
-                                            _favoritePathForMediaItem(mediaItem);
+                                        final path = _favoritePathForMediaItem(
+                                          mediaItem,
+                                        );
                                         final videoId =
                                             _extractVideoIdFromMediaItem(
                                               mediaItem,
@@ -1948,7 +1956,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             .extras?['displayArtUri']
                                             ?.toString()
                                             .trim();
-                                        final artUri = (displayArtUri != null &&
+                                        final artUri =
+                                            (displayArtUri != null &&
                                                 displayArtUri.isNotEmpty)
                                             ? displayArtUri
                                             : mediaItem.artUri

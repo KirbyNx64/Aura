@@ -120,7 +120,10 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
 
   String _currentStreamingCoverQuality() {
     final quality = coverQualityNotifier.value;
-    if (quality == 'high' || quality == 'medium' || quality == 'low') {
+    if (quality == 'high' ||
+        quality == 'medium' ||
+        quality == 'medium_low' ||
+        quality == 'low') {
       return quality;
     }
     return 'medium';
@@ -130,6 +133,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
     switch (quality) {
       case 'medium':
         return 'sddefault.jpg';
+      case 'medium_low':
+        return 'hqdefault.jpg';
       case 'low':
         return 'hqdefault.jpg';
       default:
@@ -141,6 +146,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
     switch (quality) {
       case 'medium':
         return 's600';
+      case 'medium_low':
+        return 's450';
       case 'low':
         return 's300';
       default:

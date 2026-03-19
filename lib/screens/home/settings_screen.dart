@@ -55,7 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
   String _streamAudioQuality = 'low'; // 'high', 'low'
   String _downloadCoverQuality = 'medium'; // 'high', 'medium', 'low'
-  String _streamingCoverQuality = 'medium'; // 'high', 'medium', 'low'
+  String _streamingCoverQuality =
+      'medium'; // 'high', 'medium', 'medium_low', 'low'
   AppColorScheme _currentColorScheme = AppColorScheme.amoled;
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
@@ -267,7 +268,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getString('cover_quality');
     final legacy = prefs.getBool('cover_quality_high');
-    final resolved = (stored == 'high' || stored == 'medium' || stored == 'low')
+    final resolved =
+        (stored == 'high' ||
+            stored == 'medium' ||
+            stored == 'medium_low' ||
+            stored == 'low')
         ? stored!
         : (legacy == false ? 'low' : 'medium');
 
@@ -319,6 +324,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return LocaleProvider.tr('audio_quality_high');
       case 'medium':
         return LocaleProvider.tr('audio_quality_medium');
+      case 'medium_low':
+        return LocaleProvider.tr('audio_quality_medium_low');
       default:
         return LocaleProvider.tr('audio_quality_low');
     }
@@ -398,6 +405,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: LocaleProvider.tr('audio_quality_medium_desc'),
                       value: 'medium',
                       isSelected: _streamingCoverQuality == 'medium',
+                      onSelected: _setStreamingCoverQuality,
+                    ),
+                    _buildAudioQualityOption(
+                      context: context,
+                      title: LocaleProvider.tr('audio_quality_medium_low'),
+                      subtitle: LocaleProvider.tr(
+                        'audio_quality_medium_low_desc',
+                      ),
+                      value: 'medium_low',
+                      isSelected: _streamingCoverQuality == 'medium_low',
                       onSelected: _setStreamingCoverQuality,
                     ),
                     _buildAudioQualityOption(
