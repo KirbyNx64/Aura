@@ -2514,6 +2514,38 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               'resolve:play timeout_non_blocking videoId=$videoId playing=${_player.playing} state=${_player.processingState} phase=$phase',
             );
             unawaited(_player.play().catchError((_) {}));
+
+            // Validar arranque real. Si sigue 0/0 en buffering/loading,
+            // no marcar éxito falso: forzar ruta de refresh/retry.
+            await Future<void>.delayed(const Duration(milliseconds: 1200));
+            if (!_deferredAutoPlayDesired) {
+              _releaseLog(
+                'resolve:play probe_cancelled_by_pause videoId=$videoId phase=$phase',
+              );
+              return true;
+            }
+            if (isSuperseded() || !isStillSelectedTarget()) {
+              _releaseLog(
+                'resolve:play probe_aborted_superseded videoId=$videoId phase=$phase',
+              );
+              return false;
+            }
+            final probeState = _player.processingState;
+            final probePosMs = _player.position.inMilliseconds;
+            final probeBufMs = _player.bufferedPosition.inMilliseconds;
+            final started =
+                probePosMs > 0 ||
+                probeBufMs > 0 ||
+                probeState == ProcessingState.ready;
+            _releaseLog(
+              'resolve:play probe_after_timeout videoId=$videoId phase=$phase state=$probeState positionMs=$probePosMs bufferedMs=$probeBufMs started=$started',
+            );
+            if (!started) {
+              _releaseLog(
+                'resolve:play startup_stuck_after_timeout videoId=$videoId phase=$phase',
+              );
+              return false;
+            }
           } catch (e, st) {
             _releaseLog('resolve:play error videoId=$videoId phase=$phase error=$e');
             _releaseLog('resolve:play stack=$st');
