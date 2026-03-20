@@ -634,16 +634,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               _releaseLog(
                 'resolve:completed end_of_queue_pause index=$_deferredStreamingQueueIndex',
               );
-              if (_player.playing) {
-                unawaited(pause());
-              } else {
+              _deferredAutoPlayDesired = false;
+              unawaited(() async {
+                try {
+                  await _player.pause();
+                } catch (_) {}
                 playbackState.add(
                   playbackState.value.copyWith(
                     playing: false,
                     processingState: AudioProcessingState.completed,
+                    queueIndex: _deferredStreamingQueueIndex,
                   ),
                 );
-              }
+              }());
               return;
             }
 
