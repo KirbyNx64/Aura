@@ -1,9 +1,9 @@
 {
-  "version": "2.0.1",
+  "version": "2.0.2",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.1/AuraMusic-v2.0.1-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.1/AuraMusic-v2.0.1-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.1/AuraMusic-v2.0.1-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.2/AuraMusic-v2.0.2-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.2/AuraMusic-v2.0.2-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.2/AuraMusic-v2.0.2-x86_64.apk"
   },
-  "changelog": "• ¡Gran actualización! Ahora puedes reproducir música vía streaming. Busca, reproduce y descarga canciones directamente desde las pantallas de búsqueda y artista. Ya no es necesario descargar una canción antes de reproducirla, aunque la opción de descarga sigue disponible.\n\n• Las pantallas de Me gusta y Biblioteca (Listas de reproducción) ahora permiten guardar y gestionar canciones en streaming.\n\n• Se añadió un nuevo modo Radio, que reproduce y recomienda canciones similares a la que estás escuchando.\n\n• Ahora puedes descargar música directamente desde el reproductor, así como desde las pantallas de Me gusta y listas de reproducción.\n\n• Se añadió una opción para seleccionar la calidad de las carátulas al reproducir música vía streaming.\n\n• Se añadió una opción para limpiar los enlaces de audio temporales.\n\n• Las canciones reproducidas en streaming ahora se guardan en Canciones recientes.\n\n• Se aplicaron mejoras visuales en la interfaz.\n\n• Se corrigieron algunos errores y se mejoró la estabilidad general de la aplicación."
+  "changelog": "• Los accesos directos ahora son compatibles con canciones en streaming.\n\n• La sección de artistas en la pantalla de inicio ahora muestra los artistas más escuchados.\n\n• La selección rápida ahora incluye canciones en streaming.\n\n• Se añadió una nueva pantalla llamada “Descubrimiento”, donde se muestran canciones basadas en tus reproducciones.\n\n• Se optimizó el tiempo de respuesta en las búsquedas.\n\n• Se aplicaron optimizaciones en la reproducción de música en streaming.\n\n• Se añadió una nueva resolución de carátulas para streaming de calidad media-baja (aproximadamente 480p).\n\n• Ahora puedes elegir la calidad de audio al reproducir música en streaming.\n\n• Se aplicaron cambios menores y se corrigieron errores."
 }
