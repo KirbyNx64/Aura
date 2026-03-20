@@ -424,13 +424,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   String? _streamRadioContinuationParams;
   bool _streamRadioAppendInProgress = false;
   bool _streamRadioInitialBatchLoaded = false;
+  bool _radioAutoStartPending = false;
 
   /// Si no es null, objetivo de tamaño de cola (p. ej. actual + 50 al activar desde player).
   int? _streamRadioTargetQueueSize;
   bool _deferredStreamingQueueMode = false;
   int _deferredStreamingQueueIndex = 0;
-  DateTime _lastManualPlayPauseToggle = DateTime.fromMillisecondsSinceEpoch(0);
-  bool _manualDeferredSkipInProgress = false;
   int _manualDeferredSkipGeneration = 0;
   final Random _random = Random();
   List<int> _deferredShuffleOrder = const <int>[];
@@ -467,38 +466,22 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   // Inicializar el AudioPlayer con LoudnessEnhancer y Equalizer desde el principio
   void _initializePlayerWithEnhancer() {
-    try {
-      // print('🔊 Inicializando AudioPlayer con AndroidLoudnessEnhancer y AndroidEqualizer...');
-
-      final List<AndroidAudioEffect> effects = [];
-
-      // Crear el LoudnessEnhancer
-      _loudnessEnhancer = AndroidLoudnessEnhancer();
-      _loudnessEnhancer!.setTargetGain(0.0); // Inicialmente sin boost
-      _loudnessEnhancer!.setEnabled(true);
-      effects.add(_loudnessEnhancer!);
-
-      // Crear el Equalizer
-      _equalizer = AndroidEqualizer();
-      _equalizer!.setEnabled(false); // Inicialmente deshabilitado
-      effects.add(_equalizer!);
-
-      // Crear el AudioPipeline con los efectos
-      final pipeline = AudioPipeline(androidAudioEffects: effects);
-
-      // Crear AudioPlayer con el pipeline
-      _player = AudioPlayer(audioPipeline: pipeline);
-      _bindPlayerStreams();
-
-      // print('🔊 AudioPlayer inicializado con AndroidLoudnessEnhancer y AndroidEqualizer exitosamente');
-    } catch (e) {
-      // print('⚠️ Error inicializando con LoudnessEnhancer y Equalizer, usando player normal: $e');
-      // Fallback: crear player normal
-      _player = AudioPlayer();
-      _bindPlayerStreams();
-      _loudnessEnhancer = null;
-      _equalizer = null;
-    }
+    // Estilo Harmony: player plano + load control estable para streaming.
+    // Evitamos adjuntar AudioPipeline con efectos porque en algunos dispositivos
+    // dispara "Cannot initialize effect engine" durante play().
+    _player = AudioPlayer(
+      audioLoadConfiguration: const AudioLoadConfiguration(
+        androidLoadControl: AndroidLoadControl(
+          minBufferDuration: Duration(seconds: 50),
+          maxBufferDuration: Duration(seconds: 120),
+          bufferForPlaybackDuration: Duration(milliseconds: 50),
+          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+        ),
+      ),
+    );
+    _bindPlayerStreams();
+    _loudnessEnhancer = null;
+    _equalizer = null;
   }
 
   void _bindPlayerStreams() {
@@ -532,8 +515,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             _concat!,
             initialIndex: 0,
             initialPosition: Duration.zero,
-          )
-          .timeout(const Duration(seconds: 20));
+          );
     }
   }
 
@@ -555,6 +537,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_isInitialized) return;
 
     try {
+      _releaseLog('init:start isInitialized=$_isInitialized');
       _prefs ??= await SharedPreferences.getInstance();
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
@@ -630,58 +613,16 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               return;
             }
             if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
-              if (_manualDeferredSkipInProgress) {
-                debugPrint(
-                  '[RADIO_DEBUG] completed ignored while manual deferred skip is in progress',
-                );
-                return;
-              }
-              final toggleElapsedMs = DateTime.now()
-                  .difference(_lastManualPlayPauseToggle)
-                  .inMilliseconds;
-              if (toggleElapsedMs >= 0 && toggleElapsedMs < 1200) {
-                debugPrint(
-                  '[RADIO_DEBUG] completed ignored after recent play/pause toggle (${toggleElapsedMs}ms)',
-                );
-                return;
-              }
-              // No auto-avanzar si estamos en medio de un swap de fuente
-              // (_concat.clear() dispara completed, pero no es fin natural de canción).
+              // clear()/stop()/dispose durante swaps y fallback puede disparar
+              // completed artificiales; no debemos forzar pausa ahí.
               if (_isSwappingSource) return;
-              final nextIdx = _nextDeferredQueueIndex();
-              if (nextIdx != null) {
-                unawaited(
-                  _resolveAndPlayDeferredStreamingIndex(
-                    nextIdx,
-                    playAfterResolve: true,
-                  ),
-                );
-                return;
+              // Auto-avance deshabilitado en modo streaming diferido.
+              _releaseLog(
+                'resolve:completed deferred_auto_advance_disabled index=$_deferredStreamingQueueIndex',
+              );
+              if (_player.playing) {
+                unawaited(pause());
               }
-
-              if (_streamRadioEnabled) {
-                unawaited(() async {
-                  await _ensureStreamingRadioQueue(force: true);
-                  final fetchedNextIndex = _nextDeferredQueueIndex();
-                  if (fetchedNextIndex != null) {
-                    await _resolveAndPlayDeferredStreamingIndex(
-                      fetchedNextIndex,
-                      playAfterResolve: true,
-                    );
-                    return;
-                  }
-                  if (mounted && _player.playing && !_userInitiatedPlayback) {
-                    await pause();
-                  }
-                }());
-                return;
-              }
-
-              Timer(const Duration(milliseconds: 100), () {
-                if (mounted && _player.playing && !_userInitiatedPlayback) {
-                  unawaited(pause());
-                }
-              });
               return;
             }
 
@@ -840,6 +781,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       _isInitialized = true;
       _initRetryCount = 0;
+      _releaseLog('init:done');
       // Intentar restaurar sesión previa si no hay cola actual
       if (!_restoredSession && _mediaQueue.isEmpty) {
         final restoreEnabled =
@@ -852,6 +794,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     } catch (e) {
       // Si hay error en la inicialización, intentar reinicializar
+      _releaseLog('init:error error=$e retry=$_initRetryCount/$_initMaxRetries');
       _isInitialized = false;
       if (_initRetryCount < _initMaxRetries) {
         _initRetryCount++;
@@ -2448,79 +2391,138 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       return false;
     }
 
+    var resolvedStreamUrl = streamUrl;
     final updatedExtras = <String, dynamic>{
       ...?currentItem.extras,
-      'streamUrl': streamUrl,
+      'streamUrl': resolvedStreamUrl,
       'queueIndex': targetIndex,
       'videoId': videoId,
       'isStreaming': true,
       'radioMode': false,
     };
-    final updatedItem = currentItem.copyWith(extras: updatedExtras);
+    var updatedItem = currentItem.copyWith(extras: updatedExtras);
     _mediaQueue[targetIndex] = updatedItem;
     // No reemitir la cola completa al cambiar de canción: solo actualizamos un ítem
     // (streamUrl). Evita copiar 50 MediaItems y que la UI reconstruya toda la lista.
     // mediaItem.add(updatedItem) basta para la pista actual.
     mediaItem.add(updatedItem);
 
-    try {
-      _releaseLog(
-        'resolve:load_audio_source begin videoId=$videoId url=${_clipForLog(streamUrl)} hasConcat=${_concat != null}',
-      );
-      // Verificar una última vez antes de cargar el audio en el player.
-      if (isSuperseded() || !isStillSelectedTarget()) {
-        _isSwappingSource = false;
+    Future<bool> loadAndPlayCurrentUrl(String url, {required String phase}) async {
+      try {
         _releaseLog(
-          'resolve:load_audio_source aborted_superseded videoId=$videoId',
+          'resolve:load_audio_source begin videoId=$videoId url=${_clipForLog(url)} hasConcat=${_concat != null} phase=$phase',
+        );
+        if (isSuperseded() || !isStillSelectedTarget()) {
+          _releaseLog(
+            'resolve:load_audio_source aborted_superseded videoId=$videoId phase=$phase',
+          );
+          return false;
+        }
+
+        _isSwappingSource = true;
+        await _ensureStreamingConcatReady();
+        // ignore: deprecated_member_use
+        if (_concat!.children.isNotEmpty) {
+          // ignore: deprecated_member_use
+          await _concat!.clear();
+        }
+        final deferredSource = await _buildDeferredStreamingAudioSource(
+          streamUrl: url,
+          videoId: videoId,
+        );
+        // ignore: deprecated_member_use
+        await _concat!.add(deferredSource);
+        _isSwappingSource = false;
+
+        _releaseLog(
+          'resolve:load_audio_source success videoId=$videoId processingState=${_player.processingState} phase=$phase',
+        );
+
+        if (isSuperseded() || !isStillSelectedTarget()) {
+          _releaseLog('resolve:post_load aborted_superseded videoId=$videoId');
+          return false;
+        }
+
+        // En streaming, ocultar loader apenas la fuente quedó cargada.
+        // No esperar a que play() complete su Future porque en algunos
+        // dispositivos tarda aunque el audio ya esté reproduciendo.
+        if (playLoadingNotifier.value) {
+          playLoadingNotifier.value = false;
+        }
+
+        if (playAfterResolve) {
+          _releaseLog('resolve:play begin videoId=$videoId phase=$phase');
+          try {
+            await _player.play().timeout(const Duration(seconds: 2));
+            _releaseLog(
+              'resolve:play success videoId=$videoId playing=${_player.playing} state=${_player.processingState} phase=$phase',
+            );
+          } on TimeoutException {
+            // En algunos devices play() tarda en completar su Future aunque
+            // la reproducción ya esté en curso. No bloquear la cola/radio.
+            _releaseLog(
+              'resolve:play timeout_non_blocking videoId=$videoId playing=${_player.playing} state=${_player.processingState} phase=$phase',
+            );
+            unawaited(_player.play().catchError((_) {}));
+          } catch (e, st) {
+            _releaseLog('resolve:play error videoId=$videoId phase=$phase error=$e');
+            _releaseLog('resolve:play stack=$st');
+            return false;
+          }
+        }
+        return true;
+      } on PlayerInterruptedException {
+        _releaseLog(
+          'resolve:load_audio_source interrupted videoId=$videoId generation=$myGeneration activeGeneration=$_resolveGeneration',
         );
         return false;
+      } catch (e, st) {
+        _releaseLog(
+          'resolve:load_audio_source error videoId=$videoId phase=$phase error=$e',
+        );
+        _releaseLog('resolve:load_audio_source stack=$st');
+        return false;
+      } finally {
+        _isSwappingSource = false;
       }
-
-      // Reusar el _concat existente (radio y no radio): clear() + add() es mucho
-      // más ligero que crear uno nuevo y setAudioSource(); mismo flujo para
-      // cola diferida con o sin radio.
-      // _isSwappingSource evita que el completed handler (disparado por clear())
-      // intente auto-avanzar a la siguiente canción.
-      _isSwappingSource = true;
-      await _ensureStreamingConcatReady();
-      // ignore: deprecated_member_use
-      if (_concat!.children.isNotEmpty) {
-        // ignore: deprecated_member_use
-        await _concat!.clear();
-      }
-      final deferredSource = await _buildDeferredStreamingAudioSource(
-        streamUrl: streamUrl,
-        videoId: videoId,
-      );
-      // ignore: deprecated_member_use
-      await _concat!.add(deferredSource);
-      _isSwappingSource = false;
-      _releaseLog(
-        'resolve:load_audio_source success videoId=$videoId processingState=${_player.processingState}',
-      );
-    } on PlayerInterruptedException {
-      // El player fue interrumpido por un skip más reciente — es esperado, ignorar.
-      _isSwappingSource = false;
-      _releaseLog(
-        'resolve:load_audio_source interrupted videoId=$videoId generation=$myGeneration activeGeneration=$_resolveGeneration',
-      );
-      return false;
-    } catch (e, st) {
-      // Timeout, error de red u otro fallo al cargar el stream — no relanzar
-      // porque esta función se llama con unawaited y causaría una excepción no capturada.
-      _isSwappingSource = false;
-      _releaseLog(
-        'resolve:load_audio_source error videoId=$videoId error=$e',
-      );
-      _releaseLog('resolve:load_audio_source stack=$st');
-      reportStreamPlaybackError('unknown', videoId: videoId);
-      return false;
     }
 
-    // Verificar nuevamente después del setUrl.
-    if (isSuperseded() || !isStillSelectedTarget()) {
-      _releaseLog('resolve:post_load aborted_superseded videoId=$videoId');
-      return false;
+    var loaded = await loadAndPlayCurrentUrl(resolvedStreamUrl, phase: 'primary');
+    if (!loaded) {
+      _releaseLog('resolve:retry_refresh_url begin videoId=$videoId');
+      final refreshedUrl = await StreamService.getBestAudioUrl(
+        videoId,
+        forceRefresh: true,
+        reportError: true,
+        fastFail: true,
+      ).timeout(const Duration(seconds: 6), onTimeout: () => null);
+      _releaseLog(
+        'resolve:retry_refresh_url done videoId=$videoId gotUrl=${refreshedUrl != null && refreshedUrl.isNotEmpty} url=${_clipForLog(refreshedUrl)}',
+      );
+      if (refreshedUrl == null || refreshedUrl.isEmpty) {
+        reportStreamPlaybackError('unknown', videoId: videoId);
+        return false;
+      }
+      if (isSuperseded() || !isStillSelectedTarget()) return false;
+
+      resolvedStreamUrl = refreshedUrl;
+      updatedItem = updatedItem.copyWith(
+        extras: {
+          ...?updatedItem.extras,
+          'streamUrl': resolvedStreamUrl,
+        },
+      );
+      _mediaQueue[targetIndex] = updatedItem;
+      mediaItem.add(updatedItem);
+
+      loaded = await loadAndPlayCurrentUrl(
+        resolvedStreamUrl,
+        phase: 'refresh_retry',
+      );
+      if (!loaded) {
+        reportStreamPlaybackError('unknown', videoId: videoId);
+        return false;
+      }
     }
 
     // En cola streaming diferida, liberar loader después de enlazar el stream
@@ -2545,27 +2547,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         currentSongId: updatedItem.id,
       ),
     );
-
-    if (playAfterResolve) {
-      _releaseLog('resolve:play begin videoId=$videoId');
-      try {
-        await _player.play().timeout(const Duration(seconds: 2));
-        _releaseLog(
-          'resolve:play success videoId=$videoId playing=${_player.playing} state=${_player.processingState}',
-        );
-      } on TimeoutException {
-        // En algunos dispositivos/playback stacks, play() puede tardar o no
-        // completar su Future de inmediato aunque la reproducción continúe.
-        // No bloqueamos el flujo (p. ej. autoStartRadio) por esta espera.
-        _releaseLog(
-          'resolve:play timeout_non_blocking videoId=$videoId playing=${_player.playing} state=${_player.processingState}',
-        );
-        unawaited(_player.play().catchError((_) {}));
-      } catch (e, st) {
-        _releaseLog('resolve:play error videoId=$videoId error=$e');
-        _releaseLog('resolve:play stack=$st');
-      }
-    }
 
     // Sincronizar flag solo para la canción que realmente se reproduce,
     // no para cada skip intermedio durante skips rápidos.
@@ -3370,6 +3351,50 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return {'ok': true, 'queue_size': _mediaQueue.length};
   }
 
+  Future<void> _autoStartRadioAfterPlaybackStart({
+    required int expectedIndex,
+  }) async {
+    if (_radioAutoStartPending) {
+      _releaseLog('radio:auto_start skipped already_pending');
+      return;
+    }
+    _radioAutoStartPending = true;
+    try {
+      _releaseLog(
+        'radio:auto_start wait_begin expectedIndex=$expectedIndex currentIndex=$_deferredStreamingQueueIndex',
+      );
+      final startedAt = DateTime.now();
+      while (DateTime.now().difference(startedAt) < const Duration(seconds: 6)) {
+        if (!_deferredStreamingQueueMode || _mediaQueue.isEmpty) {
+          _releaseLog('radio:auto_start abort mode_or_queue_changed');
+          return;
+        }
+        if (_deferredStreamingQueueIndex != expectedIndex) {
+          _releaseLog(
+            'radio:auto_start abort index_changed expected=$expectedIndex current=$_deferredStreamingQueueIndex',
+          );
+          return;
+        }
+        if (_player.playing) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+
+      _releaseLog(
+        'radio:auto_start trigger playing=${_player.playing} state=${_player.processingState} index=$_deferredStreamingQueueIndex',
+      );
+      final radioResult = await _startStreamingRadioFromCurrent(
+        replaceQueue: false,
+      );
+      _releaseLog(
+        'radio:auto_start result=$radioResult queueSize=${_mediaQueue.length} initialBatchLoaded=$_streamRadioInitialBatchLoaded enabled=$_streamRadioEnabled',
+      );
+    } finally {
+      _radioAutoStartPending = false;
+    }
+  }
+
   Future<Map<String, dynamic>> _addYtStreamToQueue(
     Map<String, dynamic>? extras,
   ) async {
@@ -3708,7 +3733,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> play() async {
-    _lastManualPlayPauseToggle = DateTime.now();
     _armLocalPlayLoaderGuard();
     // Verificar si hay canciones disponibles
     if (_mediaQueue.isEmpty) {
@@ -3820,7 +3844,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> pause() async {
-    _lastManualPlayPauseToggle = DateTime.now();
     try {
       await _player.pause();
     } catch (e) {
@@ -4059,7 +4082,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Cancelar inmediatamente cualquier resolución previa en curso.
     _resolveGeneration++;
     final requestGeneration = _resolveGeneration;
-    _manualDeferredSkipInProgress = true;
     _manualDeferredSkipGeneration = requestGeneration;
     // Cancelar resoluciones antiguas sin reiniciar el cliente de red para
     // conservar conexiones calientes y mantener transiciones suaves.
@@ -4130,7 +4152,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _updateSleepTimer();
         } finally {
           if (_manualDeferredSkipGeneration == requestGeneration) {
-            _manualDeferredSkipInProgress = false;
           }
         }
       }());
@@ -4149,7 +4170,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _updateSleepTimer();
         } finally {
           if (_manualDeferredSkipGeneration == requestGeneration) {
-            _manualDeferredSkipInProgress = false;
           }
         }
       }());
@@ -4273,7 +4293,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     try {
       final indices = _player.shuffleIndices;
-      if (indices.isEmpty || indices.length != _mediaQueue.length) {
+      if (indices == null ||
+          indices.isEmpty ||
+          indices.length != _mediaQueue.length) {
         return List<MediaItem>.from(_mediaQueue);
       }
 
@@ -4938,19 +4960,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _releaseLog(
           'radio:playYtStreamQueue autoStart requested queueSize=${_mediaQueue.length} initialIndex=$initialIndex',
         );
-        final radioResult = await _startStreamingRadioFromCurrent(
-          replaceQueue: false,
+        unawaited(
+          _autoStartRadioAfterPlaybackStart(expectedIndex: initialIndex),
         );
-        _releaseLog(
-          'radio:playYtStreamQueue autoStart result=$radioResult queueSize=${_mediaQueue.length} initialBatchLoaded=$_streamRadioInitialBatchLoaded enabled=$_streamRadioEnabled',
-        );
-        debugPrint(
-          '[RADIO_DEBUG] playYtStreamQueue autoStartRadio result=$radioResult',
-        );
-        final radioOk = radioResult['ok'] == true;
-        if (!radioOk) {
-          return {'ok': true, 'radio': radioResult};
-        }
       }
       return {'ok': true};
     }
