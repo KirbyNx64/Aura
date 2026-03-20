@@ -56,7 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _streamAudioQuality = 'low'; // 'high', 'low'
   String _downloadCoverQuality = 'medium'; // 'high', 'medium', 'low'
   String _streamingCoverQuality =
-      'medium'; // 'high', 'medium', 'medium_low', 'low'
+      'medium_low'; // 'high', 'medium', 'medium_low', 'low'
   AppColorScheme _currentColorScheme = AppColorScheme.amoled;
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
@@ -274,7 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             stored == 'medium_low' ||
             stored == 'low')
         ? stored!
-        : (legacy == false ? 'low' : 'medium');
+        : (legacy == false ? 'low' : 'medium_low');
 
     setState(() {
       _streamingCoverQuality = resolved;

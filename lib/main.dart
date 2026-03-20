@@ -418,7 +418,7 @@ void main() async {
           storedCoverQuality == 'medium_low' ||
           storedCoverQuality == 'low')
       ? storedCoverQuality!
-      : (legacyCoverHigh == true ? 'high' : 'medium');
+      : (legacyCoverHigh == true ? 'high' : 'medium_low');
   coverQualityNotifier.value = resolvedCoverQuality;
 
   final storedStreamingAudioQuality = prefs.getString('stream_audio_quality');

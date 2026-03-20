@@ -37,7 +37,7 @@ final ValueNotifier<String> streamingAudioQualityNotifier =
     ValueNotifier<String>('low'); // 'high', 'low'
 
 final ValueNotifier<String> coverQualityNotifier = ValueNotifier<String>(
-  'medium',
+  'medium_low',
 ); // 'high', 'medium', 'medium_low', 'low'
 
 final ValueNotifier<bool> playLoadingNotifier = ValueNotifier(false);

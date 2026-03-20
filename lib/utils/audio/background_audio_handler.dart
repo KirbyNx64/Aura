@@ -520,6 +520,23 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return '${text.substring(0, max)}...';
   }
 
+  Future<void> _ensureStreamingConcatReady() async {
+    // Reutilizar una sola instancia de concat reduce reconfiguraciones del player
+    // y evita bloqueos al recrear setAudioSource por cada stream.
+    // ignore: deprecated_member_use
+    _concat ??= ConcatenatingAudioSource(children: []);
+    if (_player.audioSource != _concat) {
+      await _player
+          .setAudioSource(
+            // ignore: deprecated_member_use
+            _concat!,
+            initialIndex: 0,
+            initialPosition: Duration.zero,
+          )
+          .timeout(const Duration(seconds: 20));
+    }
+  }
+
   // Finalizar el AudioPlayer con AndroidLoudnessEnhancer
 
   int _initRetryCount = 0;
@@ -794,6 +811,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           }());
         }
       });
+
+      try {
+        await _ensureStreamingConcatReady();
+      } catch (e) {
+        _releaseLog('init:ensure_concat_ready failed error=$e');
+      }
 
       _isInitialized = true;
       _initRetryCount = 0;
@@ -2047,23 +2070,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         ),
       );
 
+      await _ensureStreamingConcatReady();
       // ignore: deprecated_member_use
-      _concat = ConcatenatingAudioSource(
-        children: [AudioSource.uri(Uri.parse(streamUrl))],
-      );
-
-      await _player
-          .setAudioSource(
-            _concat!,
-            initialIndex: 0,
-            initialPosition: initialPosition,
-          )
-          .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw Exception('Timeout al cargar stream de audio');
-            },
-          );
+      if (_concat!.children.isNotEmpty) {
+        // ignore: deprecated_member_use
+        await _concat!.clear();
+      }
+      // ignore: deprecated_member_use
+      await _concat!.add(AudioSource.uri(Uri.parse(streamUrl)));
+      if (initialPosition > Duration.zero) {
+        await _player.seek(initialPosition, index: 0);
+      } else {
+        await _player.seek(Duration.zero, index: 0);
+      }
 
       // El stream ya está disponible en el reproductor: apagar loader global.
       playLoadingNotifier.value = false;
@@ -2439,43 +2458,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // _isSwappingSource evita que el completed handler (disparado por clear())
       // intente auto-avanzar a la siguiente canción.
       _isSwappingSource = true;
-      if (_concat != null) {
+      await _ensureStreamingConcatReady();
+      // ignore: deprecated_member_use
+      if (_concat!.children.isNotEmpty) {
         // ignore: deprecated_member_use
-        if (_concat!.children.isNotEmpty) {
-          // ignore: deprecated_member_use
-          await _concat!.clear();
-        }
-        // ignore: deprecated_member_use
-        await _concat!.add(AudioSource.uri(Uri.parse(streamUrl)));
-      } else {
-        // Fallback: crear concat si no existe (primer uso o tras dispose).
-        // ignore: deprecated_member_use
-        final newConcat = ConcatenatingAudioSource(
-          children: [AudioSource.uri(Uri.parse(streamUrl))],
-        );
-        try {
-          await _player
-              .setAudioSource(
-                // ignore: deprecated_member_use
-                newConcat,
-                initialIndex: 0,
-                initialPosition: Duration.zero,
-              )
-              .timeout(const Duration(seconds: 20));
-          _concat = newConcat;
-        } on TimeoutException {
-          _releaseLog(
-            'resolve:setAudioSource timeout videoId=$videoId -> trying direct setUrl fallback',
-          );
-          await _player
-              .setUrl(streamUrl, initialPosition: Duration.zero)
-              .timeout(const Duration(seconds: 12));
-          _concat = null;
-          _releaseLog(
-            'resolve:setAudioSource fallback setUrl success videoId=$videoId',
-          );
-        }
+        await _concat!.clear();
       }
+      // ignore: deprecated_member_use
+      await _concat!.add(AudioSource.uri(Uri.parse(streamUrl)));
       _isSwappingSource = false;
       _releaseLog(
         'resolve:load_audio_source success videoId=$videoId processingState=${_player.processingState}',
