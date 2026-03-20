@@ -812,6 +812,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // No actualizar playbackState aquí - se maneja en playbackEventStream
         // Solo mantener para debug si es necesario
         // print('⚙️ DEBUG: ProcessingState - State: $state, Index: ${_player.currentIndex}');
+        if (state == ProcessingState.ready && !_equalizerSettingsApplied) {
+          // Reintentar justo cuando el player ya está listo; en algunos
+          // dispositivos el engine del EQ aún no acepta parámetros durante loading.
+          unawaited(_applyEqualizerSettingsFromPrefs());
+        }
       });
 
       // Suscripción para persistir la posición cada ~2s
@@ -3565,7 +3570,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       try {
         _prefs ??= await SharedPreferences.getInstance();
         final parameters = await _equalizer!.parameters.timeout(
-          const Duration(seconds: 2),
+          const Duration(seconds: 5),
           onTimeout: () => throw TimeoutException(
             'Timeout obteniendo parámetros del equalizer',
           ),
