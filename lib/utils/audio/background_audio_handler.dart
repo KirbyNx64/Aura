@@ -901,35 +901,41 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     String recentKey,
   ) async {
     try {
-      if (_isStreamingMediaItem(item)) {
-        // Para streaming, usar el método que acepta metadata.
-        final extras = item.extras;
-        final videoId = extras?['videoId']?.toString().trim();
-        final artUri =
-            extras?['displayArtUri']?.toString().trim().isNotEmpty == true
-            ? extras!['displayArtUri'].toString().trim()
-            : item.artUri?.toString();
-        await MostPlayedDB().incrementPlayCountByPath(
-          recentKey,
-          title: item.title,
-          artist: item.artist,
-          videoId: (videoId != null && videoId.isNotEmpty) ? videoId : null,
-          artUri: (artUri != null && artUri.trim().isNotEmpty)
-              ? artUri.trim()
-              : null,
-          durationMs: item.duration?.inMilliseconds,
-        );
-        await StreamingArtistsDB().incrementArtistPlay(
-          path: recentKey,
-          title: item.title,
-          artist: item.artist,
-          videoId: (videoId != null && videoId.isNotEmpty) ? videoId : null,
-          artUri: (artUri != null && artUri.trim().isNotEmpty)
-              ? artUri.trim()
-              : null,
-          durationMs: item.duration?.inMilliseconds,
-        );
+      // Mantener MostPlayed solo para streaming (local deshabilitado).
+      if (!_isStreamingMediaItem(item)) {
+        _releaseLog('tracking:most_played_skipped_local key=$recentKey');
+        return;
       }
+
+      final extras = item.extras;
+      final videoId = extras?['videoId']?.toString().trim();
+      final artUri =
+          extras?['displayArtUri']?.toString().trim().isNotEmpty == true
+          ? extras!['displayArtUri'].toString().trim()
+          : item.artUri?.toString();
+      await MostPlayedDB().incrementPlayCountByPath(
+        recentKey,
+        title: item.title,
+        artist: item.artist,
+        videoId: (videoId != null && videoId.isNotEmpty) ? videoId : null,
+        artUri: (artUri != null && artUri.trim().isNotEmpty)
+            ? artUri.trim()
+            : null,
+        durationMs: item.duration?.inMilliseconds,
+      );
+      _releaseLog(
+        'tracking:most_played_saved key=$recentKey streaming=true',
+      );
+      await StreamingArtistsDB().incrementArtistPlay(
+        path: recentKey,
+        title: item.title,
+        artist: item.artist,
+        videoId: (videoId != null && videoId.isNotEmpty) ? videoId : null,
+        artUri: (artUri != null && artUri.trim().isNotEmpty)
+            ? artUri.trim()
+            : null,
+        durationMs: item.duration?.inMilliseconds,
+      );
     } catch (e) {
       // Error al actualizar más reproducidas
     }
@@ -988,10 +994,27 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             : null,
         durationMs: item.duration?.inMilliseconds,
       );
+      _releaseLog('tracking:recent_saved key=$recentKey streaming=true');
       return;
     }
 
     await RecentsDB().addRecentPath(recentKey);
+    _releaseLog('tracking:recent_saved key=$recentKey streaming=false');
+  }
+
+  void _ensureTrackingForMediaItem(MediaItem currentMediaItem) {
+    if (currentMediaItem.id.isEmpty) return;
+    if (currentMediaItem.id == _currentTrackingId) return;
+
+    _resetTracking();
+    _currentTrackingId = currentMediaItem.id;
+
+    // Si el player ya está reproduciendo, arrancar timer ahora.
+    // Si aún no, lo arrancará playingStream cuando pase a playing=true.
+    if (_player.playing) {
+      _trackingStartTime = DateTime.now();
+      _startTrackingPlaytime(currentMediaItem.id, currentMediaItem);
+    }
   }
 
   /// Función para cancelar el timer cuando se pausa o cambia la canción
@@ -1309,13 +1332,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final currentSongId = currentMediaItem.id;
 
     // Tracking de tiempo de escucha para local y streaming.
-    if (currentMediaItem.id.isNotEmpty &&
-        currentMediaItem.id != _currentTrackingId) {
-      _resetTracking();
-      _currentTrackingId = currentMediaItem.id;
-      _trackingStartTime = DateTime.now();
-      _startTrackingPlaytime(currentMediaItem.id, currentMediaItem);
-    }
+    _ensureTrackingForMediaItem(currentMediaItem);
 
     if (_isStreamingMediaItem(currentMediaItem)) {
       mediaItem.add(currentMediaItem);
@@ -2045,6 +2062,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _ensureDeferredShuffleOrder(currentIndex: 0);
       queue.add(List<MediaItem>.from(_mediaQueue));
       mediaItem.add(streamItem);
+      _ensureTrackingForMediaItem(streamItem);
       unawaited(_syncFavoriteFlagForItem(streamItem));
       unawaited(
         _updateCurrentStreamingArtwork(
@@ -2330,6 +2348,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _deferredStreamingQueueIndex = targetIndex;
       _ensureDeferredShuffleOrder(currentIndex: targetIndex);
       mediaItem.add(currentItem);
+      _ensureTrackingForMediaItem(currentItem);
       unawaited(_syncFavoriteFlagForItem(currentItem));
       playbackState.add(
         playbackState.value.copyWith(
@@ -2427,6 +2446,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // (streamUrl). Evita copiar 50 MediaItems y que la UI reconstruya toda la lista.
     // mediaItem.add(updatedItem) basta para la pista actual.
     mediaItem.add(updatedItem);
+    _ensureTrackingForMediaItem(updatedItem);
 
     Future<bool> loadAndPlayCurrentUrl(String url, {required String phase}) async {
       try {
@@ -2541,6 +2561,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       );
       _mediaQueue[targetIndex] = updatedItem;
       mediaItem.add(updatedItem);
+      _ensureTrackingForMediaItem(updatedItem);
 
       loaded = await loadAndPlayCurrentUrl(
         resolvedStreamUrl,
@@ -4140,6 +4161,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _deferredStreamingQueueIndex = targetIndex;
     final item = _mediaQueue[targetIndex];
     mediaItem.add(item);
+    _ensureTrackingForMediaItem(item);
     // La sincronización de flags se hace una sola vez dentro de
     // _resolveAndPlayDeferredStreamingIndex para evitar duplicar la
     // consulta costosa a la DB en cada skip.
@@ -4974,6 +4996,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _ensureDeferredShuffleOrder(currentIndex: initialIndex);
       queue.add(List<MediaItem>.from(_mediaQueue));
       mediaItem.add(_mediaQueue[initialIndex]);
+      _ensureTrackingForMediaItem(_mediaQueue[initialIndex]);
       unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));
 
       final shouldAutoPlay = extras?['autoPlay'] != false;
