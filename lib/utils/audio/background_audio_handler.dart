@@ -2451,12 +2451,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     mediaItem.add(updatedItem);
     _ensureTrackingForMediaItem(updatedItem);
 
+    bool loadFailureSuperseded = false;
     Future<bool> loadAndPlayCurrentUrl(String url, {required String phase}) async {
+      loadFailureSuperseded = false;
       try {
         _releaseLog(
           'resolve:load_audio_source begin videoId=$videoId url=${_clipForLog(url)} hasConcat=${_concat != null} phase=$phase',
         );
         if (isSuperseded() || !isStillSelectedTarget()) {
+          loadFailureSuperseded = true;
           _releaseLog(
             'resolve:load_audio_source aborted_superseded videoId=$videoId phase=$phase',
           );
@@ -2483,6 +2486,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         );
 
         if (isSuperseded() || !isStillSelectedTarget()) {
+          loadFailureSuperseded = true;
           _releaseLog('resolve:post_load aborted_superseded videoId=$videoId');
           return false;
         }
@@ -2525,6 +2529,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               return true;
             }
             if (isSuperseded() || !isStillSelectedTarget()) {
+              loadFailureSuperseded = true;
               _releaseLog(
                 'resolve:play probe_aborted_superseded videoId=$videoId phase=$phase',
               );
@@ -2554,6 +2559,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
         return true;
       } on PlayerInterruptedException {
+        loadFailureSuperseded = true;
         _releaseLog(
           'resolve:load_audio_source interrupted videoId=$videoId generation=$myGeneration activeGeneration=$_resolveGeneration',
         );
@@ -2571,6 +2577,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     var loaded = await loadAndPlayCurrentUrl(resolvedStreamUrl, phase: 'primary');
     if (!loaded) {
+      if (loadFailureSuperseded || isSuperseded() || !isStillSelectedTarget()) {
+        _releaseLog(
+          'resolve:retry_refresh_url skipped_superseded videoId=$videoId phase=primary',
+        );
+        return false;
+      }
       _releaseLog('resolve:retry_refresh_url begin videoId=$videoId');
       final refreshedUrl = await StreamService.getBestAudioUrl(
         videoId,
@@ -2582,6 +2594,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'resolve:retry_refresh_url done videoId=$videoId gotUrl=${refreshedUrl != null && refreshedUrl.isNotEmpty} url=${_clipForLog(refreshedUrl)}',
       );
       if (refreshedUrl == null || refreshedUrl.isEmpty) {
+        if (isSuperseded() || !isStillSelectedTarget()) {
+          _releaseLog(
+            'resolve:retry_refresh_url missing_url_superseded videoId=$videoId',
+          );
+          return false;
+        }
         reportStreamPlaybackError('unknown', videoId: videoId);
         return false;
       }
@@ -2603,6 +2621,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         phase: 'refresh_retry',
       );
       if (!loaded) {
+        if (loadFailureSuperseded || isSuperseded() || !isStillSelectedTarget()) {
+          _releaseLog(
+            'resolve:refresh_retry failed_superseded videoId=$videoId',
+          );
+          return false;
+        }
         reportStreamPlaybackError('unknown', videoId: videoId);
         return false;
       }
