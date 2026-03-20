@@ -31,8 +31,6 @@ import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:music/utils/gesture_preferences.dart';
 import 'package:music/screens/artist/artist_screen.dart';
-
-import 'package:music/screens/home/equalizer_screen.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:like_button/like_button.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
@@ -2065,49 +2063,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         if (!context.mounted) return;
                                         _showLyricsModal(context, mediaItem);
                                       }
-                                    },
-                                  ),
-                                  ListTile(
-                                    leading: const Icon(
-                                      Icons.equalizer_rounded,
-                                    ),
-                                    title: Text(LocaleProvider.tr('equalizer')),
-                                    onTap: () {
-                                      Navigator.of(context).pop();
-                                      Navigator.of(context).push(
-                                        PageRouteBuilder(
-                                          pageBuilder:
-                                              (
-                                                context,
-                                                animation,
-                                                secondaryAnimation,
-                                              ) => const EqualizerScreen(),
-                                          transitionsBuilder:
-                                              (
-                                                context,
-                                                animation,
-                                                secondaryAnimation,
-                                                child,
-                                              ) {
-                                                const begin = Offset(1.0, 0.0);
-                                                const end = Offset.zero;
-                                                const curve = Curves.ease;
-                                                final tween =
-                                                    Tween(
-                                                      begin: begin,
-                                                      end: end,
-                                                    ).chain(
-                                                      CurveTween(curve: curve),
-                                                    );
-                                                return SlideTransition(
-                                                  position: animation.drive(
-                                                    tween,
-                                                  ),
-                                                  child: child,
-                                                );
-                                              },
-                                        ),
-                                      );
                                     },
                                   ),
                                   /*

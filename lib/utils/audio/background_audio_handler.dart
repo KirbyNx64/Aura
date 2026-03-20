@@ -431,6 +431,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   bool _deferredStreamingQueueMode = false;
   int _deferredStreamingQueueIndex = 0;
   int _manualDeferredSkipGeneration = 0;
+  // Intención de reproducción para resoluciones diferidas de streaming.
+  // Si el usuario pausa mientras se resuelve una URL, no auto-reanudar al terminar.
+  bool _deferredAutoPlayDesired = true;
   final Random _random = Random();
   List<int> _deferredShuffleOrder = const <int>[];
   int _deferredShuffleCursor = 0;
@@ -598,6 +601,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               _player.loopMode == LoopMode.one) {
             unawaited(_player.seek(Duration.zero));
             unawaited(_player.play());
+            return;
           }
 
           // Precarga inteligente: cuando quedan pocos segundos, precargar la siguiente
@@ -616,12 +620,29 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               // clear()/stop()/dispose durante swaps y fallback puede disparar
               // completed artificiales; no debemos forzar pausa ahí.
               if (_isSwappingSource) return;
-              // Auto-avance deshabilitado en modo streaming diferido.
+
+              final nextIndex = _nextDeferredQueueIndex();
+              if (nextIndex != null) {
+                _releaseLog(
+                  'resolve:completed auto_advance_to_next from=$_deferredStreamingQueueIndex to=$nextIndex',
+                );
+                _deferredAutoPlayDesired = true;
+                _scheduleStreamingSkip(nextIndex, playAfterResolve: true);
+                return;
+              }
+
               _releaseLog(
-                'resolve:completed deferred_auto_advance_disabled index=$_deferredStreamingQueueIndex',
+                'resolve:completed end_of_queue_pause index=$_deferredStreamingQueueIndex',
               );
               if (_player.playing) {
                 unawaited(pause());
+              } else {
+                playbackState.add(
+                  playbackState.value.copyWith(
+                    playing: false,
+                    processingState: AudioProcessingState.completed,
+                  ),
+                );
               }
               return;
             }
@@ -2451,6 +2472,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
 
         if (playAfterResolve) {
+          if (!_deferredAutoPlayDesired) {
+            _releaseLog(
+              'resolve:play skipped_by_user_pause videoId=$videoId phase=$phase',
+            );
+            return true;
+          }
           _releaseLog('resolve:play begin videoId=$videoId phase=$phase');
           try {
             await _player.play().timeout(const Duration(seconds: 2));
@@ -3380,6 +3407,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         }
         await Future<void>.delayed(const Duration(milliseconds: 150));
       }
+      if (!_player.playing) {
+        _releaseLog('radio:auto_start abort not_playing_after_wait');
+        return;
+      }
 
       _releaseLog(
         'radio:auto_start trigger playing=${_player.playing} state=${_player.processingState} index=$_deferredStreamingQueueIndex',
@@ -3733,6 +3764,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> play() async {
+    _deferredAutoPlayDesired = true;
     _armLocalPlayLoaderGuard();
     // Verificar si hay canciones disponibles
     if (_mediaQueue.isEmpty) {
@@ -3844,6 +3876,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> pause() async {
+    _deferredAutoPlayDesired = false;
     try {
       await _player.pause();
     } catch (e) {
@@ -4078,6 +4111,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }) {
     if (!_deferredStreamingQueueMode) return;
     if (targetIndex < 0 || targetIndex >= _mediaQueue.length) return;
+
+    _deferredAutoPlayDesired = playAfterResolve;
 
     // Cancelar inmediatamente cualquier resolución previa en curso.
     _resolveGeneration++;
@@ -4942,6 +4977,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));
 
       final shouldAutoPlay = extras?['autoPlay'] != false;
+      _deferredAutoPlayDesired = shouldAutoPlay;
       final ok = await _resolveAndPlayDeferredStreamingIndex(
         initialIndex,
         playAfterResolve: shouldAutoPlay,
