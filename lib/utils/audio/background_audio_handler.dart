@@ -537,6 +537,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<AudioSource> _buildDeferredStreamingAudioSource({
+    required String streamUrl,
+    required String videoId,
+  }) async {
+    final uri = Uri.parse(streamUrl);
+    _releaseLog('resolve:audio_source using AudioSource.uri videoId=$videoId');
+    return AudioSource.uri(uri);
+  }
+
   // Finalizar el AudioPlayer con AndroidLoudnessEnhancer
 
   int _initRetryCount = 0;
@@ -641,7 +650,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               if (_isSwappingSource) return;
               final nextIdx = _nextDeferredQueueIndex();
               if (nextIdx != null) {
-                unawaited(_resolveAndPlayDeferredStreamingIndex(nextIdx));
+                unawaited(
+                  _resolveAndPlayDeferredStreamingIndex(
+                    nextIdx,
+                    playAfterResolve: true,
+                  ),
+                );
                 return;
               }
 
@@ -652,6 +666,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                   if (fetchedNextIndex != null) {
                     await _resolveAndPlayDeferredStreamingIndex(
                       fetchedNextIndex,
+                      playAfterResolve: true,
                     );
                     return;
                   }
@@ -2076,8 +2091,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // ignore: deprecated_member_use
         await _concat!.clear();
       }
+      final deferredSource = await _buildDeferredStreamingAudioSource(
+        streamUrl: streamUrl,
+        videoId: seedVideoId,
+      );
       // ignore: deprecated_member_use
-      await _concat!.add(AudioSource.uri(Uri.parse(streamUrl)));
+      await _concat!.add(deferredSource);
       if (initialPosition > Duration.zero) {
         await _player.seek(initialPosition, index: 0);
       } else {
@@ -2464,8 +2483,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         // ignore: deprecated_member_use
         await _concat!.clear();
       }
+      final deferredSource = await _buildDeferredStreamingAudioSource(
+        streamUrl: streamUrl,
+        videoId: videoId,
+      );
       // ignore: deprecated_member_use
-      await _concat!.add(AudioSource.uri(Uri.parse(streamUrl)));
+      await _concat!.add(deferredSource);
       _isSwappingSource = false;
       _releaseLog(
         'resolve:load_audio_source success videoId=$videoId processingState=${_player.processingState}',
@@ -3369,7 +3392,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItem.add(firstItem);
       unawaited(_syncFavoriteFlagForItem(firstItem));
 
-      final ok = await _resolveAndPlayDeferredStreamingIndex(0);
+      final ok = await _resolveAndPlayDeferredStreamingIndex(
+        0,
+        playAfterResolve: true,
+      );
       if (!ok) {
         return {'ok': false, 'reason': 'missing_stream_url'};
       }
@@ -4834,20 +4860,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItem.add(_mediaQueue[initialIndex]);
       unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));
 
-      final ok = await _resolveAndPlayDeferredStreamingIndex(initialIndex);
+      final shouldAutoPlay = extras?['autoPlay'] != false;
+      final ok = await _resolveAndPlayDeferredStreamingIndex(
+        initialIndex,
+        playAfterResolve: shouldAutoPlay,
+      );
       if (!ok) {
         debugPrint(
           '[RADIO_DEBUG] playYtStreamQueue resolve failed initialIndex=$initialIndex',
         );
         return {'ok': false, 'reason': 'missing_stream_url'};
       }
-      if (extras?['autoPlay'] != false) {
-        // No bloquear esta acción esperando al Future de play(), porque en
-        // just_audio puede completarse al pausar/finalizar la pista.
-        unawaited(play());
-      }
       debugPrint(
-        '[RADIO_DEBUG] playYtStreamQueue resolved and playing initialIndex=$initialIndex queueSize=${_mediaQueue.length}',
+        '[RADIO_DEBUG] playYtStreamQueue resolved initialIndex=$initialIndex queueSize=${_mediaQueue.length} autoPlay=$shouldAutoPlay',
       );
 
       if (autoStartRadio) {
