@@ -122,6 +122,9 @@ const Map<String, String> appLocalizationsEs = {
   'error_loading_audio_restricted': 'Este contenido podría no está disponible.',
   'error_loading_audio_network':
       'No se pudo cargar el contenido. Revisa tu conexión a internet.',
+  'error_loading_video': 'No se pudo cargar video',
+  'mode_song': 'Canción',
+  'mode_video': 'Video',
   'equalizer': 'Ecualizador',
   'equalizer_desc': 'Ajusta el sonido con el ecualizador de audio',
   'equalizer_not_prossessing': 'Sin reproducción actual',

@@ -1,5 +1,7 @@
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:music/utils/db/stream_cache_db.dart';
+import 'package:music/utils/yt_search/explode_video/youtube_explode_dart.dart'
+    as explode_video;
 import 'package:music/utils/notifiers.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
@@ -181,6 +183,7 @@ Future<Map<String, dynamic>?> _resolveBestAudioStreamInfoInIsolate(
 
 class StreamService {
   static final Map<String, String?> _urlCache = {};
+  static final Map<String, String?> _videoUrlCache = {};
   static final Map<String, Future<String?>> _inFlightRequests = {};
   static final Map<String, String> _lastResolveErrorCodeByVideoId = {};
   static StreamCacheDB? _cacheDB;
@@ -188,6 +191,11 @@ class StreamService {
   static int _resolveGeneration = 0;
   static const int _maxPrefetchConcurrency = 8;
   static const Duration _urlExpirySafetyMargin = Duration(minutes: 5);
+
+  static void _videoLog(String message) {
+    // ignore: avoid_print
+    print('[AURA_VIDEO] $message');
+  }
 
   static void _recreateYoutubeExplode() {
     try {
@@ -571,6 +579,7 @@ class StreamService {
     await _initCache();
     await _cacheDB!.clearCache();
     _urlCache.clear();
+    _videoUrlCache.clear();
     _inFlightRequests.clear();
     _lastResolveErrorCodeByVideoId.clear();
   }
@@ -581,6 +590,7 @@ class StreamService {
     final normalizedVideoId = videoId.trim();
     if (normalizedVideoId.isEmpty) return;
     _urlCache.remove(normalizedVideoId);
+    _videoUrlCache.remove(normalizedVideoId);
     _inFlightRequests.remove(normalizedVideoId);
     _lastResolveErrorCodeByVideoId.remove(normalizedVideoId);
     await _cacheDB!.invalidateStream(normalizedVideoId);
@@ -591,6 +601,170 @@ class StreamService {
     final normalizedVideoId = videoId.trim();
     if (normalizedVideoId.isEmpty) return null;
     return await getBestAudioUrl(normalizedVideoId, forceRefresh: true);
+  }
+
+  /// URL de video-only para render opcional en PlayerScreen.
+  /// Se obtiene bajo demanda solo cuando el usuario activa modo video.
+  static Future<String?> getBestVideoUrl(
+    String videoId, {
+    bool forceRefresh = false,
+  }) async {
+    final normalizedVideoId = videoId.trim();
+    if (normalizedVideoId.isEmpty) return null;
+    _videoLog(
+      'getBestVideoUrl:start videoId=$normalizedVideoId forceRefresh=$forceRefresh',
+    );
+
+    if (forceRefresh) {
+      _videoUrlCache.remove(normalizedVideoId);
+      _videoLog('getBestVideoUrl:cache invalidated videoId=$normalizedVideoId');
+    } else {
+      final cached = _videoUrlCache[normalizedVideoId];
+      if (cached != null && cached.isNotEmpty && !_isStreamUrlExpired(cached)) {
+        _videoLog(
+          'getBestVideoUrl:cache_hit videoId=$normalizedVideoId url=${cached.length > 120 ? '${cached.substring(0, 120)}...' : cached}',
+        );
+        return cached;
+      }
+      _videoLog('getBestVideoUrl:cache_miss videoId=$normalizedVideoId');
+    }
+
+    Future<String?> resolveOnce() async {
+      // Cliente dedicado para video preview: evita interferencia con
+      // resoluciones concurrentes de audio y estados compartidos.
+      _videoLog(
+        'getBestVideoUrl:provider explode_video_local videoId=$normalizedVideoId',
+      );
+      final yt = explode_video.YoutubeExplode();
+      explode_video.StreamManifest manifest;
+      try {
+        manifest = await yt.videos.streamsClient.getManifest(normalizedVideoId);
+      } finally {
+        try {
+          yt.close();
+        } catch (_) {}
+      }
+      _videoLog(
+        'getBestVideoUrl:manifest videoId=$normalizedVideoId muxed=${manifest.muxed.length} videoOnly=${manifest.videoOnly.length} audioOnly=${manifest.audioOnly.length}',
+      );
+
+      // 1) Preferir muxed MP4 (más compatible para render en video_player).
+      final muxedMp4Candidates = manifest.muxed.where((stream) {
+        return stream.container.name.toLowerCase().contains('mp4') ||
+            stream.codec.mimeType.toLowerCase().contains('video/mp4');
+      }).toList();
+
+      T selectByBitrate<T extends explode_video.StreamInfo>(
+        List<T> candidates,
+      ) {
+        candidates.sort(
+          (a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond),
+        );
+        // Priorizamos fluidez sobre calidad para preview en pantalla.
+        // Tomar bitrate bajo/medio reduce cortes en redes móviles.
+        const int targetBitrate = 280000;
+        const int smoothCapBitrate = 650000;
+        final capped = candidates
+            .where((s) => s.bitrate.bitsPerSecond <= smoothCapBitrate)
+            .toList();
+        final pool = capped.isNotEmpty ? capped : candidates;
+
+        T selected = pool.first;
+        for (final stream in pool) {
+          if (stream.bitrate.bitsPerSecond >= targetBitrate) {
+            selected = stream;
+            break;
+          }
+        }
+        return selected;
+      }
+
+      String? selectedSource;
+      int? selectedBitrate;
+      int? selectedTag;
+      String? pickUrlFrom<T extends explode_video.StreamInfo>(
+        List<T> list,
+        String source,
+      ) {
+        if (list.isEmpty) return null;
+        final selected = selectByBitrate<T>(list);
+        final url = selected.url.toString();
+        if (url.isEmpty) return null;
+        selectedSource = source;
+        selectedBitrate = selected.bitrate.bitsPerSecond;
+        selectedTag = selected.tag;
+        return url;
+      }
+
+      String? url = pickUrlFrom<explode_video.MuxedStreamInfo>(
+        muxedMp4Candidates,
+        'muxed_mp4',
+      );
+
+      // 2) Si no hay muxed MP4, intentar videoOnly MP4.
+      if (url == null) {
+        final videoOnlyMp4Candidates = manifest.videoOnly.where((stream) {
+          return stream.container.name.toLowerCase().contains('mp4') ||
+              stream.codec.mimeType.toLowerCase().contains('video/mp4');
+        }).toList();
+        url = pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
+          videoOnlyMp4Candidates,
+          'video_only_mp4',
+        );
+      }
+
+      // 3) Último recurso: cualquier muxed, luego cualquier videoOnly.
+      url ??= pickUrlFrom<explode_video.MuxedStreamInfo>(
+        manifest.muxed.toList(),
+        'muxed_any',
+      );
+      url ??= pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
+        manifest.videoOnly.toList(),
+        'video_only_any',
+      );
+
+      if (url == null || url.isEmpty) {
+        if (manifest.muxed.isEmpty && manifest.videoOnly.isEmpty) {
+          _videoLog(
+            'getBestVideoUrl:no_video_streams videoId=$normalizedVideoId audioOnly=${manifest.audioOnly.length}',
+          );
+        }
+        _videoLog('getBestVideoUrl:empty_result videoId=$normalizedVideoId');
+        return null;
+      }
+      _videoLog(
+        'getBestVideoUrl:selected videoId=$normalizedVideoId source=${selectedSource ?? 'unknown'} itag=${selectedTag ?? -1} bitrate=${selectedBitrate ?? -1} url=${url.length > 120 ? '${url.substring(0, 120)}...' : url}',
+      );
+      _videoUrlCache[normalizedVideoId] = url;
+      return url;
+    }
+
+    try {
+      final resolved = await resolveOnce();
+      _videoLog(
+        'getBestVideoUrl:done videoId=$normalizedVideoId ok=${resolved != null && resolved.isNotEmpty}',
+      );
+      return resolved;
+    } catch (e) {
+      _videoLog('getBestVideoUrl:error videoId=$normalizedVideoId error=$e');
+      if (_shouldRecreateClient(e)) {
+        _videoLog('getBestVideoUrl:recreate_client videoId=$normalizedVideoId');
+        _recreateYoutubeExplode();
+        try {
+          final resolved = await resolveOnce();
+          _videoLog(
+            'getBestVideoUrl:retry_done videoId=$normalizedVideoId ok=${resolved != null && resolved.isNotEmpty}',
+          );
+          return resolved;
+        } catch (retryError) {
+          _videoLog(
+            'getBestVideoUrl:retry_error videoId=$normalizedVideoId error=$retryError',
+          );
+          return null;
+        }
+      }
+      return null;
+    }
   }
 
   /// Cierra la base de datos

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:android_nav_setting/android_nav_setting.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -43,6 +44,7 @@ import 'package:music/widgets/sliding_up_panel/sliding_up_panel.dart'
 import 'package:music/screens/play/current_playlist_screen.dart';
 import 'package:music/screens/play/current_lyrics_screen.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:video_player/video_player.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
 
 enum PanelContent { playlist, lyrics }
@@ -213,6 +215,45 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   final Set<String> _artworkDiskPreloadGuard = <String>{};
   Timer? _precacheNextTimer;
 
+  // Modo video opcional (audio maestro + video seguidor).
+  bool _preferVideoMode = false;
+  bool _videoModeLoading = false;
+  String? _videoModeError;
+  String? _videoControllerSongId;
+  VideoPlayerController? _videoController;
+  Timer? _videoSyncTimer;
+  bool _videoSyncInProgress = false;
+  DateTime? _lastVideoHardSyncAt;
+  static const Duration _videoSyncInterval = Duration(milliseconds: 500);
+  static const Duration _videoHardSyncMinInterval = Duration(seconds: 2);
+  static const int _videoHardSyncDriftMs = 1400;
+
+  void _videoLog(String message) {
+    // ignore: avoid_print
+    print('[AURA_VIDEO] $message');
+  }
+
+  void _setStateSafely(VoidCallback fn, {String? reason}) {
+    if (!mounted) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final isBuildingFrame =
+        phase == SchedulerPhase.transientCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks ||
+        phase == SchedulerPhase.persistentCallbacks;
+
+    if (isBuildingFrame) {
+      if (reason != null) {
+        _videoLog('setStateSafely:deferred reason=$reason phase=$phase');
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(fn);
+      });
+      return;
+    }
+    setState(fn);
+  }
+
   // Control de indicadores de doble toque
   bool _showDoubleTapIndicators = false;
   bool _showLeftIndicator = false;
@@ -225,7 +266,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   // Flag para usar initialArtworkUri solo en el primer build
   // bool _usedInitialArtwork = false;
   // Optimizaciones de rendimiento
-  late final Future<SharedPreferences> _prefsFuture;
   final ValueNotifier<double?> _dragValueSecondsNotifier =
       ValueNotifier<double?>(null);
   String? _currentSongDataPath;
@@ -464,6 +504,443 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
 
     return mediaItem.artUri;
+  }
+
+  bool _canEnableVideoForItem(MediaItem? mediaItem) {
+    if (mediaItem == null) return false;
+    if (mediaItem.extras?['isStreaming'] != true) return false;
+    final videoId = _extractVideoIdFromMediaItem(mediaItem);
+    return videoId != null && videoId.isNotEmpty;
+  }
+
+  bool _isVideoModeActiveForItem(MediaItem? mediaItem) {
+    return _preferVideoMode && _canEnableVideoForItem(mediaItem);
+  }
+
+  void _disposeVideoController() {
+    final controller = _videoController;
+    _videoController = null;
+    _videoControllerSongId = null;
+    if (controller != null) {
+      unawaited(controller.dispose());
+    }
+  }
+
+  void _stopVideoSyncLoop() {
+    _videoSyncTimer?.cancel();
+    _videoSyncTimer = null;
+    _videoSyncInProgress = false;
+    _lastVideoHardSyncAt = null;
+  }
+
+  void _startVideoSyncLoop() {
+    _stopVideoSyncLoop();
+    _videoSyncTimer = Timer.periodic(_videoSyncInterval, (_) {
+      unawaited(_syncVideoToAudio());
+    });
+  }
+
+  Future<void> _syncVideoToAudio() async {
+    if (!mounted) return;
+    if (_videoSyncInProgress) return;
+
+    final currentMediaItem = audioHandler?.mediaItem.valueOrNull;
+    if (!_isVideoModeActiveForItem(currentMediaItem)) return;
+
+    final controller = _videoController;
+    if (controller == null || !controller.value.isInitialized) return;
+
+    if (_videoControllerSongId != currentMediaItem!.id) {
+      await _ensureVideoControllerForItem(currentMediaItem);
+      return;
+    }
+
+    final playback = audioHandler?.playbackState.valueOrNull;
+    if (playback == null) return;
+
+    _videoSyncInProgress = true;
+    try {
+      final audioPlaying = playback.playing;
+      final audioPosition = playback.position;
+      final videoValue = controller.value;
+      final videoPosition = videoValue.position;
+
+      if (audioPlaying && !videoValue.isPlaying) {
+        await controller.play();
+      } else if (!audioPlaying && videoValue.isPlaying) {
+        await controller.pause();
+      }
+
+      final driftMs =
+          videoPosition.inMilliseconds - audioPosition.inMilliseconds;
+      final absDriftMs = driftMs.abs();
+      // Evitar micro-seeks frecuentes (causan video entrecortado).
+      // Solo corregimos fuerte si el desfase es grande y con cooldown.
+      if (absDriftMs >= _videoHardSyncDriftMs && !videoValue.isBuffering) {
+        final now = DateTime.now();
+        final canHardSync =
+            _lastVideoHardSyncAt == null ||
+            now.difference(_lastVideoHardSyncAt!) >= _videoHardSyncMinInterval;
+        if (canHardSync) {
+          await controller.seekTo(audioPosition);
+          _lastVideoHardSyncAt = now;
+          _videoLog(
+            'sync:hard_seek driftMs=$driftMs audioMs=${audioPosition.inMilliseconds} videoMs=${videoPosition.inMilliseconds}',
+          );
+        }
+      }
+    } catch (_) {
+      // Mantener silencioso para no interrumpir reproducción de audio.
+    } finally {
+      _videoSyncInProgress = false;
+    }
+  }
+
+  Future<void> _ensureVideoControllerForItem(
+    MediaItem mediaItem, {
+    bool forceRefresh = false,
+  }) async {
+    if (!_isVideoModeActiveForItem(mediaItem)) {
+      _videoLog(
+        'ensureVideoController:skip_not_active mediaItem=${mediaItem.id} forceRefresh=$forceRefresh',
+      );
+      return;
+    }
+
+    final videoId = _extractVideoIdFromMediaItem(mediaItem);
+    if (videoId == null || videoId.isEmpty) {
+      _videoLog(
+        'ensureVideoController:missing_video_id mediaItem=${mediaItem.id}',
+      );
+      return;
+    }
+    _videoLog(
+      'ensureVideoController:start mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh',
+    );
+
+    final existing = _videoController;
+    if (!forceRefresh &&
+        existing != null &&
+        existing.value.isInitialized &&
+        _videoControllerSongId == mediaItem.id) {
+      _videoLog(
+        'ensureVideoController:reuse_initialized mediaItem=${mediaItem.id}',
+      );
+      await _syncVideoToAudio();
+      return;
+    }
+
+    bool isRequestStillValid() {
+      final current = audioHandler?.mediaItem.valueOrNull;
+      return mounted &&
+          _isVideoModeActiveForItem(current) &&
+          current?.id == mediaItem.id;
+    }
+
+    if (isRequestStillValid()) {
+      _setStateSafely(() {
+        _videoModeLoading = true;
+        _videoModeError = null;
+      }, reason: 'video_loading_start');
+    }
+
+    _disposeVideoController();
+
+    try {
+      final videoUrl = await StreamService.getBestVideoUrl(
+        videoId,
+        forceRefresh: forceRefresh,
+      );
+      if (!isRequestStillValid()) {
+        _videoLog(
+          'ensureVideoController:stale_after_url mediaItem=${mediaItem.id} videoId=$videoId',
+        );
+        return;
+      }
+      if (videoUrl == null || videoUrl.isEmpty) {
+        _videoLog(
+          'ensureVideoController:missing_video_url mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh',
+        );
+        if (!forceRefresh) {
+          _videoLog(
+            'ensureVideoController:retry_force_refresh mediaItem=${mediaItem.id} videoId=$videoId',
+          );
+          await _ensureVideoControllerForItem(mediaItem, forceRefresh: true);
+          return;
+        }
+        _setStateSafely(() {
+          _videoModeLoading = false;
+          _videoModeError = LocaleProvider.tr('error_loading_video');
+        }, reason: 'video_missing_url');
+        return;
+      }
+
+      final controller = VideoPlayerController.networkUrl(
+        Uri.parse(videoUrl),
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+      );
+      _videoLog(
+        'ensureVideoController:initialize_begin mediaItem=${mediaItem.id} videoId=$videoId',
+      );
+      await controller.initialize().timeout(const Duration(seconds: 12));
+      await controller.setVolume(0);
+      await controller.setLooping(false);
+
+      final playback = audioHandler?.playbackState.valueOrNull;
+      final audioPos = playback?.position ?? Duration.zero;
+      if (audioPos > Duration.zero) {
+        await controller.seekTo(audioPos);
+      }
+      if (playback?.playing == true) {
+        await controller.play();
+      } else {
+        await controller.pause();
+      }
+
+      if (!isRequestStillValid()) {
+        _videoLog(
+          'ensureVideoController:stale_after_init mediaItem=${mediaItem.id} videoId=$videoId',
+        );
+        await controller.dispose();
+        return;
+      }
+
+      _setStateSafely(() {
+        _videoController = controller;
+        _videoControllerSongId = mediaItem.id;
+        _videoModeLoading = false;
+        _videoModeError = null;
+      }, reason: 'video_controller_ready');
+      _videoLog(
+        'ensureVideoController:success mediaItem=${mediaItem.id} videoId=$videoId',
+      );
+      _startVideoSyncLoop();
+    } catch (e) {
+      _videoLog(
+        'ensureVideoController:error mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh error=$e',
+      );
+      if (!isRequestStillValid()) {
+        _videoLog(
+          'ensureVideoController:error_stale mediaItem=${mediaItem.id} videoId=$videoId',
+        );
+        return;
+      }
+      if (!forceRefresh) {
+        _videoLog(
+          'ensureVideoController:error_retry_force_refresh mediaItem=${mediaItem.id} videoId=$videoId',
+        );
+        await _ensureVideoControllerForItem(mediaItem, forceRefresh: true);
+        return;
+      }
+      _setStateSafely(() {
+        _videoModeLoading = false;
+        _videoModeError = LocaleProvider.tr('error_loading_video');
+      }, reason: 'video_controller_error');
+    }
+  }
+
+  Future<void> _toggleVideoModeForItem(MediaItem mediaItem) async {
+    final canEnable = _canEnableVideoForItem(mediaItem);
+    if (!canEnable) {
+      _videoLog('toggleVideoMode:unavailable mediaItem=${mediaItem.id}');
+      if (_preferVideoMode) {
+        _setStateSafely(() {
+          _preferVideoMode = false;
+          _videoModeLoading = false;
+        }, reason: 'video_toggle_unavailable');
+      }
+      _stopVideoSyncLoop();
+      _disposeVideoController();
+      return;
+    }
+
+    final nextValue = !_preferVideoMode;
+    _videoLog(
+      'toggleVideoMode:set mediaItem=${mediaItem.id} enable=$nextValue',
+    );
+    _setStateSafely(() {
+      _preferVideoMode = nextValue;
+      _videoModeError = null;
+    }, reason: 'video_toggle');
+
+    if (!nextValue) {
+      _stopVideoSyncLoop();
+      _disposeVideoController();
+      return;
+    }
+
+    _stopVideoSyncLoop();
+    await _ensureVideoControllerForItem(mediaItem);
+  }
+
+  void _handleVideoModeOnSongChange(MediaItem mediaItem) {
+    if (!_preferVideoMode) return;
+    if (!_canEnableVideoForItem(mediaItem)) {
+      _preferVideoMode = false;
+      _videoModeLoading = false;
+      _videoModeError = null;
+      _stopVideoSyncLoop();
+      _disposeVideoController();
+      return;
+    }
+    unawaited(_ensureVideoControllerForItem(mediaItem));
+  }
+
+  Widget _buildArtworkOrVideo(MediaItem mediaItem, double artworkSize) {
+    if (!_isVideoModeActiveForItem(mediaItem)) {
+      return AnimatedSwitcher(
+        duration: _suppressSourceSwitchTransitions
+            ? Duration.zero
+            : const Duration(milliseconds: 75),
+        child: KeyedSubtree(
+          key: ValueKey(
+            'player_art_${(mediaItem.extras?['songId'] ?? mediaItem.id).toString()}',
+          ),
+          child: buildArtwork(mediaItem, artworkSize),
+        ),
+      );
+    }
+
+    final videoWidth = MediaQuery.of(context).size.width;
+    final rawVideoHeight = videoWidth * 9 / 16;
+    final videoHeight = rawVideoHeight > artworkSize
+        ? artworkSize
+        : rawVideoHeight;
+
+    final controller = _videoController;
+    if (_videoModeLoading ||
+        controller == null ||
+        !controller.value.isInitialized ||
+        _videoControllerSongId != mediaItem.id) {
+      return Container(
+        width: videoWidth,
+        height: artworkSize,
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: _videoModeError != null
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.videocam_off_rounded,
+                    color: Colors.white70,
+                    size: 30,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _videoModeError!,
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              )
+            : LoadingIndicator(activeIndicatorColor: Colors.white),
+      );
+    }
+
+    return ClipRect(
+      child: Container(
+        width: videoWidth,
+        height: artworkSize,
+        color: Colors.black,
+        alignment: Alignment.center,
+        child: SizedBox(
+          width: videoWidth,
+          height: videoHeight,
+          child: FittedBox(
+            fit: BoxFit.cover,
+            clipBehavior: Clip.hardEdge,
+            child: SizedBox(
+              width: controller.value.size.width,
+              height: controller.value.size.height,
+              child: VideoPlayer(controller),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayingFromTitle(MediaItem currentMediaItem) {
+    final canVideo = _canEnableVideoForItem(currentMediaItem);
+    if (!canVideo) return const SizedBox.shrink();
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 170),
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: _preferVideoMode
+                  ? () => unawaited(_toggleVideoModeForItem(currentMediaItem))
+                  : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: !_preferVideoMode
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.10)
+                      : Colors.transparent,
+                ),
+                child: Text(
+                  LocaleProvider.tr('mode_song'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(
+                      alpha: !_preferVideoMode ? 0.95 : 0.68,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: !_preferVideoMode
+                  ? () => unawaited(_toggleVideoModeForItem(currentMediaItem))
+                  : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: _preferVideoMode
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.10)
+                      : Colors.transparent,
+                ),
+                child: Text(
+                  LocaleProvider.tr('mode_video'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface.withValues(
+                      alpha: _preferVideoMode ? 0.95 : 0.68,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _onCoverQualityChanged() {
@@ -1078,7 +1555,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   @override
   void initState() {
     super.initState();
-    _prefsFuture = SharedPreferences.getInstance();
     _loadGesturePreferences();
     _setupGesturePreferencesListener();
     _checkNavSetting();
@@ -1430,6 +1906,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _dragValueSecondsNotifier.dispose();
     _artworkLoadingNotifier.dispose();
     _lyricsUpdateNotifier.dispose();
+    _stopVideoSyncLoop();
+    _disposeVideoController();
 
     favoritesShouldReload.removeListener(_onFavoritesChanged);
     dislikesShouldReload.removeListener(_onDislikesChanged);
@@ -3493,6 +3971,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           // Resetear progreso visual para evitar arrastrar la posición de la cola anterior.
           _lastKnownPosition = Duration.zero;
           _lastMediaItemId = mediaItem.id;
+          _handleVideoModeOnSongChange(mediaItem);
 
           // Ocultar letras si estaban mostradas
           if (_showLyrics) {
@@ -3544,6 +4023,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           );
         }
 
+        final isVideoModeActive = _isVideoModeActiveForItem(currentMediaItem);
+        final mediaFrameWidth = isVideoModeActive ? width : artworkSize;
+        final mediaFrameHeight = artworkSize;
+        final mediaFrameRadius = isVideoModeActive ? 0.0 : artworkSize * 0.06;
+
         return ValueListenableBuilder<bool>(
           valueListenable: useArtworkAsBackgroundPlayerNotifier,
           builder: (context, useArtworkBg, _) {
@@ -3556,8 +4040,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     final isAmoled = colorScheme == AppColorScheme.amoled;
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
-                    final showBackground = isAmoled && isDark && useArtworkBg;
+                    final hideAmoledBlurForVideo =
+                        isAmoled && isDark && isVideoModeActive;
+                    final showBackground =
+                        isAmoled &&
+                        isDark &&
+                        useArtworkBg &&
+                        !hideAmoledBlurForVideo;
                     final showDynamicBg = useDynamicBg && isAmoled && isDark;
+                    final showOverlayBackground =
+                        showBackground || showDynamicBg;
+                    final useTransparentPlayerChrome =
+                        showOverlayBackground || hideAmoledBlurForVideo;
                     final isDynamicTheme =
                         colorScheme == AppColorScheme.dynamic;
 
@@ -3567,12 +4061,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       child: Stack(
                         children: [
                           // Capa base negra opaca (siempre visible para AMOLED o fondo dinámico)
-                          if (showBackground || showDynamicBg)
+                          if (useTransparentPlayerChrome)
                             const Positioned.fill(
                               child: ColoredBox(color: Colors.black),
                             ),
                           // Fondo (carátula o color dinámico) con animación de opacidad
-                          if (showBackground || showDynamicBg) ...[
+                          if (showOverlayBackground) ...[
                             (() {
                               // Construir el contenido estático del fondo una sola vez y cachearlo
                               // Envolver en RepaintBoundary para evitar repintados innecesarios
@@ -3709,16 +4203,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                           ],
                           // Scaffold principal
                           Scaffold(
-                            backgroundColor: (showBackground || showDynamicBg)
+                            backgroundColor: useTransparentPlayerChrome
                                 ? Colors.transparent
                                 : null,
                             appBar: AppBar(
-                              backgroundColor: (showBackground || showDynamicBg)
+                              backgroundColor: useTransparentPlayerChrome
                                   ? Colors.transparent
                                   : Theme.of(context).scaffoldBackgroundColor,
                               surfaceTintColor: Colors.transparent,
                               elevation: 0,
                               scrolledUnderElevation: 0,
+                              centerTitle: true,
+                              titleSpacing: 0,
                               leading: widget.panelPositionNotifier != null
                                   ? ValueListenableBuilder<double>(
                                       valueListenable:
@@ -3778,140 +4274,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           child: child,
                                         );
                                       },
-                                      child: FutureBuilder<SharedPreferences>(
-                                        future: _prefsFuture,
-                                        builder: (context, snapshot) {
-                                          final prefs = snapshot.data;
-                                          final queueSource = prefs?.getString(
-                                            'last_queue_source',
-                                          );
-                                          if (queueSource != null &&
-                                              queueSource.isNotEmpty) {
-                                            return Center(
-                                              child: RichText(
-                                                textAlign: TextAlign.center,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                                text: TextSpan(
-                                                  children: [
-                                                    TextSpan(
-                                                      text: LocaleProvider.tr(
-                                                        'playing_from',
-                                                      ),
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .titleMedium
-                                                          ?.copyWith(
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .titleMedium
-                                                                    ?.color
-                                                                    ?.withValues(
-                                                                      alpha:
-                                                                          0.5,
-                                                                    ),
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .normal,
-                                                          ),
-                                                    ),
-                                                    TextSpan(
-                                                      text: queueSource,
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .titleMedium
-                                                          ?.copyWith(
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                            color:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .titleMedium
-                                                                    ?.color
-                                                                    ?.withValues(
-                                                                      alpha:
-                                                                          0.7,
-                                                                    ),
-                                                          ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          } else {
-                                            return const SizedBox.shrink();
-                                          }
-                                        },
+                                      child: _buildPlayingFromTitle(
+                                        currentMediaItem,
                                       ),
                                     )
-                                  : FutureBuilder<SharedPreferences>(
-                                      future: _prefsFuture,
-                                      builder: (context, snapshot) {
-                                        final prefs = snapshot.data;
-                                        final queueSource = prefs?.getString(
-                                          'last_queue_source',
-                                        );
-                                        if (queueSource != null &&
-                                            queueSource.isNotEmpty) {
-                                          return Center(
-                                            child: RichText(
-                                              textAlign: TextAlign.center,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              text: TextSpan(
-                                                children: [
-                                                  TextSpan(
-                                                    text: LocaleProvider.tr(
-                                                      'playing_from',
-                                                    ),
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .titleMedium
-                                                        ?.copyWith(
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .titleMedium
-                                                                  ?.color
-                                                                  ?.withValues(
-                                                                    alpha: 0.5,
-                                                                  ),
-                                                          fontWeight:
-                                                              FontWeight.normal,
-                                                        ),
-                                                  ),
-                                                  TextSpan(
-                                                    text: queueSource,
-                                                    style: Theme.of(context)
-                                                        .textTheme
-                                                        .titleMedium
-                                                        ?.copyWith(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color:
-                                                              Theme.of(context)
-                                                                  .textTheme
-                                                                  .titleMedium
-                                                                  ?.color
-                                                                  ?.withValues(
-                                                                    alpha: 0.7,
-                                                                  ),
-                                                        ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          );
-                                        } else {
-                                          return const SizedBox.shrink();
-                                        }
-                                      },
-                                    ),
+                                  : _buildPlayingFromTitle(currentMediaItem),
                               actions: [
                                 widget.panelPositionNotifier != null
                                     ? ValueListenableBuilder<double>(
@@ -3963,10 +4330,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           top: isSmallScreen
                                               ? height * 0.015
                                               : height * 0.03,
-                                          left: isSmallScreen
+                                          left: isVideoModeActive
+                                              ? 0
+                                              : isSmallScreen
                                               ? width * 0.005
                                               : width * 0.013,
-                                          right: isSmallScreen
+                                          right: isVideoModeActive
+                                              ? 0
+                                              : isSmallScreen
                                               ? width * 0.005
                                               : width * 0.013,
                                         ),
@@ -4229,22 +4600,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                     },
                                                                 child: Stack(
                                                                   children: [
-                                                                    AnimatedSwitcher(
-                                                                      duration:
-                                                                          _suppressSourceSwitchTransitions
-                                                                          ? Duration.zero
-                                                                          : const Duration(
-                                                                              milliseconds: 75,
-                                                                            ),
-                                                                      child: KeyedSubtree(
-                                                                        key: ValueKey(
-                                                                          'player_art_${(currentMediaItem.extras?['songId'] ?? currentMediaItem.id).toString()}',
-                                                                        ),
-                                                                        child: buildArtwork(
-                                                                          currentMediaItem,
-                                                                          artworkSize,
-                                                                        ),
-                                                                      ),
+                                                                    _buildArtworkOrVideo(
+                                                                      currentMediaItem,
+                                                                      artworkSize,
                                                                     ),
                                                                     // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
                                                                     if (!showLyricsOnCover &&
@@ -4253,8 +4611,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         child: Container(
                                                                           decoration: BoxDecoration(
                                                                             borderRadius: BorderRadius.circular(
-                                                                              artworkSize *
-                                                                                  0.06,
+                                                                              mediaFrameRadius,
                                                                             ),
                                                                           ),
                                                                           child: Stack(
@@ -4361,12 +4718,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     child: ClipRRect(
                                                       borderRadius:
                                                           BorderRadius.circular(
-                                                            artworkSize * 0.04,
+                                                            isVideoModeActive
+                                                                ? 0
+                                                                : artworkSize *
+                                                                      0.04,
                                                           ),
                                                       child: RepaintBoundary(
                                                         child: Container(
-                                                          width: artworkSize,
-                                                          height: artworkSize,
+                                                          width:
+                                                              mediaFrameWidth,
+                                                          height:
+                                                              mediaFrameHeight,
                                                           decoration: BoxDecoration(
                                                             color: Colors.black
                                                                 .withAlpha(
@@ -4375,8 +4737,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                 ),
                                                             borderRadius:
                                                                 BorderRadius.circular(
-                                                                  artworkSize *
-                                                                      0.04,
+                                                                  isVideoModeActive
+                                                                      ? 0
+                                                                      : artworkSize *
+                                                                            0.04,
                                                                 ),
                                                           ),
                                                           alignment:
@@ -6127,8 +6491,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                 : audioHandler?.play();
                                                                                           },
                                                                                           child:
-                                                                                              (showBackground ||
-                                                                                                      showDynamicBg ||
+                                                                                              (useTransparentPlayerChrome ||
                                                                                                       isDynamicTheme) &&
                                                                                                   !isBusy
                                                                                               ? SizedBox(
@@ -6237,8 +6600,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                             grade: 200,
                                                                                                             fill: 1,
                                                                                                             color:
-                                                                                                                (showBackground ||
-                                                                                                                    showDynamicBg ||
+                                                                                                                (useTransparentPlayerChrome ||
                                                                                                                     isDynamicTheme)
                                                                                                                 ? Colors.black
                                                                                                                 : Theme.of(

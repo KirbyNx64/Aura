@@ -73,7 +73,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -512,13 +512,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // ignore: deprecated_member_use
     _concat ??= ConcatenatingAudioSource(children: []);
     if (_player.audioSource != _concat) {
-      await _player
-          .setAudioSource(
-            // ignore: deprecated_member_use
-            _concat!,
-            initialIndex: 0,
-            initialPosition: Duration.zero,
-          );
+      await _player.setAudioSource(
+        // ignore: deprecated_member_use
+        _concat!,
+        initialIndex: 0,
+        initialPosition: Duration.zero,
+      );
     }
   }
 
@@ -818,7 +817,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     } catch (e) {
       // Si hay error en la inicialización, intentar reinicializar
-      _releaseLog('init:error error=$e retry=$_initRetryCount/$_initMaxRetries');
+      _releaseLog(
+        'init:error error=$e retry=$_initRetryCount/$_initMaxRetries',
+      );
       _isInitialized = false;
       if (_initRetryCount < _initMaxRetries) {
         _initRetryCount++;
@@ -926,9 +927,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             : null,
         durationMs: item.duration?.inMilliseconds,
       );
-      _releaseLog(
-        'tracking:most_played_saved key=$recentKey streaming=true',
-      );
+      _releaseLog('tracking:most_played_saved key=$recentKey streaming=true');
       await StreamingArtistsDB().incrementArtistPlay(
         path: recentKey,
         title: item.title,
@@ -2452,7 +2451,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _ensureTrackingForMediaItem(updatedItem);
 
     bool loadFailureSuperseded = false;
-    Future<bool> loadAndPlayCurrentUrl(String url, {required String phase}) async {
+    Future<bool> loadAndPlayCurrentUrl(
+      String url, {
+      required String phase,
+    }) async {
       loadFailureSuperseded = false;
       try {
         _releaseLog(
@@ -2552,7 +2554,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               return false;
             }
           } catch (e, st) {
-            _releaseLog('resolve:play error videoId=$videoId phase=$phase error=$e');
+            _releaseLog(
+              'resolve:play error videoId=$videoId phase=$phase error=$e',
+            );
             _releaseLog('resolve:play stack=$st');
             return false;
           }
@@ -2575,7 +2579,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     }
 
-    var loaded = await loadAndPlayCurrentUrl(resolvedStreamUrl, phase: 'primary');
+    var loaded = await loadAndPlayCurrentUrl(
+      resolvedStreamUrl,
+      phase: 'primary',
+    );
     if (!loaded) {
       if (loadFailureSuperseded || isSuperseded() || !isStillSelectedTarget()) {
         _releaseLog(
@@ -2607,10 +2614,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       resolvedStreamUrl = refreshedUrl;
       updatedItem = updatedItem.copyWith(
-        extras: {
-          ...?updatedItem.extras,
-          'streamUrl': resolvedStreamUrl,
-        },
+        extras: {...?updatedItem.extras, 'streamUrl': resolvedStreamUrl},
       );
       _mediaQueue[targetIndex] = updatedItem;
       mediaItem.add(updatedItem);
@@ -2621,7 +2625,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         phase: 'refresh_retry',
       );
       if (!loaded) {
-        if (loadFailureSuperseded || isSuperseded() || !isStillSelectedTarget()) {
+        if (loadFailureSuperseded ||
+            isSuperseded() ||
+            !isStillSelectedTarget()) {
           _releaseLog(
             'resolve:refresh_retry failed_superseded videoId=$videoId',
           );
@@ -3471,7 +3477,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'radio:auto_start wait_begin expectedIndex=$expectedIndex currentIndex=$_deferredStreamingQueueIndex',
       );
       final startedAt = DateTime.now();
-      while (DateTime.now().difference(startedAt) < const Duration(seconds: 6)) {
+      while (DateTime.now().difference(startedAt) <
+          const Duration(seconds: 6)) {
         if (!_deferredStreamingQueueMode || _mediaQueue.isEmpty) {
           _releaseLog('radio:auto_start abort mode_or_queue_changed');
           return;
@@ -4267,8 +4274,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           );
           _updateSleepTimer();
         } finally {
-          if (_manualDeferredSkipGeneration == requestGeneration) {
-          }
+          if (_manualDeferredSkipGeneration == requestGeneration) {}
         }
       }());
       return;
@@ -4285,8 +4291,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           );
           _updateSleepTimer();
         } finally {
-          if (_manualDeferredSkipGeneration == requestGeneration) {
-          }
+          if (_manualDeferredSkipGeneration == requestGeneration) {}
         }
       }());
     });
@@ -5167,7 +5172,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         );
         return {'ok': true, 'mode': 'direct'};
       } catch (e, st) {
-        _releaseLog('retryCurrentStream:direct_setUrl error videoId=$videoId error=$e');
+        _releaseLog(
+          'retryCurrentStream:direct_setUrl error videoId=$videoId error=$e',
+        );
         _releaseLog('retryCurrentStream:direct_setUrl stack=$st');
         return {'ok': false, 'reason': 'set_url_failed'};
       }
