@@ -33,6 +33,7 @@ import 'package:music/screens/onboarding/onboarding_screen.dart';
 import 'package:music/utils/theme_controller.dart';
 import 'package:music/utils/download_manager.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'dart:async';
 import 'package:terminate_restart/terminate_restart.dart';
 
@@ -351,6 +352,8 @@ class _MainNavRootState extends State<MainNavRoot> {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Backend de video más robusto (media_kit) manteniendo API de video_player.
+  VideoPlayerMediaKit.ensureInitialized(android: true);
   TerminateRestart.instance.initialize();
   await Hive.initFlutter();
   Hive.registerAdapter(PlaylistModelAdapter());

@@ -1875,6 +1875,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
         if (currentVersion != _loadVersion) return;
 
+        // En cola local, ocultar el loader tan pronto como la fuente queda lista.
+        // Esto evita esperar a que llegue el primer playbackEvent "playing/ready".
+        if (playLoadingNotifier.value) {
+          playLoadingNotifier.value = false;
+          _clearLocalPlayLoaderGuard();
+        }
+
         // Establecer el MediaItem actual inmediatamente
         if (initialIndex >= 0 && initialIndex < _mediaQueue.length) {
           final selectedMediaItem = _mediaQueue[initialIndex];
@@ -1967,6 +1974,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                 children: [firstSource],
               ),
             );
+            if (playLoadingNotifier.value) {
+              playLoadingNotifier.value = false;
+              _clearLocalPlayLoaderGuard();
+            }
             if (_mediaQueue.isNotEmpty) {
               mediaItem.add(_mediaQueue.first);
               playbackState.add(playbackState.value.copyWith(queueIndex: 0));
@@ -1983,6 +1994,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         _initializing = false;
         initializingNotifier.value = false;
         isQueueTransitioning.value = false;
+        if (playLoadingNotifier.value) {
+          playLoadingNotifier.value = false;
+          _clearLocalPlayLoaderGuard();
+        }
       }
     });
 

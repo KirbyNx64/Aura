@@ -223,6 +223,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   VideoPlayerController? _videoController;
   Timer? _videoSyncTimer;
   bool _videoSyncInProgress = false;
+  int _videoResolveRequestId = 0;
   DateTime? _lastVideoHardSyncAt;
   static const Duration _videoSyncInterval = Duration(milliseconds: 500);
   static const Duration _videoHardSyncMinInterval = Duration(seconds: 2);
@@ -630,8 +631,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       );
       return;
     }
+    final int requestId = ++_videoResolveRequestId;
     _videoLog(
-      'ensureVideoController:start mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh',
+      'ensureVideoController:start requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh',
     );
 
     final existing = _videoController;
@@ -649,6 +651,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     bool isRequestStillValid() {
       final current = audioHandler?.mediaItem.valueOrNull;
       return mounted &&
+          requestId == _videoResolveRequestId &&
           _isVideoModeActiveForItem(current) &&
           current?.id == mediaItem.id;
     }
@@ -669,7 +672,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       );
       if (!isRequestStillValid()) {
         _videoLog(
-          'ensureVideoController:stale_after_url mediaItem=${mediaItem.id} videoId=$videoId',
+          'ensureVideoController:stale_after_url requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId',
         );
         return;
       }
@@ -697,7 +700,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       );
       final selectedItag = _extractItagFromVideoUrl(videoUrl);
       _videoLog(
-        'ensureVideoController:initialize_begin mediaItem=${mediaItem.id} videoId=$videoId itag=${selectedItag ?? 'unknown'}',
+        'ensureVideoController:initialize_begin requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId itag=${selectedItag ?? 'unknown'}',
       );
       await controller.initialize().timeout(const Duration(seconds: 12));
       final value = controller.value;
@@ -705,17 +708,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       final height = value.size.height;
       final aspectRatio = height > 0 ? (width / height) : 0.0;
       _videoLog(
-        'ensureVideoController:initialize_result mediaItem=${mediaItem.id} videoId=$videoId itag=${selectedItag ?? 'unknown'} initialized=${value.isInitialized} hasError=${value.hasError} size=${width.toStringAsFixed(1)}x${height.toStringAsFixed(1)} ratio=${aspectRatio.toStringAsFixed(3)}',
+        'ensureVideoController:initialize_result requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId itag=${selectedItag ?? 'unknown'} initialized=${value.isInitialized} hasError=${value.hasError} size=${width.toStringAsFixed(1)}x${height.toStringAsFixed(1)} ratio=${aspectRatio.toStringAsFixed(3)}',
       );
-
-      // Caso reportado: algunos itag=18 muestran "glitch"/artefacto visual.
-      // Si es 18 y la imagen sale casi cuadrada, tratarlo como video no válido.
-      final isNearSquare = aspectRatio >= 0.92 && aspectRatio <= 1.08;
-      if (selectedItag == 18 && isNearSquare) {
-        throw StateError(
-          'AURA_VIDEO_UNAVAILABLE_GLITCH itag=18 size=${width.toStringAsFixed(1)}x${height.toStringAsFixed(1)}',
-        );
-      }
 
       await controller.setVolume(0);
       await controller.setLooping(false);
@@ -733,7 +727,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
       if (!isRequestStillValid()) {
         _videoLog(
-          'ensureVideoController:stale_after_init mediaItem=${mediaItem.id} videoId=$videoId',
+          'ensureVideoController:stale_after_init requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId',
         );
         await controller.dispose();
         return;
@@ -746,30 +740,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         _videoModeError = null;
       }, reason: 'video_controller_ready');
       _videoLog(
-        'ensureVideoController:success mediaItem=${mediaItem.id} videoId=$videoId',
+        'ensureVideoController:success requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId',
       );
       _startVideoSyncLoop();
     } catch (e) {
       _videoLog(
-        'ensureVideoController:error mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh error=$e',
-      );
-      final isGlitchUnavailable = e.toString().contains(
-        'AURA_VIDEO_UNAVAILABLE_GLITCH',
+        'ensureVideoController:error requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh error=$e',
       );
       if (!isRequestStillValid()) {
         _videoLog(
-          'ensureVideoController:error_stale mediaItem=${mediaItem.id} videoId=$videoId',
+          'ensureVideoController:error_stale requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId',
         );
-        return;
-      }
-      if (isGlitchUnavailable) {
-        _videoLog(
-          'ensureVideoController:glitch_unavailable mediaItem=${mediaItem.id} videoId=$videoId',
-        );
-        _setStateSafely(() {
-          _videoModeLoading = false;
-          _videoModeError = LocaleProvider.tr('video_unavailable');
-        }, reason: 'video_glitch_unavailable');
         return;
       }
       if (!forceRefresh) {
@@ -849,10 +830,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }
 
     final videoWidth = MediaQuery.of(context).size.width;
-    final rawVideoHeight = videoWidth * 9 / 16;
-    final videoHeight = rawVideoHeight > artworkSize
-        ? artworkSize
-        : rawVideoHeight;
+    final slotHeight = artworkSize;
 
     final controller = _videoController;
     if (_videoModeLoading ||
@@ -861,7 +839,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         _videoControllerSongId != mediaItem.id) {
       return Container(
         width: videoWidth,
-        height: artworkSize,
+        height: slotHeight,
         color: Colors.black,
         alignment: Alignment.center,
         child: _videoModeError != null
@@ -887,21 +865,46 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     return ClipRect(
       child: Container(
         width: videoWidth,
-        height: artworkSize,
+        height: slotHeight,
         color: Colors.black,
         alignment: Alignment.center,
-        child: SizedBox(
-          width: videoWidth,
-          height: videoHeight,
-          child: FittedBox(
-            fit: BoxFit.cover,
-            clipBehavior: Clip.hardEdge,
-            child: SizedBox(
-              width: controller.value.size.width,
-              height: controller.value.size.height,
-              child: VideoPlayer(controller),
-            ),
-          ),
+        child: Builder(
+          builder: (context) {
+            final rawWidth = controller.value.size.width;
+            final rawHeight = controller.value.size.height;
+            final safeWidth = rawWidth > 0 ? rawWidth : videoWidth;
+            final safeHeight = rawHeight > 0
+                ? rawHeight
+                : (videoWidth * 9 / 16);
+            final aspectRatio = safeWidth / safeHeight;
+
+            // Adaptar al tamaño real del video, manteniendo un slot fijo para
+            // que título/controles no cambien de posición.
+            double fittedWidth = videoWidth;
+            double fittedHeight = fittedWidth / aspectRatio;
+            if (fittedHeight > slotHeight) {
+              fittedHeight = slotHeight;
+              fittedWidth = fittedHeight * aspectRatio;
+            }
+            if (fittedWidth > videoWidth) {
+              fittedWidth = videoWidth;
+              fittedHeight = fittedWidth / aspectRatio;
+            }
+
+            return SizedBox(
+              width: fittedWidth,
+              height: fittedHeight,
+              child: FittedBox(
+                fit: BoxFit.contain,
+                clipBehavior: Clip.hardEdge,
+                child: SizedBox(
+                  width: safeWidth,
+                  height: safeHeight,
+                  child: VideoPlayer(controller),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
@@ -909,83 +912,102 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   Widget _buildPlayingFromTitle(MediaItem currentMediaItem) {
     final canVideo = _canEnableVideoForItem(currentMediaItem);
-    if (!canVideo) return const SizedBox.shrink();
+    final isVideoModeSelected = canVideo && _preferVideoMode;
+    final disabledOpacity = canVideo ? 1.0 : 0.66;
+    final selectedTextAlpha = canVideo ? 0.95 : 0.46;
+    final unselectedTextAlpha = canVideo ? 0.68 : 0.34;
 
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 170),
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: _preferVideoMode
-                  ? () => unawaited(_toggleVideoModeForItem(currentMediaItem))
-                  : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                decoration: BoxDecoration(
+    return Opacity(
+      opacity: disabledOpacity,
+      child: IgnorePointer(
+        ignoring: !canVideo,
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 170),
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: Theme.of(
+              context,
+            ).colorScheme.primary.withValues(alpha: 0.08),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Expanded(
+                child: InkWell(
                   borderRadius: BorderRadius.circular(999),
-                  color: !_preferVideoMode
-                      ? Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.10)
-                      : Colors.transparent,
-                ),
-                child: Text(
-                  LocaleProvider.tr('mode_song'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(
-                      alpha: !_preferVideoMode ? 0.95 : 0.68,
+                  onTap: isVideoModeSelected
+                      ? () =>
+                            unawaited(_toggleVideoModeForItem(currentMediaItem))
+                      : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: !isVideoModeSelected
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.10)
+                          : Colors.transparent,
+                    ),
+                    child: Text(
+                      LocaleProvider.tr('mode_song'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(
+                              alpha: !isVideoModeSelected
+                                  ? selectedTextAlpha
+                                  : unselectedTextAlpha,
+                            ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ),
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: !_preferVideoMode
-                  ? () => unawaited(_toggleVideoModeForItem(currentMediaItem))
-                  : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                decoration: BoxDecoration(
+              Expanded(
+                child: InkWell(
                   borderRadius: BorderRadius.circular(999),
-                  color: _preferVideoMode
-                      ? Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.10)
-                      : Colors.transparent,
-                ),
-                child: Text(
-                  LocaleProvider.tr('mode_video'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(
-                      alpha: _preferVideoMode ? 0.95 : 0.68,
+                  onTap: !isVideoModeSelected
+                      ? () =>
+                            unawaited(_toggleVideoModeForItem(currentMediaItem))
+                      : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: isVideoModeSelected
+                          ? Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.10)
+                          : Colors.transparent,
+                    ),
+                    child: Text(
+                      LocaleProvider.tr('mode_video'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface
+                            .withValues(
+                              alpha: isVideoModeSelected
+                                  ? selectedTextAlpha
+                                  : unselectedTextAlpha,
+                            ),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

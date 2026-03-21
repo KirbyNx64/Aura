@@ -14,6 +14,7 @@ import 'package:music/utils/db/download_history_model.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
+import 'package:music/utils/yt_search/stream_provider.dart';
 
 import 'package:share_plus/share_plus.dart';
 
@@ -51,6 +52,8 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
   int? _streamDurationMs;
   String? _streamDurationText;
   String? _streamArtworkUrl;
+  String? _streamVideoUrl;
+  bool _isResolvingVideoStreamUrl = false;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -102,6 +105,10 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
           _streamDurationMs = metadata.durationMs;
           _streamDurationText = metadata.durationText;
           _streamArtworkUrl = metadata.artworkUrl;
+          _streamVideoUrl = _firstNonEmpty([
+            _normalizeText(widget.mediaItem.extras?['videoStreamUrl']),
+            _normalizeText(widget.mediaItem.extras?['videoUrl']),
+          ]);
           _isLoading = false;
         });
         return;
@@ -132,6 +139,10 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
           _audioInfo = info;
           _downloadHistory = history;
           _videoId = _firstNonEmpty([extraVideoId, history?.videoId]);
+          _streamVideoUrl = _firstNonEmpty([
+            _normalizeText(widget.mediaItem.extras?['videoStreamUrl']),
+            _normalizeText(widget.mediaItem.extras?['videoUrl']),
+          ]);
           _isLoading = false;
         });
       }
@@ -470,6 +481,61 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     return 'https://www.youtube.com/watch?v=$videoId';
   }
 
+  Future<String?> _resolveVideoStreamUrl({bool forceRefresh = false}) async {
+    final cachedUrl = _normalizeText(_streamVideoUrl);
+    if (!forceRefresh && cachedUrl != null && cachedUrl.isNotEmpty) {
+      return cachedUrl;
+    }
+
+    final videoId = _firstNonEmpty([
+      _normalizeText(_videoId),
+      _extractVideoIdFromPath(_mediaPath()),
+      _extractVideoIdFromPath(widget.mediaItem.id),
+    ]);
+    if (videoId == null || videoId.isEmpty) return null;
+
+    if (mounted) {
+      setState(() {
+        _isResolvingVideoStreamUrl = true;
+      });
+    }
+
+    try {
+      final resolved = await StreamService.getBestVideoUrl(
+        videoId,
+        forceRefresh: forceRefresh,
+      );
+      if (!mounted) return resolved;
+      setState(() {
+        _streamVideoUrl = resolved;
+      });
+      return resolved;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResolvingVideoStreamUrl = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _copyVideoStreamUrl() async {
+    final resolved = await _resolveVideoStreamUrl();
+    if (!mounted) return;
+    if (resolved == null || resolved.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo resolver el stream de video')),
+      );
+      return;
+    }
+
+    await Clipboard.setData(ClipboardData(text: resolved));
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Stream de video copiado')));
+  }
+
   int? _durationMsFromMediaItem(MediaItem mediaItem) {
     final fromDuration = mediaItem.duration?.inMilliseconds;
     if (fromDuration != null && fromDuration > 0) return fromDuration;
@@ -537,7 +603,14 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     final mediaPath = _mediaPath();
     final resolvedVideoId = _normalizeText(_videoId);
     final hasVideoId = resolvedVideoId != null && resolvedVideoId.isNotEmpty;
-    final resolvedStreamUrl = _normalizeText(widget.mediaItem.extras?['streamUrl']);
+    final resolvedStreamUrl = _normalizeText(
+      widget.mediaItem.extras?['streamUrl'],
+    );
+    final resolvedVideoStreamUrl = _firstNonEmpty([
+      _normalizeText(_streamVideoUrl),
+      _normalizeText(widget.mediaItem.extras?['videoStreamUrl']),
+      _normalizeText(widget.mediaItem.extras?['videoUrl']),
+    ]);
     final resolvedArtworkUrl = _normalizeText(_streamArtworkUrl);
     final artworkUrlForInfoBox = (resolvedArtworkUrl != null)
         ? _artworkUrlForInfoBox(resolvedArtworkUrl)
@@ -1046,6 +1119,72 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                                     ClipboardData(text: resolvedStreamUrl),
                                   );
                                 },
+                                style: IconButton.styleFrom(
+                                  backgroundColor: colorScheme.primaryContainer,
+                                  foregroundColor:
+                                      colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (_isStreaming && hasVideoId) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isAmoled
+                            ? Colors.white.withAlpha(20)
+                            : isDark
+                            ? Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.06)
+                            : Theme.of(
+                                context,
+                              ).colorScheme.secondary.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Video Stream',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(color: colorScheme.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  resolvedVideoStreamUrl ??
+                                      (_isResolvingVideoStreamUrl
+                                          ? 'Resolviendo...'
+                                          : 'No resuelto'),
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(fontFamily: 'monospace'),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              IconButton(
+                                icon: _isResolvingVideoStreamUrl
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.copy, size: 20),
+                                onPressed: _isResolvingVideoStreamUrl
+                                    ? null
+                                    : _copyVideoStreamUrl,
                                 style: IconButton.styleFrom(
                                   backgroundColor: colorScheme.primaryContainer,
                                   foregroundColor:

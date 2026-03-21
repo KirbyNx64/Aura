@@ -184,6 +184,11 @@ Future<Map<String, dynamic>?> _resolveBestAudioStreamInfoInIsolate(
 class StreamService {
   static final Map<String, String?> _urlCache = {};
   static final Map<String, String?> _videoUrlCache = {};
+  // Cache de video habilitado para mejorar tiempos de arranque.
+  static const bool _disableVideoUrlCache = false;
+  // Perfil rápido: evitar bitrates muy altos para iniciar video más rápido.
+  static const int _videoFastStartTargetBitrate = 550000;
+  static const int _videoFastStartMinBitrate = 220000;
   static final Map<String, Future<String?>> _inFlightRequests = {};
   static final Map<String, String> _lastResolveErrorCodeByVideoId = {};
   static StreamCacheDB? _cacheDB;
@@ -615,7 +620,12 @@ class StreamService {
       'getBestVideoUrl:start videoId=$normalizedVideoId forceRefresh=$forceRefresh',
     );
 
-    if (forceRefresh) {
+    if (_disableVideoUrlCache) {
+      _videoUrlCache.remove(normalizedVideoId);
+      _videoLog(
+        'getBestVideoUrl:cache_disabled_temp videoId=$normalizedVideoId',
+      );
+    } else if (forceRefresh) {
       _videoUrlCache.remove(normalizedVideoId);
       _videoLog('getBestVideoUrl:cache invalidated videoId=$normalizedVideoId');
     } else {
@@ -648,35 +658,35 @@ class StreamService {
         'getBestVideoUrl:manifest videoId=$normalizedVideoId muxed=${manifest.muxed.length} videoOnly=${manifest.videoOnly.length} audioOnly=${manifest.audioOnly.length}',
       );
 
-      // 1) Preferir muxed MP4 (más compatible para render en video_player).
+      // Candidatos MP4 para video_player.
       final muxedMp4Candidates = manifest.muxed.where((stream) {
         return stream.container.name.toLowerCase().contains('mp4') ||
             stream.codec.mimeType.toLowerCase().contains('video/mp4');
       }).toList();
 
-      T selectByBitrate<T extends explode_video.StreamInfo>(
+      T selectByFastStartBitrate<T extends explode_video.StreamInfo>(
         List<T> candidates,
       ) {
         candidates.sort(
           (a, b) => a.bitrate.bitsPerSecond.compareTo(b.bitrate.bitsPerSecond),
         );
-        // Priorizamos fluidez sobre calidad para preview en pantalla.
-        // Tomar bitrate bajo/medio reduce cortes en redes móviles.
-        const int targetBitrate = 280000;
-        const int smoothCapBitrate = 650000;
-        final capped = candidates
-            .where((s) => s.bitrate.bitsPerSecond <= smoothCapBitrate)
-            .toList();
-        final pool = capped.isNotEmpty ? capped : candidates;
 
-        T selected = pool.first;
-        for (final stream in pool) {
-          if (stream.bitrate.bitsPerSecond >= targetBitrate) {
-            selected = stream;
-            break;
-          }
-        }
-        return selected;
+        // Preferir calidad media-baja para arranque rápido.
+        final inFastRange = candidates.where((stream) {
+          final bps = stream.bitrate.bitsPerSecond;
+          return bps >= _videoFastStartMinBitrate &&
+              bps <= _videoFastStartTargetBitrate;
+        }).toList();
+        if (inFastRange.isNotEmpty) return inFastRange.last;
+
+        // Si no hay en rango, elegir la más cercana por debajo del target.
+        final belowTarget = candidates.where((stream) {
+          return stream.bitrate.bitsPerSecond <= _videoFastStartTargetBitrate;
+        }).toList();
+        if (belowTarget.isNotEmpty) return belowTarget.last;
+
+        // Si todas son más altas, usar la más baja disponible.
+        return candidates.first;
       }
 
       String? selectedSource;
@@ -687,7 +697,7 @@ class StreamService {
         String source,
       ) {
         if (list.isEmpty) return null;
-        final selected = selectByBitrate<T>(list);
+        final selected = selectByFastStartBitrate<T>(list);
         final url = selected.url.toString();
         if (url.isEmpty) return null;
         selectedSource = source;
@@ -696,31 +706,74 @@ class StreamService {
         return url;
       }
 
-      String? url = pickUrlFrom<explode_video.MuxedStreamInfo>(
-        muxedMp4Candidates,
-        'muxed_mp4',
+      final videoOnlyMp4Candidates = manifest.videoOnly.where((stream) {
+        return stream.container.name.toLowerCase().contains('mp4') ||
+            stream.codec.mimeType.toLowerCase().contains('video/mp4');
+      }).toList();
+
+      bool isAvcCompatible(explode_video.StreamInfo stream) {
+        final codec = stream.codec.toString().toLowerCase();
+        return codec.contains('avc1') || codec.contains('h264');
+      }
+
+      final videoOnlyMp4AvcCandidates = videoOnlyMp4Candidates
+          .where(isAvcCompatible)
+          .toList();
+      final muxedMp4AvcCandidates = muxedMp4Candidates
+          .where(isAvcCompatible)
+          .toList();
+
+      _videoLog(
+        'getBestVideoUrl:candidates videoOnlyMp4=${videoOnlyMp4Candidates.length} videoOnlyAvc=${videoOnlyMp4AvcCandidates.length} muxedMp4=${muxedMp4Candidates.length} muxedAvc=${muxedMp4AvcCandidates.length}',
       );
 
-      // 2) Si no hay muxed MP4, intentar videoOnly MP4.
-      if (url == null) {
-        final videoOnlyMp4Candidates = manifest.videoOnly.where((stream) {
-          return stream.container.name.toLowerCase().contains('mp4') ||
-              stream.codec.mimeType.toLowerCase().contains('video/mp4');
-        }).toList();
-        url = pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
+      String? url;
+      if (forceRefresh) {
+        // Segundo intento: priorizar compatibilidad/arranque rápido.
+        url = pickUrlFrom<explode_video.MuxedStreamInfo>(
+          muxedMp4AvcCandidates,
+          'muxed_mp4_avc_retry',
+        );
+        url ??= pickUrlFrom<explode_video.MuxedStreamInfo>(
+          muxedMp4Candidates,
+          'muxed_mp4_retry',
+        );
+        url ??= pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
+          videoOnlyMp4AvcCandidates,
+          'video_only_mp4_avc_retry',
+        );
+        url ??= pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
           videoOnlyMp4Candidates,
-          'video_only_mp4',
+          'video_only_mp4_retry',
+        );
+      } else {
+        // Primer intento: arrancar rápido con stream muxed AVC (más compatible).
+        url = pickUrlFrom<explode_video.MuxedStreamInfo>(
+          muxedMp4AvcCandidates,
+          'muxed_mp4_avc_fast_start',
+        );
+        url ??= pickUrlFrom<explode_video.MuxedStreamInfo>(
+          muxedMp4Candidates,
+          'muxed_mp4_fast_start',
+        );
+        url ??= pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
+          videoOnlyMp4AvcCandidates,
+          'video_only_mp4_avc_fast_start',
+        );
+        url ??= pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
+          videoOnlyMp4Candidates,
+          'video_only_mp4_fast_start',
         );
       }
 
-      // 3) Último recurso: cualquier muxed, luego cualquier videoOnly.
-      url ??= pickUrlFrom<explode_video.MuxedStreamInfo>(
-        manifest.muxed.toList(),
-        'muxed_any',
-      );
+      // Último recurso.
       url ??= pickUrlFrom<explode_video.VideoOnlyStreamInfo>(
         manifest.videoOnly.toList(),
-        'video_only_any',
+        'video_only_any_highest',
+      );
+      url ??= pickUrlFrom<explode_video.MuxedStreamInfo>(
+        manifest.muxed.toList(),
+        'muxed_any_highest',
       );
 
       if (url == null || url.isEmpty) {
@@ -735,7 +788,9 @@ class StreamService {
       _videoLog(
         'getBestVideoUrl:selected videoId=$normalizedVideoId source=${selectedSource ?? 'unknown'} itag=${selectedTag ?? -1} bitrate=${selectedBitrate ?? -1} url=${url.length > 120 ? '${url.substring(0, 120)}...' : url}',
       );
-      _videoUrlCache[normalizedVideoId] = url;
+      if (!_disableVideoUrlCache) {
+        _videoUrlCache[normalizedVideoId] = url;
+      }
       return url;
     }
 
