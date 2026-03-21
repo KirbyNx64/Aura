@@ -1,5 +1,7 @@
 include: package:flutter_lints/flutter.yaml
 
 analyzer:
+  exclude:
+    - lib/utils/yt_search/explode_video/**
   errors:
     experimental_member_use: ignore
