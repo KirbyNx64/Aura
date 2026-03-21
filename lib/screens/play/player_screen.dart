@@ -484,6 +484,22 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     return null;
   }
 
+  int? _extractItagFromVideoUrl(String? rawUrl) {
+    final source = rawUrl?.trim();
+    if (source == null || source.isEmpty) return null;
+    try {
+      final parsed = Uri.tryParse(source);
+      final itagRaw = parsed?.queryParameters['itag'];
+      if (itagRaw != null && itagRaw.isNotEmpty) {
+        return int.tryParse(itagRaw);
+      }
+    } catch (_) {}
+
+    final match = RegExp(r'(?:^|[?&])itag=(\d+)').firstMatch(source);
+    if (match == null) return null;
+    return int.tryParse(match.group(1)!);
+  }
+
   Uri? _displayArtUriFor(MediaItem mediaItem) {
     final isStreaming = mediaItem.extras?['isStreaming'] == true;
     final rawDisplay = mediaItem.extras?['displayArtUri']?.toString().trim();
@@ -679,10 +695,28 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         Uri.parse(videoUrl),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
+      final selectedItag = _extractItagFromVideoUrl(videoUrl);
       _videoLog(
-        'ensureVideoController:initialize_begin mediaItem=${mediaItem.id} videoId=$videoId',
+        'ensureVideoController:initialize_begin mediaItem=${mediaItem.id} videoId=$videoId itag=${selectedItag ?? 'unknown'}',
       );
       await controller.initialize().timeout(const Duration(seconds: 12));
+      final value = controller.value;
+      final width = value.size.width;
+      final height = value.size.height;
+      final aspectRatio = height > 0 ? (width / height) : 0.0;
+      _videoLog(
+        'ensureVideoController:initialize_result mediaItem=${mediaItem.id} videoId=$videoId itag=${selectedItag ?? 'unknown'} initialized=${value.isInitialized} hasError=${value.hasError} size=${width.toStringAsFixed(1)}x${height.toStringAsFixed(1)} ratio=${aspectRatio.toStringAsFixed(3)}',
+      );
+
+      // Caso reportado: algunos itag=18 muestran "glitch"/artefacto visual.
+      // Si es 18 y la imagen sale casi cuadrada, tratarlo como video no válido.
+      final isNearSquare = aspectRatio >= 0.92 && aspectRatio <= 1.08;
+      if (selectedItag == 18 && isNearSquare) {
+        throw StateError(
+          'AURA_VIDEO_UNAVAILABLE_GLITCH itag=18 size=${width.toStringAsFixed(1)}x${height.toStringAsFixed(1)}',
+        );
+      }
+
       await controller.setVolume(0);
       await controller.setLooping(false);
 
@@ -719,10 +753,23 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       _videoLog(
         'ensureVideoController:error mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh error=$e',
       );
+      final isGlitchUnavailable = e.toString().contains(
+        'AURA_VIDEO_UNAVAILABLE_GLITCH',
+      );
       if (!isRequestStillValid()) {
         _videoLog(
           'ensureVideoController:error_stale mediaItem=${mediaItem.id} videoId=$videoId',
         );
+        return;
+      }
+      if (isGlitchUnavailable) {
+        _videoLog(
+          'ensureVideoController:glitch_unavailable mediaItem=${mediaItem.id} videoId=$videoId',
+        );
+        _setStateSafely(() {
+          _videoModeLoading = false;
+          _videoModeError = LocaleProvider.tr('video_unavailable');
+        }, reason: 'video_glitch_unavailable');
         return;
       }
       if (!forceRefresh) {
