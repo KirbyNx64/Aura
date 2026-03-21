@@ -120,26 +120,40 @@ class _StreamingArtworkState extends State<_StreamingArtwork> {
         return _buildFallback();
       }
 
-      return Image.file(
-        File(filePath),
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          _tryNextSource();
-          return _buildFallback();
-        },
+      return ColoredBox(
+        color: widget.backgroundColor,
+        child: SizedBox.expand(
+          child: Image.file(
+            File(filePath),
+            fit: BoxFit.cover,
+            width: double.infinity,
+            height: double.infinity,
+            errorBuilder: (context, error, stackTrace) {
+              _tryNextSource();
+              return _buildFallback();
+            },
+          ),
+        ),
       );
     }
 
-    return CachedNetworkImage(
-      imageUrl: currentSource,
-      fit: BoxFit.cover,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      placeholder: (context, url) => _buildFallback(),
-      errorWidget: (context, url, error) {
-        _tryNextSource();
-        return _buildFallback();
-      },
+    return ColoredBox(
+      color: widget.backgroundColor,
+      child: SizedBox.expand(
+        child: CachedNetworkImage(
+          imageUrl: currentSource,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholder: (context, url) => _buildFallback(),
+          errorWidget: (context, url, error) {
+            _tryNextSource();
+            return _buildFallback();
+          },
+        ),
+      ),
     );
   }
 }
@@ -3180,6 +3194,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: Stack(
+              fit: StackFit.expand,
               children: [
                 _StreamingArtwork(
                   sources: artworkSources,

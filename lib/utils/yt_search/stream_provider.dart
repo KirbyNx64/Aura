@@ -190,10 +190,12 @@ class StreamService {
   static const int _videoFastStartTargetBitrate = 550000;
   static const int _videoFastStartMinBitrate = 220000;
   static final Map<String, Future<String?>> _inFlightRequests = {};
+  static final Map<String, Future<String?>> _inFlightVideoRequests = {};
   static final Map<String, String> _lastResolveErrorCodeByVideoId = {};
   static StreamCacheDB? _cacheDB;
   static YoutubeExplode? _ytInstance;
   static int _resolveGeneration = 0;
+  static int _videoResolveGeneration = 0;
   static const int _maxPrefetchConcurrency = 8;
   static const Duration _urlExpirySafetyMargin = Duration(minutes: 5);
 
@@ -614,8 +616,10 @@ class StreamService {
     String videoId, {
     bool forceRefresh = false,
   }) async {
+    final int requestGeneration = _videoResolveGeneration;
     final normalizedVideoId = videoId.trim();
     if (normalizedVideoId.isEmpty) return null;
+    if (_isVideoResolveCancelled(requestGeneration)) return null;
     _videoLog(
       'getBestVideoUrl:start videoId=$normalizedVideoId forceRefresh=$forceRefresh',
     );
@@ -638,8 +642,19 @@ class StreamService {
       }
       _videoLog('getBestVideoUrl:cache_miss videoId=$normalizedVideoId');
     }
+    if (_isVideoResolveCancelled(requestGeneration)) return null;
+
+    if (!forceRefresh) {
+      final pending = _inFlightVideoRequests[normalizedVideoId];
+      if (pending != null) {
+        final resolvedPending = await pending;
+        if (_isVideoResolveCancelled(requestGeneration)) return null;
+        return resolvedPending;
+      }
+    }
 
     Future<String?> resolveOnce() async {
+      if (_isVideoResolveCancelled(requestGeneration)) return null;
       // Cliente dedicado para video preview: evita interferencia con
       // resoluciones concurrentes de audio y estados compartidos.
       _videoLog(
@@ -654,6 +669,7 @@ class StreamService {
           yt.close();
         } catch (_) {}
       }
+      if (_isVideoResolveCancelled(requestGeneration)) return null;
       _videoLog(
         'getBestVideoUrl:manifest videoId=$normalizedVideoId muxed=${manifest.muxed.length} videoOnly=${manifest.videoOnly.length} audioOnly=${manifest.audioOnly.length}',
       );
@@ -785,6 +801,7 @@ class StreamService {
         _videoLog('getBestVideoUrl:empty_result videoId=$normalizedVideoId');
         return null;
       }
+      if (_isVideoResolveCancelled(requestGeneration)) return null;
       _videoLog(
         'getBestVideoUrl:selected videoId=$normalizedVideoId source=${selectedSource ?? 'unknown'} itag=${selectedTag ?? -1} bitrate=${selectedBitrate ?? -1} url=${url.length > 120 ? '${url.substring(0, 120)}...' : url}',
       );
@@ -794,31 +811,46 @@ class StreamService {
       return url;
     }
 
-    try {
-      final resolved = await resolveOnce();
-      _videoLog(
-        'getBestVideoUrl:done videoId=$normalizedVideoId ok=${resolved != null && resolved.isNotEmpty}',
-      );
-      return resolved;
-    } catch (e) {
-      _videoLog('getBestVideoUrl:error videoId=$normalizedVideoId error=$e');
-      if (_shouldRecreateClient(e)) {
-        _videoLog('getBestVideoUrl:recreate_client videoId=$normalizedVideoId');
-        _recreateYoutubeExplode();
-        try {
-          final resolved = await resolveOnce();
-          _videoLog(
-            'getBestVideoUrl:retry_done videoId=$normalizedVideoId ok=${resolved != null && resolved.isNotEmpty}',
-          );
-          return resolved;
-        } catch (retryError) {
-          _videoLog(
-            'getBestVideoUrl:retry_error videoId=$normalizedVideoId error=$retryError',
-          );
-          return null;
+    final request = () async {
+      try {
+        final resolved = await resolveOnce();
+        if (_isVideoResolveCancelled(requestGeneration)) return null;
+        _videoLog(
+          'getBestVideoUrl:done videoId=$normalizedVideoId ok=${resolved != null && resolved.isNotEmpty}',
+        );
+        return resolved;
+      } catch (e) {
+        if (_isVideoResolveCancelled(requestGeneration)) return null;
+        _videoLog('getBestVideoUrl:error videoId=$normalizedVideoId error=$e');
+        if (_shouldRecreateClient(e)) {
+          _videoLog('getBestVideoUrl:recreate_client videoId=$normalizedVideoId');
+          _recreateYoutubeExplode();
+          try {
+            final resolved = await resolveOnce();
+            if (_isVideoResolveCancelled(requestGeneration)) return null;
+            _videoLog(
+              'getBestVideoUrl:retry_done videoId=$normalizedVideoId ok=${resolved != null && resolved.isNotEmpty}',
+            );
+            return resolved;
+          } catch (retryError) {
+            if (_isVideoResolveCancelled(requestGeneration)) return null;
+            _videoLog(
+              'getBestVideoUrl:retry_error videoId=$normalizedVideoId error=$retryError',
+            );
+            return null;
+          }
         }
+        return null;
       }
-      return null;
+    }();
+
+    _inFlightVideoRequests[normalizedVideoId] = request;
+    try {
+      final resolved = await request;
+      if (_isVideoResolveCancelled(requestGeneration)) return null;
+      return resolved;
+    } finally {
+      _inFlightVideoRequests.remove(normalizedVideoId);
     }
   }
 
@@ -826,6 +858,8 @@ class StreamService {
   static Future<void> close() async {
     await _cacheDB?.close();
     _cacheDB = null;
+    _inFlightRequests.clear();
+    _inFlightVideoRequests.clear();
     try {
       _ytInstance?.close();
     } catch (_) {}
@@ -836,13 +870,24 @@ class StreamService {
   static void cancelPendingResolves({bool resetClient = true}) {
     _resolveGeneration++;
     _inFlightRequests.clear();
+    cancelPendingVideoResolves();
     if (resetClient) {
       _recreateYoutubeExplode();
     }
   }
 
+  /// Cancela únicamente resoluciones de URL de video.
+  static void cancelPendingVideoResolves() {
+    _videoResolveGeneration++;
+    _inFlightVideoRequests.clear();
+  }
+
   static bool _isResolveCancelled(int requestGeneration) {
     return requestGeneration != _resolveGeneration;
+  }
+
+  static bool _isVideoResolveCancelled(int requestGeneration) {
+    return requestGeneration != _videoResolveGeneration;
   }
 
   static int? _extractExpireEpochSeconds(String streamUrl) {

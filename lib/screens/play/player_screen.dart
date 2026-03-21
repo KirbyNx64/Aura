@@ -221,13 +221,22 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   String? _videoModeError;
   String? _videoControllerSongId;
   VideoPlayerController? _videoController;
+  VideoPlayerController? _videoInitializingController;
   Timer? _videoSyncTimer;
+  Timer? _videoResolveDebounceTimer;
+  MediaItem? _videoResolvePendingItem;
   bool _videoSyncInProgress = false;
   int _videoResolveRequestId = 0;
+  final Expando<bool> _videoControllerDisposeRequested = Expando<bool>(
+    'videoControllerDisposeRequested',
+  );
   DateTime? _lastVideoHardSyncAt;
   static const Duration _videoSyncInterval = Duration(milliseconds: 500);
   static const Duration _videoHardSyncMinInterval = Duration(seconds: 2);
   static const int _videoHardSyncDriftMs = 1400;
+  static const Duration _videoResolveDebounceDelay = Duration(
+    milliseconds: 180,
+  );
 
   void _videoLog(String message) {
     // ignore: avoid_print
@@ -534,13 +543,87 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     return _preferVideoMode && _canEnableVideoForItem(mediaItem);
   }
 
+  VideoPlayerValue? _safeVideoValue(VideoPlayerController? controller) {
+    if (controller == null) return null;
+    try {
+      return controller.value;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isVideoControllerInitialized(VideoPlayerController? controller) {
+    final value = _safeVideoValue(controller);
+    return value?.isInitialized ?? false;
+  }
+
+  void _disposeVideoControllerSafely(
+    VideoPlayerController? controller, {
+    required String reason,
+  }) {
+    if (controller == null) return;
+    if (_videoControllerDisposeRequested[controller] == true) {
+      return;
+    }
+    _videoControllerDisposeRequested[controller] = true;
+    unawaited(() async {
+      try {
+        await controller.dispose();
+      } catch (e) {
+        _videoLog(
+          'disposeVideoControllerSafely:ignored_error reason=$reason error=$e',
+        );
+      }
+    }());
+  }
+
+  void _disposeInitializingVideoController() {
+    final controller = _videoInitializingController;
+    _videoInitializingController = null;
+    _disposeVideoControllerSafely(
+      controller,
+      reason: 'dispose_initializing_controller',
+    );
+  }
+
+  void _cancelPendingVideoResolve({bool cancelService = true}) {
+    _videoResolveDebounceTimer?.cancel();
+    _videoResolveDebounceTimer = null;
+    _videoResolvePendingItem = null;
+    _videoResolveRequestId++;
+    _disposeInitializingVideoController();
+    if (cancelService) {
+      StreamService.cancelPendingVideoResolves();
+    }
+  }
+
+  void _scheduleVideoResolveForItem(
+    MediaItem mediaItem, {
+    bool forceRefresh = false,
+    Duration delay = _videoResolveDebounceDelay,
+  }) {
+    _videoResolveDebounceTimer?.cancel();
+    _videoResolvePendingItem = mediaItem;
+    _videoResolveDebounceTimer = Timer(delay, () {
+      if (!mounted) return;
+      final pending = _videoResolvePendingItem;
+      _videoResolvePendingItem = null;
+      if (pending == null) return;
+      unawaited(
+        _ensureVideoControllerForItem(pending, forceRefresh: forceRefresh),
+      );
+    });
+  }
+
   void _disposeVideoController() {
+    _disposeInitializingVideoController();
     final controller = _videoController;
     _videoController = null;
     _videoControllerSongId = null;
-    if (controller != null) {
-      unawaited(controller.dispose());
-    }
+    _disposeVideoControllerSafely(
+      controller,
+      reason: 'dispose_active_controller',
+    );
   }
 
   void _stopVideoSyncLoop() {
@@ -565,7 +648,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (!_isVideoModeActiveForItem(currentMediaItem)) return;
 
     final controller = _videoController;
-    if (controller == null || !controller.value.isInitialized) return;
+    final initialVideoValue = _safeVideoValue(controller);
+    if (controller == null ||
+        initialVideoValue == null ||
+        !initialVideoValue.isInitialized) {
+      return;
+    }
 
     if (_videoControllerSongId != currentMediaItem!.id) {
       await _ensureVideoControllerForItem(currentMediaItem);
@@ -579,7 +667,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     try {
       final audioPlaying = playback.playing;
       final audioPosition = playback.position;
-      final videoValue = controller.value;
+      final videoValue = _safeVideoValue(controller);
+      if (videoValue == null || !videoValue.isInitialized) return;
       final videoPosition = videoValue.position;
 
       if (audioPlaying && !videoValue.isPlaying) {
@@ -639,7 +728,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final existing = _videoController;
     if (!forceRefresh &&
         existing != null &&
-        existing.value.isInitialized &&
+        _isVideoControllerInitialized(existing) &&
         _videoControllerSongId == mediaItem.id) {
       _videoLog(
         'ensureVideoController:reuse_initialized mediaItem=${mediaItem.id}',
@@ -647,6 +736,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       await _syncVideoToAudio();
       return;
     }
+
+    // Al cambiar rápido de canción, cancelar trabajo pendiente de video
+    // (debounce + resoluciones previas) para evitar jank acumulado.
+    _videoResolveDebounceTimer?.cancel();
+    _videoResolveDebounceTimer = null;
+    _videoResolvePendingItem = null;
+    _disposeInitializingVideoController();
+    StreamService.cancelPendingVideoResolves();
 
     bool isRequestStillValid() {
       final current = audioHandler?.mediaItem.valueOrNull;
@@ -663,6 +760,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       }, reason: 'video_loading_start');
     }
 
+    _stopVideoSyncLoop();
     _disposeVideoController();
 
     try {
@@ -698,12 +796,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         Uri.parse(videoUrl),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
+      _videoInitializingController = controller;
       final selectedItag = _extractItagFromVideoUrl(videoUrl);
       _videoLog(
         'ensureVideoController:initialize_begin requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId itag=${selectedItag ?? 'unknown'}',
       );
       await controller.initialize().timeout(const Duration(seconds: 12));
-      final value = controller.value;
+      final value = _safeVideoValue(controller);
+      if (value == null || !value.isInitialized) {
+        _videoLog(
+          'ensureVideoController:initialize_value_unavailable requestId=$requestId mediaItem=${mediaItem.id}',
+        );
+        return;
+      }
       final width = value.size.width;
       final height = value.size.height;
       final aspectRatio = height > 0 ? (width / height) : 0.0;
@@ -729,10 +834,19 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         _videoLog(
           'ensureVideoController:stale_after_init requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId',
         );
-        await controller.dispose();
+        if (identical(_videoInitializingController, controller)) {
+          _videoInitializingController = null;
+        }
+        _disposeVideoControllerSafely(
+          controller,
+          reason: 'dispose_stale_initialized_controller',
+        );
         return;
       }
 
+      if (identical(_videoInitializingController, controller)) {
+        _videoInitializingController = null;
+      }
       _setStateSafely(() {
         _videoController = controller;
         _videoControllerSongId = mediaItem.id;
@@ -744,6 +858,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       );
       _startVideoSyncLoop();
     } catch (e) {
+      _disposeInitializingVideoController();
       _videoLog(
         'ensureVideoController:error requestId=$requestId mediaItem=${mediaItem.id} videoId=$videoId forceRefresh=$forceRefresh error=$e',
       );
@@ -777,6 +892,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           _videoModeLoading = false;
         }, reason: 'video_toggle_unavailable');
       }
+      _cancelPendingVideoResolve();
       _stopVideoSyncLoop();
       _disposeVideoController();
       return;
@@ -792,18 +908,21 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     }, reason: 'video_toggle');
 
     if (!nextValue) {
+      _cancelPendingVideoResolve();
       _stopVideoSyncLoop();
       _disposeVideoController();
       return;
     }
 
     _stopVideoSyncLoop();
+    _cancelPendingVideoResolve(cancelService: false);
     await _ensureVideoControllerForItem(mediaItem);
   }
 
   void _handleVideoModeOnSongChange(MediaItem mediaItem) {
     if (!_preferVideoMode) return;
     if (!_canEnableVideoForItem(mediaItem)) {
+      _cancelPendingVideoResolve();
       _preferVideoMode = false;
       _videoModeLoading = false;
       _videoModeError = null;
@@ -811,7 +930,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       _disposeVideoController();
       return;
     }
-    unawaited(_ensureVideoControllerForItem(mediaItem));
+    _scheduleVideoResolveForItem(mediaItem);
   }
 
   Widget _buildArtworkOrVideo(MediaItem mediaItem, double artworkSize) {
@@ -833,9 +952,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final slotHeight = artworkSize;
 
     final controller = _videoController;
+    final controllerValue = _safeVideoValue(controller);
     if (_videoModeLoading ||
         controller == null ||
-        !controller.value.isInitialized ||
+        controllerValue == null ||
+        !controllerValue.isInitialized ||
         _videoControllerSongId != mediaItem.id) {
       return Container(
         width: videoWidth,
@@ -866,12 +987,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       child: Container(
         width: videoWidth,
         height: slotHeight,
-        color: Colors.black,
+        color: Colors.transparent,
         alignment: Alignment.center,
         child: Builder(
           builder: (context) {
-            final rawWidth = controller.value.size.width;
-            final rawHeight = controller.value.size.height;
+            final currentValue = _safeVideoValue(controller);
+            if (currentValue == null || !currentValue.isInitialized) {
+              return const SizedBox.shrink();
+            }
+            final rawWidth = currentValue.size.width;
+            final rawHeight = currentValue.size.height;
             final safeWidth = rawWidth > 0 ? rawWidth : videoWidth;
             final safeHeight = rawHeight > 0
                 ? rawHeight
@@ -1975,6 +2100,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _dragValueSecondsNotifier.dispose();
     _artworkLoadingNotifier.dispose();
     _lyricsUpdateNotifier.dispose();
+    _cancelPendingVideoResolve();
     _stopVideoSyncLoop();
     _disposeVideoController();
 
@@ -4109,18 +4235,22 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     final isAmoled = colorScheme == AppColorScheme.amoled;
                     final isDark =
                         Theme.of(context).brightness == Brightness.dark;
-                    final hideAmoledBlurForVideo =
-                        isAmoled && isDark && isVideoModeActive;
+                    final forceBlackBackgroundForVideo =
+                        isVideoModeActive && (isDark || isAmoled);
                     final showBackground =
                         isAmoled &&
                         isDark &&
                         useArtworkBg &&
-                        !hideAmoledBlurForVideo;
-                    final showDynamicBg = useDynamicBg && isAmoled && isDark;
+                        !forceBlackBackgroundForVideo;
+                    final showDynamicBg =
+                        useDynamicBg &&
+                        isAmoled &&
+                        isDark &&
+                        !forceBlackBackgroundForVideo;
                     final showOverlayBackground =
                         showBackground || showDynamicBg;
                     final useTransparentPlayerChrome =
-                        showOverlayBackground || hideAmoledBlurForVideo;
+                        showOverlayBackground || forceBlackBackgroundForVideo;
                     final isDynamicTheme =
                         colorScheme == AppColorScheme.dynamic;
 
@@ -4129,7 +4259,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                       // del panel de playlist. El fondo (blur/color) es costoso y causa lag.
                       child: Stack(
                         children: [
-                          // Capa base negra opaca (siempre visible para AMOLED o fondo dinámico)
+                          // Capa base negra opaca (fondo dinámico o modo video)
                           if (useTransparentPlayerChrome)
                             const Positioned.fill(
                               child: ColoredBox(color: Colors.black),

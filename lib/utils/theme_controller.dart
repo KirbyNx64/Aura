@@ -20,13 +20,22 @@ class ThemeController {
   /// ID de la canción para la cual ya se extrajo el color exitosamente
   String? _extractedSongId;
 
-  /// Flag para evitar procesamiento concurrente
-  bool _processing = false;
-
   Timer? _debounceTimer;
   MediaItem? _pendingMediaItem;
   String? _pendingSongId;
-  bool _retryPending = false;
+  int _requestSequence = 0;
+  int _latestRequestSequence = 0;
+  DateTime? _lastMediaItemChangeAt;
+
+  // Debounce adaptativo: rápido cuando el usuario se queda en una canción,
+  // un poco más largo cuando está saltando varias muy seguido.
+  static const Duration _songChangeDebounce = Duration(milliseconds: 90);
+  static const Duration _songChangeDebounceRapid = Duration(milliseconds: 170);
+  static const Duration _rapidSongChangeWindow = Duration(milliseconds: 420);
+  // Evita que la resolución de carátula bloquee demasiado la siguiente canción.
+  static const Duration _artworkResolveTimeout = Duration(milliseconds: 100);
+  // Limita el tiempo de extracción de paleta para mantener sensación fluida.
+  static const Duration _paletteExtractTimeout = Duration(milliseconds: 900);
 
   /// Suscripción al stream de mediaItem
   StreamSubscription<MediaItem?>? _subscription;
@@ -39,8 +48,15 @@ class ThemeController {
 
   /// Detiene la escucha
   void stopListening() {
+    _debounceTimer?.cancel();
+    _pendingMediaItem = null;
+    _pendingSongId = null;
     _subscription?.cancel();
     _subscription = null;
+  }
+
+  bool _isRequestCurrent(int requestSequence) {
+    return requestSequence == _latestRequestSequence;
   }
 
   void _onMediaItemChanged(MediaItem? mediaItem) {
@@ -59,50 +75,63 @@ class ThemeController {
     // Actualizar estado pendiente
     _pendingMediaItem = mediaItem;
     _pendingSongId = songId;
-    _retryPending = false;
 
-    // Iniciar nuevo timer (debounce de 300ms)
-    _debounceTimer = Timer(const Duration(milliseconds: 200), _processPending);
+    final now = DateTime.now();
+    final useRapidDebounce =
+        _lastMediaItemChangeAt != null &&
+        now.difference(_lastMediaItemChangeAt!) <= _rapidSongChangeWindow;
+    _lastMediaItemChangeAt = now;
+    final effectiveDebounce = useRapidDebounce
+        ? _songChangeDebounceRapid
+        : _songChangeDebounce;
+
+    // Iniciar nuevo timer (debounce corto con trailing update).
+    final requestSequence = ++_requestSequence;
+    _latestRequestSequence = requestSequence;
+    _debounceTimer = Timer(effectiveDebounce, () {
+      unawaited(_processPending(requestSequence));
+    });
   }
 
   /// Procesa la canción pendiente si es necesario
-  Future<void> _processPending() async {
-    if (_processing) {
-      _retryPending = true;
-      return;
-    }
-
+  Future<void> _processPending(int requestSequence) async {
+    if (!_isRequestCurrent(requestSequence)) return;
     final item = _pendingMediaItem;
     final id = _pendingSongId;
 
     if (item == null || id == null) return;
     if (id == _extractedSongId) return;
 
-    _processing = true;
-    try {
-      await _resolveAndExtract(item, id);
-    } finally {
-      _processing = false;
-      if (_retryPending) {
-        _retryPending = false;
-        _processPending();
-      }
-    }
+    await _resolveAndExtract(item, id, requestSequence);
   }
 
   /// Resuelve la imagen de la carátula y extrae el color
-  Future<void> _resolveAndExtract(MediaItem mediaItem, String songId) async {
-    // La guardia _processing ahora se maneja en _processPending
-
+  Future<void> _resolveAndExtract(
+    MediaItem mediaItem,
+    String songId,
+    int requestSequence,
+  ) async {
+    if (!_isRequestCurrent(requestSequence)) return;
     ImageProvider? imageProvider;
 
-    // 1. Intentar desde artUri del mediaItem
+    // 1. Intentar desde displayArtUri (suele ser más rápido y estable para stream).
+    final displayArtRaw = mediaItem.extras?['displayArtUri']?.toString().trim();
+    if (displayArtRaw != null && displayArtRaw.isNotEmpty) {
+      final displayArtUri = Uri.tryParse(displayArtRaw);
+      if (displayArtUri != null) {
+        imageProvider = _providerFromUri(displayArtUri);
+      }
+    }
+
+    // 2. Intentar desde artUri del mediaItem
     final artUri = mediaItem.artUri;
-    if (artUri != null) {
+    if (imageProvider == null && artUri != null) {
       imageProvider = _providerFromUri(artUri);
     }
 
-    // 2. Intentar desde artworkCache global
+    if (!_isRequestCurrent(requestSequence)) return;
+
+    // 3. Intentar desde artworkCache global
     if (imageProvider == null) {
       final songPath = mediaItem.extras?['data'] as String?;
       if (songPath != null) {
@@ -111,7 +140,7 @@ class ThemeController {
           imageProvider = _providerFromUri(cachedUri);
         }
 
-        // 3. Si aún no hay imagen, cargarla con getOrCacheArtwork
+        // 4. Si aún no hay imagen, cargarla con getOrCacheArtwork
         if (imageProvider == null) {
           final songIdInt = mediaItem.extras?['songId'] as int?;
           if (songIdInt != null) {
@@ -119,7 +148,8 @@ class ThemeController {
               final uri = await getOrCacheArtwork(
                 songIdInt,
                 songPath,
-              ).timeout(const Duration(seconds: 3));
+              ).timeout(_artworkResolveTimeout);
+              if (!_isRequestCurrent(requestSequence)) return;
               if (uri != null) {
                 imageProvider = _providerFromUri(uri);
               }
@@ -129,8 +159,8 @@ class ThemeController {
       }
     }
 
-    if (imageProvider != null) {
-      await _extractColor(imageProvider, songId);
+    if (imageProvider != null && _isRequestCurrent(requestSequence)) {
+      await _extractColor(imageProvider, songId, requestSequence);
     }
   }
 
@@ -151,9 +181,12 @@ class ThemeController {
   }
 
   /// Extrae el color dominante de la imagen
-  Future<void> _extractColor(ImageProvider imageProvider, String songId) async {
-    // La guardia y estado _processing se manejan en _processPending
-
+  Future<void> _extractColor(
+    ImageProvider imageProvider,
+    String songId,
+    int requestSequence,
+  ) async {
+    if (!_isRequestCurrent(requestSequence)) return;
     try {
       final generator = await PaletteGeneratorMaster.fromImageProvider(
         ResizeImage(imageProvider, height: 50, width: 50),
@@ -162,7 +195,9 @@ class ThemeController {
           (HSLColor hsl) => hsl.lightness > 0.12 && hsl.lightness < 0.75,
           avoidRedBlackWhitePaletteFilterMaster,
         ],
-      );
+      ).timeout(_paletteExtractTimeout);
+
+      if (!_isRequestCurrent(requestSequence)) return;
 
       final paletteColor =
           generator.dominantColor ??
