@@ -619,6 +619,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               // clear()/stop()/dispose durante swaps y fallback puede disparar
               // completed artificiales; no debemos forzar pausa ahí.
               if (_isSwappingSource) return;
+              // Si hay un skip manual diferido en curso, ignorar este completed.
+              // Evita que se programe un segundo next por carrera de eventos.
+              if (_manualDeferredSkipGeneration != 0 &&
+                  _manualDeferredSkipGeneration == _resolveGeneration) {
+                _releaseLog(
+                  'resolve:completed ignored_manual_skip generation=$_resolveGeneration index=$_deferredStreamingQueueIndex',
+                );
+                return;
+              }
 
               final nextIndex = _nextDeferredQueueIndex();
               if (nextIndex != null) {
@@ -4289,7 +4298,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           );
           _updateSleepTimer();
         } finally {
-          if (_manualDeferredSkipGeneration == requestGeneration) {}
+          if (_manualDeferredSkipGeneration == requestGeneration) {
+            _manualDeferredSkipGeneration = 0;
+          }
         }
       }());
       return;
@@ -4306,7 +4317,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           );
           _updateSleepTimer();
         } finally {
-          if (_manualDeferredSkipGeneration == requestGeneration) {}
+          if (_manualDeferredSkipGeneration == requestGeneration) {
+            _manualDeferredSkipGeneration = 0;
+          }
         }
       }());
     });

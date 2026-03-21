@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:audio_service/audio_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:music/main.dart'
     show
@@ -149,10 +150,162 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
     return null;
   }
 
+  String _currentStreamingCoverQuality() {
+    final quality = coverQualityNotifier.value;
+    if (quality == 'high' ||
+        quality == 'medium' ||
+        quality == 'medium_low' ||
+        quality == 'low') {
+      return quality;
+    }
+    return 'medium';
+  }
+
+  String _ytThumbFileForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 'sddefault.jpg';
+      case 'medium_low':
+        return 'hqdefault.jpg';
+      case 'low':
+        return 'hqdefault.jpg';
+      default:
+        return 'maxresdefault.jpg';
+    }
+  }
+
+  String _googleThumbSizeForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 's600';
+      case 'medium_low':
+        return 's450';
+      case 'low':
+        return 's300';
+      default:
+        return 's1200';
+    }
+  }
+
+  String? _extractVideoIdFromMediaItem(MediaItem mediaItem) {
+    final extras = mediaItem.extras;
+    final candidates = <String?>[
+      extras?['videoId']?.toString(),
+      extras?['ytVideoId']?.toString(),
+      extras?['youtubeId']?.toString(),
+    ];
+
+    for (final candidate in candidates) {
+      final value = candidate?.trim();
+      if (value != null && value.isNotEmpty) {
+        return value;
+      }
+    }
+
+    final id = mediaItem.id.trim();
+    if (id.startsWith('yt:')) {
+      final normalized = id.substring(3).trim();
+      if (normalized.isNotEmpty) {
+        return normalized;
+      }
+    }
+
+    final uri = Uri.tryParse(id);
+    if (uri != null) {
+      final queryVideoId = uri.queryParameters['v']?.trim();
+      if (queryVideoId != null && queryVideoId.isNotEmpty) {
+        return queryVideoId;
+      }
+      if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+        final shortId = uri.pathSegments.first.trim();
+        if (shortId.isNotEmpty) {
+          return shortId;
+        }
+      }
+    }
+
+    final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+    if (idLike.hasMatch(id)) {
+      return id;
+    }
+
+    return null;
+  }
+
+  String? _applyStreamingArtworkQuality(String? rawUrl, {String? videoId}) {
+    final normalized = rawUrl?.trim();
+    if (normalized == null || normalized.isEmpty || normalized == 'null') {
+      return null;
+    }
+
+    final quality = _currentStreamingCoverQuality();
+    final lower = normalized.toLowerCase();
+
+    if (lower.contains('googleusercontent.com')) {
+      final size = _googleThumbSizeForQuality(quality);
+      final replaced = normalized.replaceFirst(RegExp(r'=s\d+\b'), '=$size');
+      if (replaced != normalized) return replaced;
+
+      final eqIndex = normalized.lastIndexOf('=');
+      if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+        final suffix = normalized.substring(eqIndex + 1);
+        if (!suffix.contains('/')) {
+          return '${normalized.substring(0, eqIndex + 1)}$size';
+        }
+      }
+      return '$normalized=$size';
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) return normalized;
+
+    final host = uri.host.toLowerCase();
+    if (!host.contains('ytimg.com') && !host.contains('img.youtube.com')) {
+      return normalized;
+    }
+
+    final qualityFile = _ytThumbFileForQuality(quality);
+    final qualityWebp = qualityFile.replaceAll('.jpg', '.webp');
+    final segments = List<String>.from(uri.pathSegments);
+
+    if (segments.isNotEmpty) {
+      final last = segments.last.toLowerCase();
+      final isKnownThumb =
+          last.contains('maxresdefault') ||
+          last.contains('sddefault') ||
+          last.contains('hqdefault') ||
+          last.contains('mqdefault');
+      if (isKnownThumb) {
+        final useWebp = last.endsWith('.webp');
+        segments[segments.length - 1] = useWebp ? qualityWebp : qualityFile;
+        return uri.replace(pathSegments: segments).toString();
+      }
+    }
+
+    final id = videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$id/$qualityFile';
+    }
+
+    return normalized;
+  }
+
   Uri? _displayArtUriFor(MediaItem item) {
-    final raw = item.extras?['displayArtUri']?.toString().trim();
+    final isStreaming = item.extras?['isStreaming'] == true;
+    final rawDisplay = item.extras?['displayArtUri']?.toString().trim();
+    final rawArt = item.artUri?.toString().trim();
+    final raw = (rawDisplay != null && rawDisplay.isNotEmpty)
+        ? rawDisplay
+        : rawArt;
+
     if (raw != null && raw.isNotEmpty) {
-      final parsed = Uri.tryParse(raw);
+      final normalizedRaw = isStreaming
+          ? _applyStreamingArtworkQuality(
+              raw,
+              videoId: _extractVideoIdFromMediaItem(item),
+            )
+          : raw;
+      final parsed = Uri.tryParse(normalizedRaw ?? raw);
       if (parsed != null) return parsed;
     }
     return item.artUri;
@@ -193,14 +346,16 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
       }
 
       if (scheme == 'http' || scheme == 'https') {
-        return Image.network(
-          artUri.toString(),
+        return CachedNetworkImage(
+          imageUrl: artUri.toString(),
           width: 50,
           height: 50,
           fit: BoxFit.cover,
-          alignment: Alignment.center,
-          cacheWidth: 200,
-          errorBuilder: (context, error, stackTrace) {
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          placeholder: (context, url) =>
+              _buildOverlayArtworkPlaceholder(context),
+          errorWidget: (context, url, error) {
             return _buildOverlayArtworkPlaceholder(context);
           },
         );
@@ -285,7 +440,7 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
       }
       // Si es una URL de red, usar NetworkImage
       else if (scheme == 'http' || scheme == 'https') {
-        imageProvider = NetworkImage(artUri.toString());
+        imageProvider = CachedNetworkImageProvider(artUri.toString());
       }
     }
 

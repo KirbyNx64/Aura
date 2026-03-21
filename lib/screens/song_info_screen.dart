@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_audio_toolkit/flutter_audio_toolkit.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +15,6 @@ import 'package:music/utils/db/download_history_model.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
-import 'package:music/utils/yt_search/stream_provider.dart';
 
 import 'package:share_plus/share_plus.dart';
 
@@ -52,8 +52,6 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
   int? _streamDurationMs;
   String? _streamDurationText;
   String? _streamArtworkUrl;
-  String? _streamVideoUrl;
-  bool _isResolvingVideoStreamUrl = false;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -105,10 +103,6 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
           _streamDurationMs = metadata.durationMs;
           _streamDurationText = metadata.durationText;
           _streamArtworkUrl = metadata.artworkUrl;
-          _streamVideoUrl = _firstNonEmpty([
-            _normalizeText(widget.mediaItem.extras?['videoStreamUrl']),
-            _normalizeText(widget.mediaItem.extras?['videoUrl']),
-          ]);
           _isLoading = false;
         });
         return;
@@ -139,10 +133,6 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
           _audioInfo = info;
           _downloadHistory = history;
           _videoId = _firstNonEmpty([extraVideoId, history?.videoId]);
-          _streamVideoUrl = _firstNonEmpty([
-            _normalizeText(widget.mediaItem.extras?['videoStreamUrl']),
-            _normalizeText(widget.mediaItem.extras?['videoUrl']),
-          ]);
           _isLoading = false;
         });
       }
@@ -481,59 +471,130 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     return 'https://www.youtube.com/watch?v=$videoId';
   }
 
-  Future<String?> _resolveVideoStreamUrl({bool forceRefresh = false}) async {
-    final cachedUrl = _normalizeText(_streamVideoUrl);
-    if (!forceRefresh && cachedUrl != null && cachedUrl.isNotEmpty) {
-      return cachedUrl;
+  String _currentStreamingCoverQuality() {
+    final quality = coverQualityNotifier.value;
+    if (quality == 'high' ||
+        quality == 'medium' ||
+        quality == 'medium_low' ||
+        quality == 'low') {
+      return quality;
     }
+    return 'medium';
+  }
 
-    final videoId = _firstNonEmpty([
-      _normalizeText(_videoId),
-      _extractVideoIdFromPath(_mediaPath()),
-      _extractVideoIdFromPath(widget.mediaItem.id),
-    ]);
-    if (videoId == null || videoId.isEmpty) return null;
-
-    if (mounted) {
-      setState(() {
-        _isResolvingVideoStreamUrl = true;
-      });
-    }
-
-    try {
-      final resolved = await StreamService.getBestVideoUrl(
-        videoId,
-        forceRefresh: forceRefresh,
-      );
-      if (!mounted) return resolved;
-      setState(() {
-        _streamVideoUrl = resolved;
-      });
-      return resolved;
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isResolvingVideoStreamUrl = false;
-        });
-      }
+  String _ytThumbFileForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 'sddefault.jpg';
+      case 'medium_low':
+        return 'hqdefault.jpg';
+      case 'low':
+        return 'hqdefault.jpg';
+      default:
+        return 'maxresdefault.jpg';
     }
   }
 
-  Future<void> _copyVideoStreamUrl() async {
-    final resolved = await _resolveVideoStreamUrl();
-    if (!mounted) return;
-    if (resolved == null || resolved.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo resolver el stream de video')),
-      );
-      return;
+  String _googleThumbSizeForQuality(String quality) {
+    switch (quality) {
+      case 'medium':
+        return 's600';
+      case 'medium_low':
+        return 's450';
+      case 'low':
+        return 's300';
+      default:
+        return 's1200';
+    }
+  }
+
+  String? _resolvedArtworkVideoId() {
+    return _firstNonEmpty([
+      _normalizeText(_videoId),
+      _normalizeText(widget.mediaItem.extras?['videoId']),
+      _extractVideoIdFromPath(_mediaPath()),
+      _extractVideoIdFromPath(widget.mediaItem.id),
+    ]);
+  }
+
+  String? _applyStreamingArtworkQuality(String? rawUrl, {String? videoId}) {
+    final normalized = rawUrl?.trim();
+    if (normalized == null || normalized.isEmpty || normalized == 'null') {
+      return null;
     }
 
-    await Clipboard.setData(ClipboardData(text: resolved));
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Stream de video copiado')));
+    final quality = _currentStreamingCoverQuality();
+    final lower = normalized.toLowerCase();
+
+    if (lower.contains('googleusercontent.com')) {
+      final size = _googleThumbSizeForQuality(quality);
+      final replaced = normalized.replaceFirst(RegExp(r'=s\d+\b'), '=$size');
+      if (replaced != normalized) return replaced;
+
+      final eqIndex = normalized.lastIndexOf('=');
+      if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+        final suffix = normalized.substring(eqIndex + 1);
+        if (!suffix.contains('/')) {
+          return '${normalized.substring(0, eqIndex + 1)}$size';
+        }
+      }
+      return '$normalized=$size';
+    }
+
+    final uri = Uri.tryParse(normalized);
+    if (uri == null) return normalized;
+
+    final host = uri.host.toLowerCase();
+    if (!host.contains('ytimg.com') && !host.contains('img.youtube.com')) {
+      return normalized;
+    }
+
+    final qualityFile = _ytThumbFileForQuality(quality);
+    final qualityWebp = qualityFile.replaceAll('.jpg', '.webp');
+    final segments = List<String>.from(uri.pathSegments);
+
+    if (segments.isNotEmpty) {
+      final last = segments.last.toLowerCase();
+      final isKnownThumb =
+          last.contains('maxresdefault') ||
+          last.contains('sddefault') ||
+          last.contains('hqdefault') ||
+          last.contains('mqdefault');
+      if (isKnownThumb) {
+        final useWebp = last.endsWith('.webp');
+        segments[segments.length - 1] = useWebp ? qualityWebp : qualityFile;
+        return uri.replace(pathSegments: segments).toString();
+      }
+    }
+
+    final id = videoId?.trim();
+    if (id != null && id.isNotEmpty) {
+      return 'https://i.ytimg.com/vi/$id/$qualityFile';
+    }
+
+    return normalized;
+  }
+
+  Uri? _displayArtUriForSongInfo() {
+    final isStreamingItem = _isStreaming || _isStreamingMediaItem();
+    final raw = _firstNonEmpty([
+      _normalizeText(_streamArtworkUrl),
+      _normalizeText(widget.mediaItem.extras?['displayArtUri']),
+      _normalizeText(widget.mediaItem.extras?['artUri']),
+      _normalizeText(widget.mediaItem.artUri?.toString()),
+    ]);
+
+    if (raw != null && raw.isNotEmpty) {
+      final normalizedRaw = isStreamingItem
+          ? _applyStreamingArtworkQuality(
+              raw,
+              videoId: _resolvedArtworkVideoId(),
+            )
+          : raw;
+      final parsed = Uri.tryParse(normalizedRaw ?? raw);
+      if (parsed != null) return parsed;
+    }
+    return widget.mediaItem.artUri;
   }
 
   int? _durationMsFromMediaItem(MediaItem mediaItem) {
@@ -569,30 +630,11 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
   }
 
   String _artworkUrlForInfoBox(String rawUrl) {
-    final normalized = rawUrl.trim();
-    if (normalized.isEmpty) return normalized;
-
-    final lower = normalized.toLowerCase();
-    if (!lower.contains('googleusercontent.com')) {
-      return normalized;
-    }
-
-    const targetSize = 's1200';
-    final replaced = normalized.replaceFirst(
-      RegExp(r'=s\d+\b'),
-      '=$targetSize',
-    );
-    if (replaced != normalized) return replaced;
-
-    final eqIndex = normalized.lastIndexOf('=');
-    if (eqIndex != -1 && eqIndex < normalized.length - 1) {
-      final suffix = normalized.substring(eqIndex + 1);
-      if (!suffix.contains('/')) {
-        return '${normalized.substring(0, eqIndex + 1)}$targetSize';
-      }
-    }
-
-    return '$normalized=$targetSize';
+    return _applyStreamingArtworkQuality(
+          rawUrl,
+          videoId: _resolvedArtworkVideoId(),
+        ) ??
+        rawUrl.trim();
   }
 
   @override
@@ -606,11 +648,6 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     final resolvedStreamUrl = _normalizeText(
       widget.mediaItem.extras?['streamUrl'],
     );
-    final resolvedVideoStreamUrl = _firstNonEmpty([
-      _normalizeText(_streamVideoUrl),
-      _normalizeText(widget.mediaItem.extras?['videoStreamUrl']),
-      _normalizeText(widget.mediaItem.extras?['videoUrl']),
-    ]);
     final resolvedArtworkUrl = _normalizeText(_streamArtworkUrl);
     final artworkUrlForInfoBox = (resolvedArtworkUrl != null)
         ? _artworkUrlForInfoBox(resolvedArtworkUrl)
@@ -1131,72 +1168,6 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
                       ),
                     ),
                   ],
-                  if (_isStreaming && hasVideoId) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: isAmoled
-                            ? Colors.white.withAlpha(20)
-                            : isDark
-                            ? Theme.of(
-                                context,
-                              ).colorScheme.secondary.withValues(alpha: 0.06)
-                            : Theme.of(
-                                context,
-                              ).colorScheme.secondary.withValues(alpha: 0.07),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Video Stream',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(color: colorScheme.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  resolvedVideoStreamUrl ??
-                                      (_isResolvingVideoStreamUrl
-                                          ? 'Resolviendo...'
-                                          : 'No resuelto'),
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(fontFamily: 'monospace'),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              IconButton(
-                                icon: _isResolvingVideoStreamUrl
-                                    ? const SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Icon(Icons.copy, size: 20),
-                                onPressed: _isResolvingVideoStreamUrl
-                                    ? null
-                                    : _copyVideoStreamUrl,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: colorScheme.primaryContainer,
-                                  foregroundColor:
-                                      colorScheme.onPrimaryContainer,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                   if (_isStreaming &&
                       artworkUrlForInfoBox != null &&
                       artworkUrlForInfoBox.isNotEmpty) ...[
@@ -1345,13 +1316,14 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     songId ??= int.tryParse(widget.mediaItem.id);
 
     final filePath = _mediaPath();
+    final displayArtUri = _displayArtUriForSongInfo();
 
     // If we have valid songId and path, use ArtworkListTile which handles caching/loading
     if (songId != null && filePath.isNotEmpty) {
       return ArtworkListTile(
         songId: songId,
         songPath: filePath,
-        artUri: widget.mediaItem.artUri,
+        artUri: displayArtUri,
         size: size,
         width: size,
         height: size,
@@ -1360,7 +1332,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
     }
 
     // Fallback logic
-    final artUri = widget.mediaItem.artUri;
+    final artUri = displayArtUri;
     if (artUri != null) {
       if (artUri.scheme == 'file') {
         return ClipRRect(
@@ -1376,12 +1348,15 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
       } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
         return ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: Image.network(
-            artUri.toString(),
+          child: CachedNetworkImage(
+            imageUrl: artUri.toString(),
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => _buildPlaceholder(size),
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            placeholder: (context, url) => _buildPlaceholder(size),
+            errorWidget: (context, url, error) => _buildPlaceholder(size),
           ),
         );
       }
