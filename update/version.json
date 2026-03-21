@@ -5,5 +5,5 @@
     "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.3/AuraMusic-v2.0.3-armeabi-v7a.apk",
     "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.3/AuraMusic-v2.0.3-x86_64.apk"
   },
-  "changelog": "• Se añadió una nueva función para reproducir videos de canciones vía streaming. Ten en cuenta que no todas las canciones cuentan con video musical disponible.\n\n• Se aplicaron mejoras visuales en la interfaz.\n\n• Se implementaron optimizaciones internas y se corrigieron errores menores."
+  "changelog": "• Se añadió una nueva función para reproducir videos de canciones vía streaming. Ten en cuenta que no todas las canciones cuentan con video musical disponible.\n\n• Se aplicaron mejoras visuales en la interfaz.\n\n• Se implementaron optimizaciones internas y se corrigieron errores menores.\n\n• Se eliminó el ecualizador debido a problemas de incompatibilidad. Esta función se encontraba en fase experimental y provocaba errores en el motor de audio de Android."
 }
