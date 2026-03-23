@@ -588,6 +588,7 @@ const Map<String, String> appLocalizationsEs = {
   // Home screen
   'recent': 'Recientes',
   'playlists': 'Listas de reproducción',
+  'yt_auto_generated_playlist': 'Playlist autogenerada',
   'recent_playlists': 'Listas de reproducción recientes',
   'no_recent_playlists': 'No hay listas de reproducción recientes.',
   'quick_pick_songs': 'selección rápida',
@@ -616,6 +617,17 @@ const Map<String, String> appLocalizationsEs = {
   'search_artist_on_youtube': 'Buscar artista en YouTube',
   'search_artist_on_youtube_music': 'Buscar artista en YouTube Music',
   'search_artist': 'Buscar Artista',
+  'login': 'Iniciar sesión',
+  'yt_music_login': 'Cuenta de YouTube',
+  'yt_music_login_desc':
+      'Conecta tu cuenta para ver las listas de reproducción de tu biblioteca',
+  'yt_music_loading_session': 'Cargando sesión...',
+  'yt_music_session_active': 'Sesión activa',
+  'yt_music_session_saved': 'Sesión de YouTube guardada',
+  'yt_music_session_removed': 'Sesión de YouTube eliminada',
+  'yt_music_logout': 'Cerrar sesión de YouTube Music',
+  'yt_music_logout_confirm':
+      '¿Estás seguro de que quieres cerrar sesión de YouTube Music?',
   'quick_access': 'Accesos directos',
   'no_songs_to_show': 'No hay canciones para mostrar aún.',
   'quick_pick': 'Selección rápida',

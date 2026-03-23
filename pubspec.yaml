@@ -43,6 +43,7 @@ dependencies:
   open_file: ^3.5.11
   smooth_page_indicator: ^2.0.1
   carousel_slider: ^5.1.2
+  flutter_inappwebview: ^6.1.5
   android_intent_plus: ^6.0.0
   package_info_plus: ^9.0.0
   ota_update: ^7.1.0
@@ -63,6 +64,7 @@ dependencies:
   image: ^4.8.0
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
+  crypto: ^3.0.7
   material_loading_indicator: ^1.0.0
   flutter_m3shapes: ^1.0.0+2
   material_symbols_icons: ^4.2906.0

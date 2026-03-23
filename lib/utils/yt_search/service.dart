@@ -1,5 +1,8 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 import 'package:dio/dio.dart';
+import 'package:crypto/crypto.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../l10n/locale_provider.dart';
 
@@ -11,6 +14,72 @@ const fixedParms =
     '?prettyPrint=false&alt=json&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-WEYFDNX30';
 const userAgent =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36';
+const bool _ytLibraryDebugLogs = true;
+String? _cachedVisitorId;
+bool _visitorIdLoadAttempted = false;
+
+void _ytLibLog(String message) {
+  if (!_ytLibraryDebugLogs) return;
+  developer.log(message, name: 'YT-LIB');
+}
+
+String _cookieDebugSummary(String? cookieHeader) {
+  final raw = cookieHeader?.trim();
+  if (raw == null || raw.isEmpty) return 'none';
+  final names = raw
+      .split(';')
+      .map((entry) => entry.trim())
+      .where((entry) => entry.isNotEmpty && entry.contains('='))
+      .map((entry) => entry.substring(0, entry.indexOf('=')))
+      .toList();
+  final preview = names.take(6).join(',');
+  final suffix = names.length > 6 ? ',...' : '';
+  return 'len=${raw.length}, names=[$preview$suffix]';
+}
+
+String? _getCookieValueByName(String? cookieHeader, String cookieName) {
+  final raw = cookieHeader?.trim();
+  if (raw == null || raw.isEmpty) return null;
+  final target = cookieName.trim().toLowerCase();
+  if (target.isEmpty) return null;
+
+  for (final part in raw.split(';')) {
+    final entry = part.trim();
+    if (entry.isEmpty || !entry.contains('=')) continue;
+    final separator = entry.indexOf('=');
+    if (separator <= 0) continue;
+    final name = entry.substring(0, separator).trim().toLowerCase();
+    if (name != target) continue;
+    final value = entry.substring(separator + 1).trim();
+    if (value.isEmpty) return null;
+    return value;
+  }
+  return null;
+}
+
+String? _extractSapisidFromCookieHeader(String? cookieHeader) {
+  final secure3p = _getCookieValueByName(cookieHeader, '__Secure-3PAPISID');
+  if (secure3p != null && secure3p.isNotEmpty) return secure3p;
+
+  final sapisid = _getCookieValueByName(cookieHeader, 'SAPISID');
+  if (sapisid != null && sapisid.isNotEmpty) return sapisid;
+
+  final apisid = _getCookieValueByName(cookieHeader, 'APISID');
+  if (apisid != null && apisid.isNotEmpty) return apisid;
+
+  return null;
+}
+
+String? _buildSapisidAuthorization(String? cookieHeader, {String? origin}) {
+  final sapisid = _extractSapisidFromCookieHeader(cookieHeader);
+  if (sapisid == null || sapisid.isEmpty) return null;
+
+  final normalizedOrigin = (origin ?? domain).replaceFirst(RegExp(r'/$'), '');
+  final unixTimestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final input = '$unixTimestamp $sapisid $normalizedOrigin';
+  final digest = sha1.convert(utf8.encode(input)).toString();
+  return 'SAPISIDHASH ${unixTimestamp}_$digest';
+}
 
 final Map<String, String> headers = {
   'user-agent': userAgent,
@@ -19,12 +88,184 @@ final Map<String, String> headers = {
   'content-type': 'application/json',
   'content-encoding': 'gzip',
   'origin': domain,
-  'cookie': 'CONSENT=YES+1',
+  'cookie': 'SOCS=CAI; CONSENT=YES+1',
 };
+
+const String _ytAuthCookieHeaderPrefKey = 'yt_music_auth_cookie_header_v1';
+String? _cachedYtAuthCookieHeader;
+
+String? _normalizeCookieHeader(String? rawCookieHeader) {
+  final raw = rawCookieHeader?.trim();
+  if (raw == null || raw.isEmpty) return null;
+
+  final parts = raw
+      .split(';')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty && e.contains('='))
+      .toList();
+  if (parts.isEmpty) return null;
+
+  final normalizedByName = <String, String>{};
+  for (final part in parts) {
+    final separator = part.indexOf('=');
+    if (separator <= 0) continue;
+    final name = part.substring(0, separator).trim();
+    final value = part.substring(separator + 1).trim();
+    if (name.isEmpty || value.isEmpty) continue;
+    normalizedByName[name] = value;
+  }
+
+  if (normalizedByName.isEmpty) return null;
+  return normalizedByName.entries
+      .map((entry) => '${entry.key}=${entry.value}')
+      .join('; ');
+}
+
+String _composeCookieHeader(String? authCookieHeader) {
+  final baseCookie = headers['cookie']?.trim() ?? '';
+  final auth = _normalizeCookieHeader(authCookieHeader);
+  if (auth == null || auth.isEmpty) return baseCookie;
+
+  if (auth.contains('CONSENT=')) {
+    return auth;
+  }
+  if (baseCookie.isEmpty) return auth;
+  return '$baseCookie; $auth';
+}
+
+Map<String, String> _buildRequestHeaders({String? authCookieHeader}) {
+  final requestHeaders = Map<String, String>.from(headers);
+  if (_cachedVisitorId != null && _cachedVisitorId!.trim().isNotEmpty) {
+    requestHeaders['x-goog-visitor-id'] = _cachedVisitorId!.trim();
+  }
+  requestHeaders['cookie'] = _composeCookieHeader(authCookieHeader);
+  final origin = domain.replaceFirst(RegExp(r'/$'), '');
+  final authorization = _buildSapisidAuthorization(
+    authCookieHeader,
+    origin: origin,
+  );
+  if (authorization != null && authorization.isNotEmpty) {
+    requestHeaders['authorization'] = authorization;
+    requestHeaders['x-origin'] = origin;
+    requestHeaders['x-goog-authuser'] = '0';
+    requestHeaders['referer'] = '$origin/';
+  }
+  return requestHeaders;
+}
+
+Future<void> _ensureVisitorIdLoaded() async {
+  if (_visitorIdLoadAttempted) return;
+  _visitorIdLoadAttempted = true;
+
+  try {
+    final dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 8),
+        receiveTimeout: const Duration(seconds: 12),
+      ),
+    );
+    final response = await dio.get<String>(
+      domain,
+      options: Options(
+        headers: {
+          'user-agent': userAgent,
+          'accept':
+              'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      ),
+    );
+    final html = response.data ?? '';
+    if (html.isEmpty) {
+      _ytLibLog('_ensureVisitorIdLoaded no html response');
+      return;
+    }
+
+    final matches = RegExp(
+      r'ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;',
+      dotAll: true,
+    ).allMatches(html);
+    for (final match in matches) {
+      final jsonChunk = match.group(1);
+      if (jsonChunk == null || jsonChunk.isEmpty) continue;
+      try {
+        final parsed = jsonDecode(jsonChunk);
+        if (parsed is Map && parsed['VISITOR_DATA'] is String) {
+          final visitor = (parsed['VISITOR_DATA'] as String).trim();
+          if (visitor.isNotEmpty) {
+            _cachedVisitorId = visitor;
+            _ytLibLog(
+              '_ensureVisitorIdLoaded visitorId loaded len=${visitor.length}',
+            );
+            return;
+          }
+        }
+      } catch (_) {
+        // Continuar con el siguiente bloque ytcfg.
+      }
+    }
+    _ytLibLog('_ensureVisitorIdLoaded visitorId not found in ytcfg');
+  } catch (e) {
+    _ytLibLog('_ensureVisitorIdLoaded exception: $e');
+  }
+}
+
+String _buildCurrentClientVersion() {
+  final nowUtc = DateTime.now().toUtc();
+  final year = nowUtc.year.toString().padLeft(4, '0');
+  final month = nowUtc.month.toString().padLeft(2, '0');
+  final day = nowUtc.day.toString().padLeft(2, '0');
+  return '1.$year$month$day.01.00';
+}
+
+Future<String?> getYtMusicAuthCookieHeader() async {
+  if (_cachedYtAuthCookieHeader != null) return _cachedYtAuthCookieHeader;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_ytAuthCookieHeaderPrefKey);
+    _cachedYtAuthCookieHeader = _normalizeCookieHeader(raw);
+    _ytLibLog(
+      'getYtMusicAuthCookieHeader loaded: ${_cookieDebugSummary(_cachedYtAuthCookieHeader)}',
+    );
+    return _cachedYtAuthCookieHeader;
+  } catch (_) {
+    _ytLibLog('getYtMusicAuthCookieHeader failed to load cookie');
+    return null;
+  }
+}
+
+Future<void> setYtMusicAuthCookieHeader(String rawCookieHeader) async {
+  final normalized = _normalizeCookieHeader(rawCookieHeader);
+  final prefs = await SharedPreferences.getInstance();
+  if (normalized == null || normalized.isEmpty) {
+    await prefs.remove(_ytAuthCookieHeaderPrefKey);
+    _cachedYtAuthCookieHeader = null;
+    return;
+  }
+  await prefs.setString(_ytAuthCookieHeaderPrefKey, normalized);
+  _cachedYtAuthCookieHeader = normalized;
+}
+
+Future<void> clearYtMusicAuthCookieHeader() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove(_ytAuthCookieHeaderPrefKey);
+  _cachedYtAuthCookieHeader = null;
+}
+
+Future<bool> hasYtMusicAuthCookieHeader() async {
+  final cookie = await getYtMusicAuthCookieHeader();
+  final hasCookie = cookie != null && cookie.trim().isNotEmpty;
+  _ytLibLog(
+    'hasYtMusicAuthCookieHeader -> $hasCookie (${_cookieDebugSummary(cookie)})',
+  );
+  return hasCookie;
+}
 
 final Map<String, dynamic> ytServiceContext = {
   'context': {
-    'client': {"clientName": "WEB_REMIX", "clientVersion": "1.20230213.01.00"},
+    'client': {
+      "clientName": "WEB_REMIX",
+      "clientVersion": _buildCurrentClientVersion(),
+    },
     'user': {},
   },
 };
@@ -45,6 +286,621 @@ class YtMusicResult {
     this.durationText,
     this.durationMs,
   });
+}
+
+class YtMusicLibraryPlaylist {
+  final String playlistId;
+  final String title;
+  final String? author;
+  final String? thumbUrl;
+  final String? countText;
+  final int? trackCount;
+
+  const YtMusicLibraryPlaylist({
+    required this.playlistId,
+    required this.title,
+    this.author,
+    this.thumbUrl,
+    this.countText,
+    this.trackCount,
+  });
+}
+
+void _collectMapsByKey(
+  dynamic node,
+  String key,
+  List<Map<String, dynamic>> out,
+) {
+  if (node == null) return;
+  if (node is Map) {
+    final value = node[key];
+    if (value is Map<String, dynamic>) {
+      out.add(value);
+    } else if (value is Map) {
+      out.add(Map<String, dynamic>.from(value));
+    }
+    for (final child in node.values) {
+      _collectMapsByKey(child, key, out);
+    }
+    return;
+  }
+  if (node is List) {
+    for (final child in node) {
+      _collectMapsByKey(child, key, out);
+    }
+  }
+}
+
+int? _parseCountFromText(String? text) {
+  final normalized = text?.trim();
+  if (normalized == null || normalized.isEmpty) return null;
+  final match = RegExp(r'(\d[\d\.,]*)').firstMatch(normalized);
+  if (match == null) return null;
+  final digits = match.group(1)?.replaceAll(RegExp(r'[^0-9]'), '');
+  if (digits == null || digits.isEmpty) return null;
+  return int.tryParse(digits);
+}
+
+String? _extractPlaylistIdFromTwoRowRenderer(Map<String, dynamic> renderer) {
+  String? browseId = nav(renderer, [
+    'title',
+    'runs',
+    0,
+    'navigationEndpoint',
+    'browseEndpoint',
+    'browseId',
+  ])?.toString();
+
+  browseId ??= nav(renderer, [
+    'overlay',
+    'musicItemThumbnailOverlayRenderer',
+    'content',
+    'musicPlayButtonRenderer',
+    'playNavigationEndpoint',
+    'watchPlaylistEndpoint',
+    'playlistId',
+  ])?.toString();
+
+  browseId ??= nav(renderer, [
+    'overlay',
+    'musicItemThumbnailOverlayRenderer',
+    'content',
+    'musicPlayButtonRenderer',
+    'playNavigationEndpoint',
+    'watchEndpoint',
+    'playlistId',
+  ])?.toString();
+
+  final menuItems = nav(renderer, ['menu', 'menuRenderer', 'items']);
+  if ((browseId == null || browseId.isEmpty) && menuItems is List) {
+    for (final raw in menuItems) {
+      if (raw is! Map) continue;
+      final menuRenderer = raw['menuNavigationItemRenderer'];
+      if (menuRenderer is! Map) continue;
+
+      final endpoint = menuRenderer['navigationEndpoint'];
+      if (endpoint is! Map) continue;
+
+      final fromBrowse = nav(endpoint, [
+        'browseEndpoint',
+        'browseId',
+      ])?.toString().trim();
+      if (fromBrowse != null && fromBrowse.isNotEmpty) {
+        browseId = fromBrowse;
+        break;
+      }
+
+      final fromWatchPlaylist = nav(endpoint, [
+        'watchPlaylistEndpoint',
+        'playlistId',
+      ])?.toString().trim();
+      if (fromWatchPlaylist != null && fromWatchPlaylist.isNotEmpty) {
+        browseId = fromWatchPlaylist;
+        break;
+      }
+
+      final fromWatch = nav(endpoint, [
+        'watchEndpoint',
+        'playlistId',
+      ])?.toString().trim();
+      if (fromWatch != null && fromWatch.isNotEmpty) {
+        browseId = fromWatch;
+        break;
+      }
+    }
+  }
+
+  final raw = browseId?.trim();
+  if (raw == null || raw.isEmpty) return null;
+  if (raw.startsWith('VL')) {
+    final trimmed = raw.substring(2).trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+  return raw;
+}
+
+YtMusicLibraryPlaylist? _parseLibraryPlaylistRenderer(
+  Map<String, dynamic> renderer,
+) {
+  final pageType = nav(renderer, [
+    'title',
+    'runs',
+    0,
+    'navigationEndpoint',
+    'browseEndpoint',
+    'browseEndpointContextSupportedConfigs',
+    'browseEndpointContextMusicConfig',
+    'pageType',
+  ])?.toString();
+  if (pageType != null &&
+      pageType.isNotEmpty &&
+      !pageType.contains('PLAYLIST')) {
+    return null;
+  }
+
+  final playlistId = _extractPlaylistIdFromTwoRowRenderer(renderer);
+  if (playlistId == null || playlistId.isEmpty) return null;
+
+  final title =
+      nav(renderer, ['title', 'runs', 0, 'text'])?.toString().trim() ??
+      nav(renderer, ['title', 'simpleText'])?.toString().trim();
+  if (title == null || title.isEmpty) return null;
+
+  dynamic thumbnails = nav(renderer, [
+    'thumbnailRenderer',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  thumbnails ??= nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  thumbnails ??= nav(renderer, [
+    'thumbnail',
+    'croppedSquareThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+
+  String? thumbUrl;
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    final rawThumb = thumbnails.last['url']?.toString().trim();
+    if (rawThumb != null && rawThumb.isNotEmpty) {
+      thumbUrl = _cleanThumbnailUrl(rawThumb, highQuality: true);
+    }
+  }
+
+  final subtitleRuns = nav(renderer, ['subtitle', 'runs']);
+  String? countText;
+  int? trackCount;
+  String? author;
+
+  if (subtitleRuns is List) {
+    for (final rawRun in subtitleRuns) {
+      if (rawRun is! Map) continue;
+      final text = rawRun['text']?.toString().trim();
+      if (text == null || text.isEmpty || text == '•' || text == '·') {
+        continue;
+      }
+
+      final lower = text.toLowerCase();
+      if (countText == null &&
+          (lower.contains('song') ||
+              lower.contains('track') ||
+              lower.contains('video') ||
+              lower.contains('canci') ||
+              lower.contains('tema'))) {
+        countText = text;
+        trackCount = _parseCountFromText(text) ?? trackCount;
+      }
+
+      if (author == null && rawRun['navigationEndpoint'] is Map) {
+        final browseId = nav(rawRun, [
+          'navigationEndpoint',
+          'browseEndpoint',
+          'browseId',
+        ])?.toString();
+        if (browseId != null &&
+            browseId.isNotEmpty &&
+            (browseId.startsWith('UC') || browseId.startsWith('MPLA'))) {
+          author = text;
+        }
+      }
+    }
+  }
+
+  return YtMusicLibraryPlaylist(
+    playlistId: playlistId,
+    title: title,
+    author: author,
+    thumbUrl: thumbUrl,
+    countText: countText,
+    trackCount: trackCount,
+  );
+}
+
+YtMusicLibraryPlaylist? _parseLibraryPlaylistResponsiveRenderer(
+  Map<String, dynamic> renderer,
+) {
+  String? browseId = nav(renderer, [
+    'flexColumns',
+    0,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+    0,
+    'navigationEndpoint',
+    'browseEndpoint',
+    'browseId',
+  ])?.toString();
+
+  browseId ??= nav(renderer, [
+    'overlay',
+    'musicItemThumbnailOverlayRenderer',
+    'content',
+    'musicPlayButtonRenderer',
+    'playNavigationEndpoint',
+    'watchPlaylistEndpoint',
+    'playlistId',
+  ])?.toString();
+
+  final normalizedBrowseId = browseId?.trim();
+  if (normalizedBrowseId == null || normalizedBrowseId.isEmpty) return null;
+  final playlistId = normalizedBrowseId.startsWith('VL')
+      ? normalizedBrowseId.substring(2)
+      : normalizedBrowseId;
+  if (playlistId.isEmpty) return null;
+
+  final title =
+      nav(renderer, [
+        'flexColumns',
+        0,
+        'musicResponsiveListItemFlexColumnRenderer',
+        'text',
+        'runs',
+        0,
+        'text',
+      ])?.toString().trim() ??
+      nav(renderer, [
+        'flexColumns',
+        0,
+        'musicResponsiveListItemFlexColumnRenderer',
+        'text',
+        'simpleText',
+      ])?.toString().trim();
+  if (title == null || title.isEmpty) return null;
+
+  dynamic thumbnails = nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  thumbnails ??= nav(renderer, [
+    'thumbnail',
+    'croppedSquareThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  String? thumbUrl;
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    final rawThumb = thumbnails.last['url']?.toString().trim();
+    if (rawThumb != null && rawThumb.isNotEmpty) {
+      thumbUrl = _cleanThumbnailUrl(rawThumb, highQuality: true);
+    }
+  }
+
+  final subtitleRuns = nav(renderer, [
+    'flexColumns',
+    1,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+  ]);
+  String? countText;
+  int? trackCount;
+  String? author;
+  if (subtitleRuns is List) {
+    for (final rawRun in subtitleRuns) {
+      if (rawRun is! Map) continue;
+      final text = rawRun['text']?.toString().trim();
+      if (text == null || text.isEmpty || text == '•' || text == '·') {
+        continue;
+      }
+
+      final lower = text.toLowerCase();
+      if (countText == null &&
+          (lower.contains('song') ||
+              lower.contains('track') ||
+              lower.contains('video') ||
+              lower.contains('canci') ||
+              lower.contains('tema'))) {
+        countText = text;
+        trackCount = _parseCountFromText(text) ?? trackCount;
+      }
+
+      if (author == null && rawRun['navigationEndpoint'] is Map) {
+        final artistId = nav(rawRun, [
+          'navigationEndpoint',
+          'browseEndpoint',
+          'browseId',
+        ])?.toString();
+        if (artistId != null &&
+            artistId.isNotEmpty &&
+            (artistId.startsWith('UC') || artistId.startsWith('MPLA'))) {
+          author = text;
+        }
+      }
+    }
+  }
+
+  return YtMusicLibraryPlaylist(
+    playlistId: playlistId,
+    title: title,
+    author: author,
+    thumbUrl: thumbUrl,
+    countText: countText,
+    trackCount: trackCount,
+  );
+}
+
+String? _extractLibraryPlaylistsContinuationToken(dynamic response) {
+  final direct =
+      nav(response, [
+        'continuationContents',
+        'gridContinuation',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]) ??
+      nav(response, [
+        'continuationContents',
+        'musicShelfContinuation',
+        'continuations',
+        0,
+        'nextContinuationData',
+        'continuation',
+      ]) ??
+      nav(response, [
+        'onResponseReceivedActions',
+        0,
+        'appendContinuationItemsAction',
+        'continuationItems',
+        0,
+        'continuationItemRenderer',
+        'continuationEndpoint',
+        'continuationCommand',
+        'token',
+      ]);
+  final normalized = direct?.toString().trim();
+  if (normalized == null || normalized.isEmpty) return null;
+  return normalized;
+}
+
+List<YtMusicLibraryPlaylist> _parseLibraryPlaylists(dynamic response) {
+  final renderers = <Map<String, dynamic>>[];
+  _collectMapsByKey(response, 'musicTwoRowItemRenderer', renderers);
+
+  final responsiveRenderers = <Map<String, dynamic>>[];
+  _collectMapsByKey(
+    response,
+    'musicResponsiveListItemRenderer',
+    responsiveRenderers,
+  );
+
+  final parsed = <YtMusicLibraryPlaylist>[];
+  final seenIds = <String>{};
+
+  for (final renderer in renderers) {
+    final playlist = _parseLibraryPlaylistRenderer(renderer);
+    if (playlist == null) continue;
+    if (!seenIds.add(playlist.playlistId)) continue;
+    parsed.add(playlist);
+  }
+
+  for (final renderer in responsiveRenderers) {
+    final playlist = _parseLibraryPlaylistResponsiveRenderer(renderer);
+    if (playlist == null) continue;
+    if (!seenIds.add(playlist.playlistId)) continue;
+    parsed.add(playlist);
+  }
+
+  return parsed;
+}
+
+String? _normalizeAccountAvatarUrl(String? rawUrl) {
+  final trimmed = rawUrl?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  final withScheme = trimmed.startsWith('//') ? 'https:$trimmed' : trimmed;
+  if (!withScheme.startsWith('http')) return null;
+  return _cleanThumbnailUrl(withScheme);
+}
+
+String? _extractAccountAvatarUrl(dynamic response) {
+  final urls = <String>[];
+
+  void collect(dynamic node) {
+    if (node is Map) {
+      for (final entry in node.entries) {
+        final key = entry.key.toString().toLowerCase();
+        final value = entry.value;
+        if (key == 'url' && value is String) {
+          final lower = value.toLowerCase();
+          if (lower.contains('yt3.ggpht.com') ||
+              lower.contains('googleusercontent.com') ||
+              lower.contains('ggpht.com')) {
+            urls.add(value);
+          }
+        }
+        collect(value);
+      }
+      return;
+    }
+    if (node is List) {
+      for (final child in node) {
+        collect(child);
+      }
+    }
+  }
+
+  collect(response);
+  for (final raw in urls) {
+    final normalized = _normalizeAccountAvatarUrl(raw);
+    if (normalized == null || normalized.isEmpty) continue;
+    return normalized;
+  }
+  return null;
+}
+
+Future<List<YtMusicLibraryPlaylist>> getLibraryPlaylists({
+  int? limit = 100,
+}) async {
+  final data = {...ytServiceContext, 'browseId': 'FEmusic_liked_playlists'};
+  final all = <YtMusicLibraryPlaylist>[];
+  final seenIds = <String>{};
+  final visitedTokens = <String>{};
+
+  try {
+    final authCookie = await getYtMusicAuthCookieHeader();
+    _ytLibLog(
+      'getLibraryPlaylists start: limit=$limit, auth=${_cookieDebugSummary(authCookie)}',
+    );
+
+    final firstRequest = await sendRequest('browse', data);
+    final firstResponse = firstRequest.data;
+    _ytLibLog(
+      'getLibraryPlaylists first request status=${firstRequest.statusCode}',
+    );
+    final debugTwoRow = <Map<String, dynamic>>[];
+    _collectMapsByKey(firstResponse, 'musicTwoRowItemRenderer', debugTwoRow);
+    final debugResponsive = <Map<String, dynamic>>[];
+    _collectMapsByKey(
+      firstResponse,
+      'musicResponsiveListItemRenderer',
+      debugResponsive,
+    );
+    _ytLibLog(
+      'getLibraryPlaylists first renderer counts: twoRow=${debugTwoRow.length}, responsive=${debugResponsive.length}',
+    );
+
+    final firstPage = _parseLibraryPlaylists(firstResponse);
+    _ytLibLog('getLibraryPlaylists first parsed count=${firstPage.length}');
+    for (final playlist in firstPage) {
+      if (!seenIds.add(playlist.playlistId)) continue;
+      all.add(playlist);
+      if (limit != null && all.length >= limit) {
+        _ytLibLog(
+          'getLibraryPlaylists done by limit on first page: ${all.length}',
+        );
+        return all.take(limit).toList();
+      }
+    }
+
+    String? nextToken = _extractLibraryPlaylistsContinuationToken(
+      firstResponse,
+    );
+    _ytLibLog(
+      'getLibraryPlaylists first continuation present=${nextToken != null && nextToken.isNotEmpty}',
+    );
+    while (nextToken != null &&
+        nextToken.isNotEmpty &&
+        visitedTokens.add(nextToken)) {
+      final encoded = Uri.encodeQueryComponent(nextToken);
+      final continuationRequest = await sendRequest(
+        'browse',
+        data,
+        additionalParams: '&ctoken=$encoded&continuation=$encoded',
+      );
+      final continuationResponse = continuationRequest.data;
+      _ytLibLog(
+        'getLibraryPlaylists continuation status=${continuationRequest.statusCode}, tokenLen=${nextToken.length}',
+      );
+
+      final page = _parseLibraryPlaylists(continuationResponse);
+      _ytLibLog('getLibraryPlaylists continuation parsed count=${page.length}');
+      if (page.isEmpty) break;
+
+      for (final playlist in page) {
+        if (!seenIds.add(playlist.playlistId)) continue;
+        all.add(playlist);
+        if (limit != null && all.length >= limit) {
+          _ytLibLog(
+            'getLibraryPlaylists done by limit with continuations: ${all.length}',
+          );
+          return all.take(limit).toList();
+        }
+      }
+
+      nextToken = _extractLibraryPlaylistsContinuationToken(
+        continuationResponse,
+      );
+    }
+    _ytLibLog('getLibraryPlaylists done: total=${all.length}');
+  } catch (e) {
+    _ytLibLog('getLibraryPlaylists exception while loading playlists: $e');
+    return all;
+  }
+
+  return all;
+}
+
+Future<String?> getYtMusicAccountAvatarUrl() async {
+  String? parseAvatar(dynamic response) {
+    final direct = nav(response, [
+      'actions',
+      0,
+      'openPopupAction',
+      'popup',
+      'multiPageMenuRenderer',
+      'header',
+      'activeAccountHeaderRenderer',
+      'accountPhoto',
+      'thumbnails',
+      0,
+      'url',
+    ])?.toString();
+    final normalizedDirect = _normalizeAccountAvatarUrl(direct);
+    if (normalizedDirect != null && normalizedDirect.isNotEmpty) {
+      return normalizedDirect;
+    }
+    return _extractAccountAvatarUrl(response);
+  }
+
+  try {
+    final response = (await sendRequest('account/account_menu', {
+      ...ytServiceContext,
+    })).data;
+    final avatarUrl = parseAvatar(response);
+    final rootKeys = response is Map
+        ? response.keys.take(10).toList()
+        : const [];
+    _ytLibLog(
+      'getYtMusicAccountAvatarUrl account/account_menu -> ${avatarUrl != null && avatarUrl.isNotEmpty}, rootKeys=$rootKeys',
+    );
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      return avatarUrl;
+    }
+  } catch (e) {
+    _ytLibLog('getYtMusicAccountAvatarUrl account/account_menu exception: $e');
+  }
+
+  // Fallback para variantes antiguas.
+  try {
+    final data = {...ytServiceContext};
+    final response = (await sendRequest('account/get_account_menu', data)).data;
+    final avatarUrl = parseAvatar(response);
+    _ytLibLog(
+      'getYtMusicAccountAvatarUrl account/get_account_menu -> ${avatarUrl != null && avatarUrl.isNotEmpty}',
+    );
+    return avatarUrl;
+  } catch (e) {
+    _ytLibLog('getYtMusicAccountAvatarUrl exception: $e');
+    return null;
+  }
 }
 
 // Búsqueda recursiva de una clave dentro de un árbol Map/List
@@ -851,10 +1707,29 @@ Future<Response> sendRequest(
   );
   final url = "$baseUrl$action$fixedParms$additionalParams";
   try {
-    return await dio.post(
+    await _ensureVisitorIdLoaded();
+    final authCookieHeader = await getYtMusicAuthCookieHeader();
+    final requestHeaders = _buildRequestHeaders(
+      authCookieHeader: authCookieHeader,
+    );
+    final browseId = data['browseId']?.toString();
+    final isLibraryBrowse =
+        action == 'browse' && browseId == 'FEmusic_liked_playlists';
+    if (isLibraryBrowse) {
+      _ytLibLog(
+        'sendRequest browse FEmusic_liked_playlists: additionalParamsLen=${additionalParams.length}, auth=${_cookieDebugSummary(authCookieHeader)}',
+      );
+    }
+    if (action == 'account/account_menu' ||
+        action == 'account/get_account_menu') {
+      _ytLibLog(
+        'sendRequest $action visitorId=${_cachedVisitorId != null && _cachedVisitorId!.isNotEmpty}, auth=${_cookieDebugSummary(authCookieHeader)}',
+      );
+    }
+    final response = await dio.post(
       url,
       options: Options(
-        headers: headers,
+        headers: requestHeaders,
         validateStatus: (status) {
           return (status != null && (status >= 200 && status < 300)) ||
               status == 400;
@@ -863,7 +1738,21 @@ Future<Response> sendRequest(
       data: jsonEncode(data),
       cancelToken: cancelToken,
     );
+    if (isLibraryBrowse) {
+      final payload = response.data;
+      final keys = payload is Map ? payload.keys.take(8).toList() : const [];
+      _ytLibLog(
+        'sendRequest library status=${response.statusCode}, rootKeys=$keys',
+      );
+    }
+    return response;
   } on DioException catch (e) {
+    final browseId = data['browseId']?.toString();
+    if (action == 'browse' && browseId == 'FEmusic_liked_playlists') {
+      _ytLibLog(
+        'sendRequest library DioException type=${e.type}, message=${e.message}',
+      );
+    }
     if (e.type == DioExceptionType.connectionError ||
         (e.type == DioExceptionType.unknown &&
             (e.error.toString().contains('SocketException') ||

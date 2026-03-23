@@ -3,6 +3,7 @@ import 'package:music/main.dart' show audioHandler;
 import 'package:terminate_restart/terminate_restart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:music/screens/home/ota_update_screen.dart';
 import 'package:music/screens/home/about_screen.dart';
 import 'package:music/utils/theme_preferences.dart';
@@ -34,6 +35,8 @@ import 'package:music/widgets/gesture_settings_dialog.dart';
 import 'package:open_settings_plus/open_settings_plus.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:music/utils/yt_search/service.dart' as yt_service;
+import 'package:music/utils/yt_search/yt_cookie_login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final void Function(AppThemeMode)? setThemeMode;
@@ -60,6 +63,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
   int? _totalBytesAtDownloadDir;
+  static const String _ytSessionStatusCacheKey =
+      'settings_yt_auth_status_cache_v1';
+  static const String _ytSessionAvatarCacheKey =
+      'settings_yt_auth_avatar_cache_v1';
+  bool? _hasYtAuthCookieHeader;
+  String? _ytProfilePhotoUrl;
+  bool _isResolvingYtAuthState = true;
 
   @override
   void initState() {
@@ -78,6 +88,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadOverlayNextButtonSetting();
     _loadTranslationLanguageSetting();
     _loadArtworkBackgroundSetting();
+    _bootstrapYtAuthState();
+  }
+
+  Future<void> _bootstrapYtAuthState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedStatus = prefs.getBool(_ytSessionStatusCacheKey);
+    final cachedAvatar = prefs.getString(_ytSessionAvatarCacheKey);
+    if (!mounted) return;
+
+    setState(() {
+      _hasYtAuthCookieHeader = cachedStatus;
+      _ytProfilePhotoUrl = cachedAvatar;
+      _isResolvingYtAuthState = false;
+    });
+
+    _refreshYtAuthCookieStatus();
+  }
+
+  Future<void> _persistYtAuthCache({
+    required bool hasSession,
+    String? avatarUrl,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_ytSessionStatusCacheKey, hasSession);
+    final normalizedAvatar = avatarUrl?.trim();
+    if (normalizedAvatar == null || normalizedAvatar.isEmpty) {
+      await prefs.remove(_ytSessionAvatarCacheKey);
+    } else {
+      await prefs.setString(_ytSessionAvatarCacheKey, normalizedAvatar);
+    }
   }
 
   Future<void> _loadOverlayNextButtonSetting() async {
@@ -147,6 +187,261 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await prefs.setBool('use_dynamic_color_in_dialogs', value);
     useDynamicColorInDialogsNotifier.value = value;
     setState(() {});
+  }
+
+  Future<void> _refreshYtAuthCookieStatus() async {
+    final hasCookie = await yt_service.hasYtMusicAuthCookieHeader();
+    String? avatarUrl;
+    if (hasCookie) {
+      final fetchedAvatar = await yt_service.getYtMusicAccountAvatarUrl();
+      final normalizedFetched = fetchedAvatar?.trim();
+      if (normalizedFetched != null && normalizedFetched.isNotEmpty) {
+        avatarUrl = normalizedFetched;
+      } else {
+        avatarUrl = _ytProfilePhotoUrl?.trim();
+      }
+    }
+
+    if (!mounted) return;
+    if (_hasYtAuthCookieHeader != hasCookie ||
+        _ytProfilePhotoUrl != avatarUrl ||
+        _isResolvingYtAuthState) {
+      setState(() {
+        _hasYtAuthCookieHeader = hasCookie;
+        _ytProfilePhotoUrl = avatarUrl;
+        _isResolvingYtAuthState = false;
+      });
+    }
+    await _persistYtAuthCache(hasSession: hasCookie, avatarUrl: avatarUrl);
+  }
+
+  Future<void> _openYtCookieWebLogin() async {
+    final cookieHeader = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const YtCookieLoginScreen()),
+    );
+    if (!mounted) return;
+
+    if (cookieHeader == null || cookieHeader.trim().isEmpty) return;
+
+    await yt_service.setYtMusicAuthCookieHeader(cookieHeader);
+    await _refreshYtAuthCookieStatus();
+    if (!mounted) return;
+    await _showYtSessionDialog(
+      title: LocaleProvider.tr('success'),
+      message: LocaleProvider.tr('yt_music_session_saved'),
+      icon: Icons.check_circle_outline_rounded,
+      iconColor: Theme.of(context).colorScheme.primary,
+    );
+  }
+
+  Future<void> _clearYtCookieSession() async {
+    await yt_service.clearYtMusicAuthCookieHeader();
+    await clearYtWebViewSessionData();
+    if (!mounted) return;
+    setState(() {
+      _hasYtAuthCookieHeader = false;
+      _ytProfilePhotoUrl = null;
+      _isResolvingYtAuthState = false;
+    });
+    await _persistYtAuthCache(hasSession: false, avatarUrl: null);
+    if (!mounted) return;
+    await _showYtSessionDialog(
+      title: LocaleProvider.tr('success'),
+      message: LocaleProvider.tr('yt_music_session_removed'),
+      icon: Icons.check_circle_outline_rounded,
+      iconColor: Theme.of(context).colorScheme.primary,
+    );
+  }
+
+  Future<void> _confirmAndClearYtCookieSession() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white24, width: 1)
+                : BorderSide.none,
+          ),
+          surfaceTintColor: Colors.transparent,
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  LocaleProvider.tr('warning'),
+                  style: TextStyle(
+                    fontSize: 20,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            LocaleProvider.tr('yt_music_logout_confirm'),
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: Text(LocaleProvider.tr('cancel')),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(
+                LocaleProvider.tr('ok'),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirm == true) {
+      await _clearYtCookieSession();
+    }
+  }
+
+  Future<void> _showYtSessionDialog({
+    required String title,
+    required String message,
+    IconData? icon,
+    Color? iconColor,
+  }) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+            side: isAmoled && isDark
+                ? const BorderSide(color: Colors.white24, width: 1)
+                : BorderSide.none,
+          ),
+          surfaceTintColor: Colors.transparent,
+          title: Row(
+            children: [
+              if (icon != null) ...[
+                Icon(
+                  icon,
+                  color: iconColor ?? Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            message,
+            style: TextStyle(
+              fontSize: 16,
+              color: Theme.of(context).colorScheme.onSurface.withAlpha(180),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(LocaleProvider.tr('ok')),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildYtLoginLeadingIcon({double size = 34, bool emphasize = false}) {
+    final hasSession = _hasYtAuthCookieHeader == true;
+    final avatarUrl = _ytProfilePhotoUrl?.trim();
+    final ringColor = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.16);
+    final bgColor = Theme.of(context).colorScheme.surface;
+
+    Widget fallbackAvatar() {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: bgColor,
+          border: Border.all(color: ringColor, width: 2),
+          boxShadow: emphasize
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
+        ),
+        child: Icon(
+          _isResolvingYtAuthState
+              ? Icons.account_circle_outlined
+              : hasSession
+              ? Icons.cloud_done_outlined
+              : Icons.cloud_off_outlined,
+          color: Theme.of(context).colorScheme.onSurface,
+          size: size * 0.56,
+        ),
+      );
+    }
+
+    if (avatarUrl != null && avatarUrl.isNotEmpty) {
+      return Container(
+        width: size + 4,
+        height: size + 4,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          boxShadow: emphasize
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
+        ),
+        child: ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: avatarUrl,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            placeholder: (context, url) => fallbackAvatar(),
+            errorWidget: (context, url, error) => fallbackAvatar(),
+          ),
+        ),
+      );
+    }
+
+    return fallbackAvatar();
   }
 
   void _showArtworkBackgroundDialog() {
@@ -3281,6 +3576,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasYtSession = _hasYtAuthCookieHeader == true;
+    final isYtSessionKnown = _hasYtAuthCookieHeader != null;
     // final isSystem = colorSchemeNotifier.value == AppColorScheme.system;
     final cardColor = isAmoled
         ? Colors.white.withAlpha(20)
@@ -3351,6 +3648,100 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                const SizedBox(width: 14),
+                TranslatedText(
+                  'login',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(20)),
+              ),
+              child: ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+                leading: _buildYtLoginLeadingIcon(size: 52),
+                title: TranslatedText(
+                  'yt_music_login',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                subtitle: Text(
+                  _isResolvingYtAuthState && !isYtSessionKnown
+                      ? LocaleProvider.tr('yt_music_loading_session')
+                      : LocaleProvider.tr('yt_music_login_desc'),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.9),
+                  ),
+                ),
+                trailing: _isResolvingYtAuthState && !isYtSessionKnown
+                    ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      )
+                    : hasYtSession
+                    ? IconButton(
+                        tooltip: LocaleProvider.tr('yt_music_logout'),
+                        onPressed: _confirmAndClearYtCookieSession,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          shape: const CircleBorder(),
+                          minimumSize: const Size(38, 38),
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: Icon(
+                          Icons.logout_rounded,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      )
+                    : IconButton(
+                        tooltip: LocaleProvider.tr('yt_music_login'),
+                        onPressed: _openYtCookieWebLogin,
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          shape: const CircleBorder(),
+                          minimumSize: const Size(38, 38),
+                          padding: EdgeInsets.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: Icon(
+                          Icons.login_rounded,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(20)),
+                ),
+                onTap: null,
+              ),
+            ),
+            const SizedBox(height: 24),
+
             // Preferencias
             Row(
               children: [

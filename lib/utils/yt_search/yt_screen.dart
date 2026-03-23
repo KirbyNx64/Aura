@@ -986,7 +986,6 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     // Mostrar sugerencias por defecto
     _showSuggestions = true;
-
     _focusNode.addListener(_handleFocusChange);
     focusYtSearchNotifier.addListener(_handleFocusYtSearchRequest);
 

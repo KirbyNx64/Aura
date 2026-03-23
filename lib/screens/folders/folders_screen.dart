@@ -27,6 +27,7 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/utils/db/playlist_model.dart' as hive_model;
 import 'package:music/utils/simple_yt_download.dart';
+import 'package:music/utils/yt_search/service.dart' as yt_service;
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
@@ -42,7 +43,7 @@ enum OrdenCarpetas {
   fechaEdicionDesc, // Más recientes primero
 }
 
-enum PlaylistSource { local, streaming }
+enum PlaylistSource { local, streaming, ytMusicCookies }
 
 enum FoldersRootView { folders, allSongs, playlists }
 
@@ -67,6 +68,34 @@ class _StreamingPlaylistItem {
     this.durationText,
     this.durationMs,
   });
+}
+
+class _YtLibraryPlaylistItem {
+  final String playlistId;
+  final String title;
+  final String? author;
+  final String? thumbUrl;
+  final String? countText;
+  final int? trackCount;
+
+  const _YtLibraryPlaylistItem({
+    required this.playlistId,
+    required this.title,
+    this.author,
+    this.thumbUrl,
+    this.countText,
+    this.trackCount,
+  });
+}
+
+class _PlaylistListEntry {
+  final hive_model.PlaylistModel? local;
+  final _YtLibraryPlaylistItem? ytLibrary;
+
+  const _PlaylistListEntry.local(this.local) : ytLibrary = null;
+  const _PlaylistListEntry.ytLibrary(this.ytLibrary) : local = null;
+
+  bool get isYtLibrary => ytLibrary != null;
 }
 
 class _StreamingArtwork extends StatefulWidget {
@@ -153,6 +182,13 @@ class FoldersScreen extends StatefulWidget {
 
 class _FoldersScreenState extends State<FoldersScreen>
     with WidgetsBindingObserver {
+  static const bool _ytUiDebugLogs = true;
+
+  void _ytUiLog(String message) {
+    if (!_ytUiDebugLogs) return;
+    debugPrint('[FOLDERS/YT] $message');
+  }
+
   final OnAudioQuery _audioQuery = OnAudioQuery();
 
   // Cambia la selección múltiple a rutas
@@ -182,9 +218,16 @@ class _FoldersScreenState extends State<FoldersScreen>
   PlaylistSource _playlistSource = PlaylistSource.streaming;
   List<hive_model.PlaylistModel> _playlists = [];
   List<hive_model.PlaylistModel> _filteredPlaylists = [];
+  List<_YtLibraryPlaylistItem> _ytLibraryPlaylists = [];
+  List<_YtLibraryPlaylistItem> _filteredYtLibraryPlaylists = [];
+  final Map<String, List<_StreamingPlaylistItem>> _ytPlaylistItemsCache = {};
+  int _ytPlaylistSongsLoadGeneration = 0;
   List<SongModel> _allSongsForGrid = [];
   Map<String, List<String>> _playlistArtworkSourcesCache = {};
   hive_model.PlaylistModel? _selectedPlaylist;
+  _YtLibraryPlaylistItem? _selectedYtLibraryPlaylist;
+  bool _hasYtAuthCookieSession = false;
+  bool _isLoadingYtLibraryPlaylists = false;
   final TextEditingController _playlistSearchController =
       TextEditingController();
 
@@ -197,6 +240,85 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   static String? _pathFromMediaItem(MediaItem? item) =>
       item?.extras?['data'] ?? item?.id;
+
+  bool get _hasSelectedPlaylist =>
+      _selectedPlaylist != null || _selectedYtLibraryPlaylist != null;
+  bool get _isStreamingPlaylistDetail =>
+      _hasSelectedPlaylist && _playlistSource != PlaylistSource.local;
+
+  bool get _isSpanishAppLanguage =>
+      languageNotifier.value.toLowerCase().startsWith('es');
+
+  String _displayYtLibraryPlaylistTitle(String title) {
+    final trimmed = title.trim();
+    if (_isSpanishAppLanguage && trimmed.toLowerCase() == 'liked music') {
+      return 'Música que te gustó';
+    }
+    return title;
+  }
+
+  bool _isLikedMusicYtPlaylist(_YtLibraryPlaylistItem item) {
+    final playlistId = item.playlistId.trim().toUpperCase();
+    if (playlistId == 'LM') return true;
+
+    final rawTitle = item.title.trim().toLowerCase();
+    if (rawTitle == 'liked music' ||
+        rawTitle == 'música que te gustó' ||
+        rawTitle == 'musica que te gusto') {
+      return true;
+    }
+
+    final displayTitle = _displayYtLibraryPlaylistTitle(
+      item.title,
+    ).trim().toLowerCase();
+    return displayTitle == 'música que te gustó' ||
+        displayTitle == 'musica que te gusto';
+  }
+
+  String _currentSelectedPlaylistName() =>
+      (_selectedYtLibraryPlaylist != null
+          ? _displayYtLibraryPlaylistTitle(_selectedYtLibraryPlaylist!.title)
+          : null) ??
+      _selectedPlaylist?.name ??
+      LocaleProvider.tr('playlists');
+
+  String _playlistSourceLabel(PlaylistSource source) {
+    switch (source) {
+      case PlaylistSource.local:
+        return 'local';
+      case PlaylistSource.streaming:
+        return 'streaming';
+      case PlaylistSource.ytMusicCookies:
+        return 'ytMusicCookies';
+    }
+  }
+
+  void _invalidateYtPlaylistSongLoads(String reason) {
+    _ytPlaylistSongsLoadGeneration++;
+    _ytUiLog(
+      '_invalidateYtPlaylistSongLoads generation=$_ytPlaylistSongsLoadGeneration reason=$reason',
+    );
+  }
+
+  bool _isYtPlaylistSongLoadActive({
+    required int generation,
+    required String playlistId,
+  }) {
+    final isActive =
+        mounted &&
+        generation == _ytPlaylistSongsLoadGeneration &&
+        _playlistSource == PlaylistSource.ytMusicCookies &&
+        _selectedYtLibraryPlaylist?.playlistId == playlistId;
+    if (!isActive) {
+      _ytUiLog(
+        '_loadSongsFromYtLibraryPlaylist discard stale result: req=$playlistId, '
+        'generation=$generation, currentGeneration=$_ytPlaylistSongsLoadGeneration, '
+        'selected=${_selectedYtLibraryPlaylist?.playlistId}, '
+        'source=${_playlistSourceLabel(_playlistSource)}',
+      );
+    }
+    return isActive;
+  }
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -373,6 +495,11 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (_showAllSongs) {
       // Recargar todas las canciones
       await _loadAllSongs();
+    } else if (_selectedYtLibraryPlaylist != null) {
+      await _loadSongsFromYtLibraryPlaylist(
+        _selectedYtLibraryPlaylist!,
+        forceRefresh: true,
+      );
     } else if (_selectedPlaylist != null) {
       // Recargar la playlist seleccionada
       await _loadSongsFromPlaylist(_selectedPlaylist!);
@@ -646,13 +773,21 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
   }
 
-  void _togglePlaylistSource() {
+  void _setPlaylistSource(PlaylistSource source) {
+    if (_playlistSource == source) return;
+    _ytUiLog(
+      'set source: ${_playlistSourceLabel(_playlistSource)} -> ${_playlistSourceLabel(source)}',
+    );
+    _invalidateYtPlaylistSongLoads(
+      'source-change:${_playlistSourceLabel(_playlistSource)}->${_playlistSourceLabel(source)}',
+    );
     setState(() {
-      _playlistSource = _playlistSource == PlaylistSource.local
-          ? PlaylistSource.streaming
-          : PlaylistSource.local;
+      _playlistSource = source;
       _applyPlaylistFilters();
     });
+    if (_playlistSource == PlaylistSource.ytMusicCookies) {
+      unawaited(_loadYtLibraryPlaylists());
+    }
     unawaited(_saveLastViewPrefs());
   }
 
@@ -813,10 +948,14 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   bool _playlistMatchesCurrentSource(hive_model.PlaylistModel playlist) {
-    return _playlistMatchesTargetSource(
-      playlist,
-      forStreaming: _playlistSource == PlaylistSource.streaming,
-    );
+    switch (_playlistSource) {
+      case PlaylistSource.local:
+        return _playlistMatchesTargetSource(playlist, forStreaming: false);
+      case PlaylistSource.streaming:
+        return _playlistMatchesTargetSource(playlist, forStreaming: true);
+      case PlaylistSource.ytMusicCookies:
+        return false;
+    }
   }
 
   bool _playlistMatchesTargetSource(
@@ -833,18 +972,196 @@ class _FoldersScreenState extends State<FoldersScreen>
     final sourceFiltered = _playlists
         .where(_playlistMatchesCurrentSource)
         .toList();
+    final includeYtLibrary = _playlistSource == PlaylistSource.ytMusicCookies;
+
+    List<_YtLibraryPlaylistItem> ytFiltered;
+    if (includeYtLibrary) {
+      ytFiltered = _ytLibraryPlaylists.toList();
+    } else {
+      ytFiltered = [];
+    }
+
     if (query.isEmpty) {
       _filteredPlaylists = sourceFiltered;
+      _filteredYtLibraryPlaylists = ytFiltered;
       return;
     }
     _filteredPlaylists = sourceFiltered
         .where((p) => p.name.toLowerCase().contains(query))
         .toList();
+    _filteredYtLibraryPlaylists = ytFiltered.where((playlist) {
+      final title = playlist.title.toLowerCase();
+      final titleDisplay = _displayYtLibraryPlaylistTitle(
+        playlist.title,
+      ).toLowerCase();
+      final author = (playlist.author ?? '').toLowerCase();
+      final count = (playlist.countText ?? '').toLowerCase();
+      return title.contains(query) ||
+          titleDisplay.contains(query) ||
+          author.contains(query) ||
+          count.contains(query);
+    }).toList();
+  }
+
+  List<_PlaylistListEntry> _buildPlaylistListEntries() {
+    final entries = <_PlaylistListEntry>[];
+    if (_playlistSource == PlaylistSource.ytMusicCookies) {
+      entries.addAll(
+        _filteredYtLibraryPlaylists.map(_PlaylistListEntry.ytLibrary),
+      );
+      return entries;
+    }
+    entries.addAll(_filteredPlaylists.map(_PlaylistListEntry.local));
+    return entries;
+  }
+
+  String _formatYtLibraryPlaylistSubtitle(_YtLibraryPlaylistItem item) {
+    if (_isLikedMusicYtPlaylist(item)) {
+      return LocaleProvider.tr('yt_auto_generated_playlist');
+    }
+
+    final countText = item.countText?.trim();
+    if (countText != null && countText.isNotEmpty) {
+      return _localizeYtTrackCountText(countText);
+    }
+    final count = item.trackCount;
+    if (count != null && count > 0) {
+      return '$count ${LocaleProvider.tr('songs')}';
+    }
+    final author = item.author?.trim();
+    if (author != null && author.isNotEmpty) return author;
+    return LocaleProvider.tr('playlists');
+  }
+
+  String _localizeYtTrackCountText(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return trimmed;
+
+    final singularSong = LocaleProvider.tr('mode_song').toLowerCase();
+    final pluralSongs = LocaleProvider.tr('songs').toLowerCase();
+
+    return trimmed.replaceAllMapped(
+      RegExp(r'\btracks?\b', caseSensitive: false),
+      (match) {
+        final token = match.group(0)?.toLowerCase() ?? '';
+        return token == 'track' ? singularSong : pluralSongs;
+      },
+    );
+  }
+
+  Widget _buildYtLibraryPlaylistArtwork(_YtLibraryPlaylistItem playlist) {
+    final art = _applyStreamingArtworkQuality(playlist.thumbUrl);
+    if (art == null || art.isEmpty) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: Theme.of(context).colorScheme.surfaceContainer,
+        ),
+        child: Icon(
+          Icons.queue_music_rounded,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 48,
+        height: 48,
+        child: CachedNetworkImage(
+          imageUrl: art,
+          fit: BoxFit.cover,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          errorWidget: (context, url, error) => Container(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            child: Icon(
+              Icons.queue_music_rounded,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadYtLibraryPlaylists({bool forceRefresh = false}) async {
+    _ytUiLog(
+      '_loadYtLibraryPlaylists start: forceRefresh=$forceRefresh, currentSource=${_playlistSourceLabel(_playlistSource)}',
+    );
+    final hasAuth = await yt_service.hasYtMusicAuthCookieHeader();
+    _ytUiLog('_loadYtLibraryPlaylists hasAuth=$hasAuth');
+    if (!mounted) return;
+
+    if (!hasAuth) {
+      _ytUiLog('_loadYtLibraryPlaylists aborted: no auth cookie');
+      setState(() {
+        _hasYtAuthCookieSession = false;
+        _isLoadingYtLibraryPlaylists = false;
+        _ytLibraryPlaylists = [];
+        _filteredYtLibraryPlaylists = [];
+      });
+      return;
+    }
+
+    if (_isLoadingYtLibraryPlaylists) return;
+    if (!forceRefresh && _ytLibraryPlaylists.isNotEmpty) {
+      _ytUiLog(
+        '_loadYtLibraryPlaylists using cache: cached=${_ytLibraryPlaylists.length}',
+      );
+      setState(() {
+        _hasYtAuthCookieSession = true;
+        _applyPlaylistFilters();
+      });
+      return;
+    }
+
+    setState(() {
+      _hasYtAuthCookieSession = true;
+      _isLoadingYtLibraryPlaylists = true;
+    });
+
+    try {
+      final rawPlaylists = await yt_service.getLibraryPlaylists(limit: 120);
+      _ytUiLog('service.getLibraryPlaylists returned=${rawPlaylists.length}');
+      final parsed = rawPlaylists
+          .map(
+            (playlist) => _YtLibraryPlaylistItem(
+              playlistId: playlist.playlistId,
+              title: playlist.title,
+              author: playlist.author,
+              thumbUrl: playlist.thumbUrl,
+              countText: playlist.countText,
+              trackCount: playlist.trackCount,
+            ),
+          )
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _ytLibraryPlaylists = parsed;
+        _isLoadingYtLibraryPlaylists = false;
+        _applyPlaylistFilters();
+      });
+      _ytUiLog(
+        '_loadYtLibraryPlaylists done: parsed=${parsed.length}, filtered=${_filteredYtLibraryPlaylists.length}',
+      );
+    } catch (e) {
+      _ytUiLog('_loadYtLibraryPlaylists exception while loading playlists: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingYtLibraryPlaylists = false;
+        _applyPlaylistFilters();
+      });
+    }
   }
 
   Future<void> _saveOrderFilter() async {
     final prefs = await SharedPreferences.getInstance();
-    if (_selectedPlaylist != null) {
+    if (_hasSelectedPlaylist) {
       await prefs.setInt(_orderPlaylistPrefsKey, _ordenPlaylist.index);
     } else {
       await prefs.setInt(_orderPrefsKey, _orden.index);
@@ -1467,9 +1784,10 @@ class _FoldersScreenState extends State<FoldersScreen>
         if (carpetaSeleccionada == '__ALL_SONGS__') {
           // Usar la traducción para "Todas las canciones"
           origen = LocaleProvider.tr('all_songs');
-        } else if (carpetaSeleccionada!.startsWith('__PLAYLIST__')) {
+        } else if (carpetaSeleccionada!.startsWith('__PLAYLIST__') ||
+            carpetaSeleccionada!.startsWith('__YT_PLAYLIST__')) {
           // Usar el nombre de la playlist
-          origen = _selectedPlaylist?.name ?? LocaleProvider.tr('playlists');
+          origen = _currentSelectedPlaylistName();
         } else {
           final parts = carpetaSeleccionada!.split(RegExp(r'[\\/]'));
           origen = parts.isNotEmpty ? parts.last : carpetaSeleccionada!;
@@ -1719,7 +2037,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Modificar _aplicarOrdenamiento para soportar los nuevos tipos
   Future<void> _aplicarOrdenamiento(List<SongModel> lista) async {
-    final ordenActual = _selectedPlaylist != null ? _ordenPlaylist : _orden;
+    final ordenActual = _hasSelectedPlaylist ? _ordenPlaylist : _orden;
     switch (ordenActual) {
       case OrdenCarpetas.normal:
         break;
@@ -1746,7 +2064,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   void _aplicarOrdenamientoStreaming(List<_StreamingPlaylistItem> lista) {
-    final ordenActual = _selectedPlaylist != null ? _ordenPlaylist : _orden;
+    final ordenActual = _hasSelectedPlaylist ? _ordenPlaylist : _orden;
     switch (ordenActual) {
       case OrdenCarpetas.normal:
         lista
@@ -1773,8 +2091,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   // Modificar _ordenarCanciones y _onSearchChanged para ser async y esperar el ordenamiento
   Future<void> _ordenarCanciones() async {
-    if (_selectedPlaylist != null &&
-        _playlistSource == PlaylistSource.streaming) {
+    if (_isStreamingPlaylistDetail) {
       _aplicarOrdenamientoStreaming(_playlistStreamingItems);
       _saveOrderFilter();
       await _onSearchChanged();
@@ -1789,8 +2106,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   Future<void> _onSearchChanged() async {
     final query = quitarDiacriticos(_searchController.text.toLowerCase());
 
-    if (_selectedPlaylist != null &&
-        _playlistSource == PlaylistSource.streaming) {
+    if (_isStreamingPlaylistDetail) {
       if (query.isEmpty) {
         setState(() {
           _filteredPlaylistStreamingItems = [];
@@ -1917,7 +2233,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         'last_queue_source',
-        _selectedPlaylist?.name ?? LocaleProvider.tr('playlists'),
+        _currentSelectedPlaylistName(),
       );
 
       await handler
@@ -1959,7 +2275,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
         'last_queue_source',
-        _selectedPlaylist?.name ?? LocaleProvider.tr('playlists'),
+        _currentSelectedPlaylistName(),
       );
 
       await handler
@@ -3411,9 +3727,7 @@ class _FoldersScreenState extends State<FoldersScreen>
           builder: (context, colorScheme, child) {
             final isAmoled = colorScheme == AppColorScheme.amoled;
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final isStreamingPlaylistSortContext =
-                _selectedPlaylist != null &&
-                _playlistSource == PlaylistSource.streaming;
+            final isStreamingPlaylistSortContext = _isStreamingPlaylistDetail;
 
             return AlertDialog(
               backgroundColor: isAmoled && isDark
@@ -3497,7 +3811,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   }
 
   Widget _buildSortOption(OrdenCarpetas value, String labelKey, IconData icon) {
-    final ordenActual = _selectedPlaylist != null ? _ordenPlaylist : _orden;
+    final ordenActual = _hasSelectedPlaylist ? _ordenPlaylist : _orden;
     final isSelected = ordenActual == value;
     final colorScheme = Theme.of(context).colorScheme;
     final primaryColor = colorScheme.primary;
@@ -3510,7 +3824,7 @@ class _FoldersScreenState extends State<FoldersScreen>
       child: InkWell(
         onTap: () async {
           setState(() {
-            if (_selectedPlaylist != null) {
+            if (_hasSelectedPlaylist) {
               _ordenPlaylist = value;
             } else {
               _orden = value;
@@ -3578,9 +3892,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
-    final selectingStreamingPlaylist =
-        _selectedPlaylist != null &&
-        _playlistSource == PlaylistSource.streaming;
+    final selectingStreamingPlaylist = _isStreamingPlaylistDetail;
 
     if (_isLoading) {
       return Scaffold(body: Center(child: LoadingIndicator()));
@@ -3588,7 +3900,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (songPathsByFolder.isEmpty &&
         !_showAllSongs &&
         !_showPlaylists &&
-        _selectedPlaylist == null) {
+        !_hasSelectedPlaylist) {
       return Scaffold(
         body: ExpressiveRefreshIndicator(
           onRefresh: () async {
@@ -3659,10 +3971,14 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
 
     // Vista de lista de playlists
-    if (_showPlaylists && _selectedPlaylist == null) {
+    if (_showPlaylists && !_hasSelectedPlaylist) {
       final colorScheme = colorSchemeNotifier.value;
       final isAmoled = colorScheme == AppColorScheme.amoled;
       final isDark = Theme.of(context).brightness == Brightness.dark;
+      final playlistEntries = _buildPlaylistListEntries();
+      final isYtCookiesWithSession =
+          _playlistSource == PlaylistSource.ytMusicCookies &&
+          _hasYtAuthCookieSession;
       final barColor = isAmoled
           ? Colors.white.withAlpha(20)
           : isDark
@@ -3719,8 +4035,14 @@ class _FoldersScreenState extends State<FoldersScreen>
               ),
               onSelected: (value) {
                 switch (value) {
-                  case 'switch_source':
-                    _togglePlaylistSource();
+                  case 'source_local':
+                    _setPlaylistSource(PlaylistSource.local);
+                    break;
+                  case 'source_streaming':
+                    _setPlaylistSource(PlaylistSource.streaming);
+                    break;
+                  case 'source_yt_cookies':
+                    _setPlaylistSource(PlaylistSource.ytMusicCookies);
                     break;
                   case 'create_playlist':
                     _createNewPlaylist();
@@ -3729,21 +4051,59 @@ class _FoldersScreenState extends State<FoldersScreen>
               },
               itemBuilder: (context) => [
                 PopupMenuItem<String>(
-                  value: 'switch_source',
+                  value: 'source_local',
+                  child: Row(
+                    children: [
+                      Icon(Icons.music_note_rounded, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(LocaleProvider.tr('show_local_songs')),
+                      ),
+                      if (_playlistSource == PlaylistSource.local)
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'source_streaming',
+                  child: Row(
+                    children: [
+                      Icon(Icons.cloud_outlined, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(LocaleProvider.tr('show_streaming_songs')),
+                      ),
+                      if (_playlistSource == PlaylistSource.streaming)
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                    ],
+                  ),
+                ),
+                PopupMenuItem<String>(
+                  value: 'source_yt_cookies',
                   child: Row(
                     children: [
                       Icon(
-                        _playlistSource == PlaylistSource.local
-                            ? Icons.cloud_outlined
-                            : Icons.music_note_rounded,
+                        isYtCookiesWithSession
+                            ? Icons.cloud_done_outlined
+                            : Icons.cloud_off_outlined,
                         size: 20,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        _playlistSource == PlaylistSource.local
-                            ? LocaleProvider.tr('show_streaming_songs')
-                            : LocaleProvider.tr('show_local_songs'),
-                      ),
+                      const Expanded(child: Text('YouTube Music (cookies)')),
+                      if (_playlistSource == PlaylistSource.ytMusicCookies)
+                        Icon(
+                          Icons.check,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                     ],
                   ),
                 ),
@@ -3817,7 +4177,9 @@ class _FoldersScreenState extends State<FoldersScreen>
         ),
         body: _isLoading
             ? Center(child: LoadingIndicator())
-            : _filteredPlaylists.isEmpty
+            : (playlistEntries.isEmpty && _isLoadingYtLibraryPlaylists)
+            ? Center(child: LoadingIndicator())
+            : playlistEntries.isEmpty
             ? ExpressiveRefreshIndicator(
                 onRefresh: () async {
                   await _loadPlaylists();
@@ -3902,15 +4264,17 @@ class _FoldersScreenState extends State<FoldersScreen>
                           top: 8.0,
                           bottom: space,
                         ),
-                        itemCount: _filteredPlaylists.length,
+                        itemCount: playlistEntries.length,
                         itemBuilder: (context, index) {
-                          final playlist = _filteredPlaylists[index];
+                          final entry = playlistEntries[index];
+                          final playlist = entry.local;
+                          final ytPlaylist = entry.ytLibrary;
 
                           // Determinar el borderRadius según la posición
                           final bool isFirst = index == 0;
                           final bool isLast =
-                              index == _filteredPlaylists.length - 1;
-                          final bool isOnly = _filteredPlaylists.length == 1;
+                              index == playlistEntries.length - 1;
+                          final bool isOnly = playlistEntries.length == 1;
 
                           BorderRadius borderRadius;
                           if (isOnly) {
@@ -3948,9 +4312,17 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: borderRadius,
                                   ),
-                                  leading: _buildPlaylistArtworkGrid(playlist),
+                                  leading: entry.isYtLibrary
+                                      ? _buildYtLibraryPlaylistArtwork(
+                                          ytPlaylist!,
+                                        )
+                                      : _buildPlaylistArtworkGrid(playlist!),
                                   title: Text(
-                                    playlist.name,
+                                    entry.isYtLibrary
+                                        ? _displayYtLibraryPlaylistTitle(
+                                            ytPlaylist!.title,
+                                          )
+                                        : playlist!.name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: Theme.of(
@@ -3958,7 +4330,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                                     ).textTheme.titleMedium,
                                   ),
                                   subtitle: Text(
-                                    '${playlist.songPaths.length} ${LocaleProvider.tr('songs')}',
+                                    entry.isYtLibrary
+                                        ? _formatYtLibraryPlaylistSubtitle(
+                                            ytPlaylist!,
+                                          )
+                                        : '${playlist!.songPaths.length} ${LocaleProvider.tr('songs')}',
                                     style: isAmoled
                                         ? TextStyle(
                                             color: Colors.white.withValues(
@@ -3968,10 +4344,17 @@ class _FoldersScreenState extends State<FoldersScreen>
                                         : null,
                                   ),
                                   onTap: () async {
-                                    await _loadSongsFromPlaylist(playlist);
+                                    if (entry.isYtLibrary) {
+                                      await _loadSongsFromYtLibraryPlaylist(
+                                        ytPlaylist!,
+                                      );
+                                    } else {
+                                      await _loadSongsFromPlaylist(playlist!);
+                                    }
                                   },
-                                  onLongPress: () =>
-                                      _showPlaylistOptions(playlist),
+                                  onLongPress: entry.isYtLibrary
+                                      ? null
+                                      : () => _showPlaylistOptions(playlist!),
                                 ),
                               ),
                             ),
@@ -4482,9 +4865,13 @@ class _FoldersScreenState extends State<FoldersScreen>
                   ),
                   onPressed: () async {
                     // Si hay una playlist seleccionada, volver a la lista de playlists
-                    if (_selectedPlaylist != null) {
+                    if (_hasSelectedPlaylist) {
+                      _invalidateYtPlaylistSongLoads(
+                        'appbar-back-from-playlist-detail',
+                      );
                       setState(() {
                         _selectedPlaylist = null;
+                        _selectedYtLibraryPlaylist = null;
                         carpetaSeleccionada = null;
                         _searchController.clear();
                         _filteredSongs.clear();
@@ -4496,9 +4883,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                       return;
                     }
 
+                    _invalidateYtPlaylistSongLoads('appbar-back-to-folders');
                     setState(() {
                       carpetaSeleccionada = null;
                       _showAllSongs = false;
+                      _selectedYtLibraryPlaylist = null;
                       _searchController.clear();
                       _filteredSongs.clear();
                       _displaySongs.clear();
@@ -4546,9 +4935,9 @@ class _FoldersScreenState extends State<FoldersScreen>
                     ],
                   ),
                 )
-              : _selectedPlaylist != null
+              : _hasSelectedPlaylist
               ? Text(
-                  _selectedPlaylist!.name,
+                  _currentSelectedPlaylistName(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -4687,9 +5076,11 @@ class _FoldersScreenState extends State<FoldersScreen>
                     case 'delete_songs':
                       if (_selectedSongPaths.isNotEmpty) {
                         if (selectingStreamingPlaylist) {
-                          await _handleRemoveStreamingFromPlaylistMassive(
-                            context,
-                          );
+                          if (_selectedPlaylist != null) {
+                            await _handleRemoveStreamingFromPlaylistMassive(
+                              context,
+                            );
+                          }
                         } else {
                           await _handleDeleteSongs(context);
                         }
@@ -4767,7 +5158,10 @@ class _FoldersScreenState extends State<FoldersScreen>
                     ),
                   PopupMenuItem<String>(
                     value: 'delete_songs',
-                    enabled: _selectedSongPaths.isNotEmpty,
+                    enabled:
+                        _selectedSongPaths.isNotEmpty &&
+                        (!selectingStreamingPlaylist ||
+                            _selectedPlaylist != null),
                     child: Row(
                       children: [
                         const Icon(Icons.delete_outline_rounded),
@@ -4792,9 +5186,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                 icon: const Icon(Icons.shuffle_rounded, size: 28, weight: 600),
                 tooltip: LocaleProvider.tr('shuffle'),
                 onPressed: () {
-                  final showingStreamingPlaylist =
-                      _selectedPlaylist != null &&
-                      _playlistSource == PlaylistSource.streaming;
+                  final showingStreamingPlaylist = _isStreamingPlaylistDetail;
                   if (showingStreamingPlaylist) {
                     final visibleStreaming = _searchController.text.isNotEmpty
                         ? _filteredPlaylistStreamingItems
@@ -4907,9 +5299,7 @@ class _FoldersScreenState extends State<FoldersScreen>
               final bottomPadding = MediaQuery.of(context).padding.bottom;
               final space =
                   (currentMediaItem != null ? 100.0 : 0.0) + bottomPadding;
-              final showingStreamingPlaylist =
-                  _selectedPlaylist != null &&
-                  _playlistSource == PlaylistSource.streaming;
+              final showingStreamingPlaylist = _isStreamingPlaylistDetail;
               final streamingToShow =
                   showingStreamingPlaylist && _searchController.text.isNotEmpty
                   ? _filteredPlaylistStreamingItems
@@ -4940,7 +5330,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                             child: Icon(
                               _showAllSongs
                                   ? Icons.music_note_rounded
-                                  : _selectedPlaylist != null
+                                  : _hasSelectedPlaylist
                                   ? Icons.queue_music_rounded
                                   : Icons.folder_off_rounded,
                               size: 50,
@@ -4957,7 +5347,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                           TranslatedText(
                             _showAllSongs
                                 ? 'no_songs'
-                                : _selectedPlaylist != null
+                                : _hasSelectedPlaylist
                                 ? (showingStreamingPlaylist
                                       ? 'no_streaming_songs'
                                       : 'no_songs_in_playlist')
@@ -5496,9 +5886,7 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   Future<void> _handleAddToPlaylistMassive(BuildContext context) async {
     final allPlaylists = await PlaylistsDB().getAllPlaylists();
-    final selectingStreamingPlaylist =
-        _selectedPlaylist != null &&
-        _playlistSource == PlaylistSource.streaming;
+    final selectingStreamingPlaylist = _isStreamingPlaylistDetail;
     final playlists = allPlaylists
         .where(
           (p) => _playlistMatchesTargetSource(
@@ -6744,8 +7132,11 @@ class _FoldersScreenState extends State<FoldersScreen>
   // Nueva función para cargar canciones de una carpeta con spinner
   Future<void> _loadSongsForFolder(MapEntry<String, List<String>> entry) async {
     if (!mounted) return;
+    _invalidateYtPlaylistSongLoads('open-folder:${entry.key}');
     setState(() {
       carpetaSeleccionada = entry.key;
+      _selectedPlaylist = null;
+      _selectedYtLibraryPlaylist = null;
       _searchController.clear();
       _isSelecting = false;
       _selectedSongPaths.clear();
@@ -6792,12 +7183,14 @@ class _FoldersScreenState extends State<FoldersScreen>
   /// Cargar todas las canciones de todas las carpetas
   Future<void> _loadAllSongs() async {
     if (!mounted) return;
+    _invalidateYtPlaylistSongLoads('open-all-songs');
     setState(() {
       carpetaSeleccionada =
           '__ALL_SONGS__'; // Marcador especial para indicar que estamos mostrando todas las canciones
       _showAllSongs = true;
       _showPlaylists = false;
       _selectedPlaylist = null;
+      _selectedYtLibraryPlaylist = null;
       _searchController.clear();
       _isSelecting = false;
       _selectedSongPaths.clear();
@@ -7007,12 +7400,17 @@ class _FoldersScreenState extends State<FoldersScreen>
 
   /// Cargar la lista de playlists desde la base de datos
   Future<void> _loadPlaylists() async {
+    _ytUiLog(
+      '_loadPlaylists start: source=${_playlistSourceLabel(_playlistSource)}',
+    );
     if (!mounted) return;
+    _invalidateYtPlaylistSongLoads('open-playlists-root');
     setState(() {
       _showPlaylists = true;
       _showAllSongs = false;
       carpetaSeleccionada = null;
       _selectedPlaylist = null;
+      _selectedYtLibraryPlaylist = null;
       _searchController.clear();
       _playlistSearchController.clear();
       _isSelecting = false;
@@ -7027,15 +7425,33 @@ class _FoldersScreenState extends State<FoldersScreen>
     final streamingArtworkCache = await _buildPlaylistArtworkSourcesCache(
       playlists,
     );
+    final hasYtAuth = await yt_service.hasYtMusicAuthCookieHeader();
+    _ytUiLog(
+      '_loadPlaylists local=${playlists.length}, hasYtAuth=$hasYtAuth, source=${_playlistSourceLabel(_playlistSource)}',
+    );
 
     if (!mounted) return;
     setState(() {
       _playlists = playlists;
-      _applyPlaylistFilters();
       _allSongsForGrid = allIndexedSongs;
       _playlistArtworkSourcesCache = streamingArtworkCache;
+      _hasYtAuthCookieSession = hasYtAuth;
+      if (!hasYtAuth) {
+        _ytLibraryPlaylists = [];
+        _filteredYtLibraryPlaylists = [];
+      }
       _isLoading = false;
+      _applyPlaylistFilters();
     });
+
+    if (_playlistSource == PlaylistSource.ytMusicCookies && hasYtAuth) {
+      unawaited(_loadYtLibraryPlaylists(forceRefresh: true));
+    } else if (_playlistSource == PlaylistSource.ytMusicCookies && !hasYtAuth) {
+      _ytUiLog(
+        '_loadPlaylists source=ytMusicCookies but no auth cookie; remote list will stay empty',
+      );
+    }
+
     unawaited(_saveLastViewPrefs());
   }
 
@@ -7614,11 +8030,130 @@ class _FoldersScreenState extends State<FoldersScreen>
     }
   }
 
+  Future<void> _loadSongsFromYtLibraryPlaylist(
+    _YtLibraryPlaylistItem playlist, {
+    bool forceRefresh = false,
+  }) async {
+    final requestedPlaylistId = playlist.playlistId;
+    _invalidateYtPlaylistSongLoads('open-yt-playlist:$requestedPlaylistId');
+    final loadGeneration = _ytPlaylistSongsLoadGeneration;
+    _ytUiLog(
+      '_loadSongsFromYtLibraryPlaylist start: id=$requestedPlaylistId, title=${playlist.title}, forceRefresh=$forceRefresh, generation=$loadGeneration',
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _selectedYtLibraryPlaylist = playlist;
+      _selectedPlaylist = null;
+      carpetaSeleccionada = '__YT_PLAYLIST__${playlist.playlistId}';
+      _searchController.clear();
+      _isSelecting = false;
+      _selectedSongPaths.clear();
+      _originalSongs = [];
+      _filteredSongs = [];
+      _displaySongs = [];
+      _playlistStreamingItems = [];
+      _filteredPlaylistStreamingItems = [];
+      _isLoading = true;
+    });
+
+    if (audioHandler?.mediaItem.valueOrNull != null) {
+      _mediaItemDebounce?.cancel();
+      _currentMediaItemNotifier.value = audioHandler!.mediaItem.valueOrNull;
+    }
+    if (audioHandler?.playbackState.valueOrNull != null) {
+      _isPlayingNotifier.value =
+          audioHandler!.playbackState.valueOrNull!.playing;
+    }
+
+    List<_StreamingPlaylistItem> streamingItems;
+    final cached = _ytPlaylistItemsCache[requestedPlaylistId];
+    if (!forceRefresh && cached != null && cached.isNotEmpty) {
+      _ytUiLog(
+        '_loadSongsFromYtLibraryPlaylist using cache: tracks=${cached.length}',
+      );
+      streamingItems = List<_StreamingPlaylistItem>.from(cached);
+    } else {
+      final tracks = await yt_service.getPlaylistSongs(requestedPlaylistId);
+      if (!_isYtPlaylistSongLoadActive(
+        generation: loadGeneration,
+        playlistId: requestedPlaylistId,
+      )) {
+        return;
+      }
+      _ytUiLog(
+        '_loadSongsFromYtLibraryPlaylist service tracks=${tracks.length}',
+      );
+      streamingItems = tracks
+          .where((track) => (track.videoId?.trim().isNotEmpty ?? false))
+          .map((track) {
+            final videoId = track.videoId!.trim();
+            final durationText =
+                (track.durationText?.trim().isNotEmpty ?? false)
+                ? track.durationText!.trim()
+                : (track.durationMs != null && track.durationMs! > 0)
+                ? _formatDurationMs(track.durationMs!)
+                : null;
+            return _StreamingPlaylistItem(
+              rawPath: 'yt:$videoId',
+              title: (track.title?.trim().isNotEmpty ?? false)
+                  ? track.title!.trim()
+                  : 'YouTube Music ($videoId)',
+              artist: (track.artist?.trim().isNotEmpty ?? false)
+                  ? track.artist!.trim()
+                  : LocaleProvider.tr('artist_unknown'),
+              videoId: videoId,
+              artUri: _applyStreamingArtworkQuality(
+                track.thumbUrl,
+                videoId: videoId,
+              ),
+              durationText: durationText,
+              durationMs: track.durationMs,
+            );
+          })
+          .toList();
+
+      _ytPlaylistItemsCache[requestedPlaylistId] = List.from(streamingItems);
+    }
+
+    if (!_isYtPlaylistSongLoadActive(
+      generation: loadGeneration,
+      playlistId: requestedPlaylistId,
+    )) {
+      return;
+    }
+
+    _originalSongs = [];
+    _filteredSongs = [];
+    _displaySongs = [];
+    _originalPlaylistStreamingItems = List.from(streamingItems);
+    _playlistStreamingItems = List.from(streamingItems);
+    _filteredPlaylistStreamingItems = [];
+
+    await _ordenarCanciones();
+    if (!_isYtPlaylistSongLoadActive(
+      generation: loadGeneration,
+      playlistId: requestedPlaylistId,
+    )) {
+      return;
+    }
+    _ytUiLog(
+      '_loadSongsFromYtLibraryPlaylist done: visible=${_playlistStreamingItems.length}',
+    );
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+    });
+    unawaited(_saveLastViewPrefs());
+  }
+
   /// Cargar las canciones de una playlist seleccionada
   Future<void> _loadSongsFromPlaylist(hive_model.PlaylistModel playlist) async {
     if (!mounted) return;
+    _invalidateYtPlaylistSongLoads('open-local-playlist:${playlist.id}');
     setState(() {
       _selectedPlaylist = playlist;
+      _selectedYtLibraryPlaylist = null;
       carpetaSeleccionada = '__PLAYLIST__${playlist.id}';
       _searchController.clear();
       _isSelecting = false;
@@ -7771,10 +8306,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onTap: () async {
                     Navigator.pop(context);
                     if (_showAllSongs || _showPlaylists) {
+                      _invalidateYtPlaylistSongLoads(
+                        'view-selector-open-folders',
+                      );
                       setState(() {
                         _showAllSongs = false;
                         _showPlaylists = false;
                         _selectedPlaylist = null;
+                        _selectedYtLibraryPlaylist = null;
                         carpetaSeleccionada = null;
                         _searchController.clear();
                         _filteredSongs.clear();
@@ -7866,9 +8405,9 @@ class _FoldersScreenState extends State<FoldersScreen>
     // (el botón back del sistema debe salir de la pantalla, no volver a carpetas)
     if (_showAllSongs) return false;
     // Si estamos en la lista de playlists (sin playlist seleccionada), no hay pop interno
-    if (_showPlaylists && _selectedPlaylist == null) return false;
+    if (_showPlaylists && !_hasSelectedPlaylist) return false;
     // Si hay una playlist seleccionada, hay pop interno (volver a lista de playlists)
-    if (_selectedPlaylist != null) return true;
+    if (_hasSelectedPlaylist) return true;
     return carpetaSeleccionada != null;
   }
 
@@ -7876,9 +8415,11 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (!mounted) return;
 
     // Si hay una playlist seleccionada, volver a la lista de playlists
-    if (_selectedPlaylist != null) {
+    if (_hasSelectedPlaylist) {
+      _invalidateYtPlaylistSongLoads('internal-pop-from-playlist-detail');
       setState(() {
         _selectedPlaylist = null;
+        _selectedYtLibraryPlaylist = null;
         carpetaSeleccionada = null;
         _searchController.clear();
         _filteredSongs.clear();
@@ -7890,11 +8431,13 @@ class _FoldersScreenState extends State<FoldersScreen>
       return;
     }
 
+    _invalidateYtPlaylistSongLoads('internal-pop-to-folders');
     setState(() {
       carpetaSeleccionada = null;
       _showAllSongs = false;
       _showPlaylists = false;
       _selectedPlaylist = null;
+      _selectedYtLibraryPlaylist = null;
     });
     unawaited(_saveLastViewPrefs());
     // Recargar la lista de carpetas para mostrar el estado actual
