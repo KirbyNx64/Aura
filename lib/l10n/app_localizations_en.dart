@@ -202,6 +202,11 @@ const Map<String, String> appLocalizationsEn = {
   'translation_language': 'Translation language',
   'translation_language_desc':
       'Select the language lyrics will be translated to',
+  'translation_display_mode': 'Translation mode',
+  'translation_display_mode_desc':
+      'Choose whether translation appears below the original lyric or replaces it',
+  'translation_display_mode_append': 'Below original lyrics',
+  'translation_display_mode_replace': 'Replace original lyrics',
   'auto_detect': 'Auto detect',
   'language_spanish': 'Spanish',
   'language_english': 'English',

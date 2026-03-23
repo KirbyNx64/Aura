@@ -952,15 +952,19 @@ class _LyricsWithTranslationViewState
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        _LyricsModalListView(
-          lyricLines: widget.lyricLines,
-          isAmoled: widget.isAmoled,
-          isDark: widget.isDark,
-          showTranslation: _showTranslation,
-          translatedLines: _translatedLines,
-          isSelectionMode: _isSelectionMode,
-          selectedIndices: _selectedIndices,
-          onLineSelected: _onLineSelected,
+        ValueListenableBuilder<bool>(
+          valueListenable: translationReplaceOriginalNotifier,
+          builder: (context, replaceOriginal, _) => _LyricsModalListView(
+            lyricLines: widget.lyricLines,
+            isAmoled: widget.isAmoled,
+            isDark: widget.isDark,
+            showTranslation: _showTranslation,
+            translatedLines: _translatedLines,
+            replaceOriginalWithTranslation: replaceOriginal,
+            isSelectionMode: _isSelectionMode,
+            selectedIndices: _selectedIndices,
+            onLineSelected: _onLineSelected,
+          ),
         ),
         if (!_isSelectionMode) ...[
           Positioned(
@@ -1037,6 +1041,7 @@ class _LyricsModalListView extends StatefulWidget {
   final bool isDark;
   final bool showTranslation;
   final List<String>? translatedLines;
+  final bool replaceOriginalWithTranslation;
   final bool isSelectionMode;
   final Set<int> selectedIndices;
   final ValueChanged<int> onLineSelected;
@@ -1047,6 +1052,7 @@ class _LyricsModalListView extends StatefulWidget {
     required this.isDark,
     this.showTranslation = false,
     this.translatedLines,
+    this.replaceOriginalWithTranslation = false,
     required this.isSelectionMode,
     required this.selectedIndices,
     required this.onLineSelected,
@@ -1312,29 +1318,40 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
                       widget.showTranslation &&
                           widget.translatedLines != null &&
                           index < widget.translatedLines!.length
-                      ? Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.lyricLines[index].text,
-                              textAlign: TextAlign.left,
-                              style: textStyle.copyWith(
-                                color: textStyle.color?.withValues(alpha: 0.6),
-                                fontSize: 18,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              widget.translatedLines![index],
-                              textAlign: TextAlign.left,
-                              style: textStyle.copyWith(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        )
+                      ? widget.replaceOriginalWithTranslation
+                            ? Text(
+                                widget.translatedLines![index],
+                                textAlign: TextAlign.left,
+                                style: textStyle.copyWith(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.lyricLines[index].text,
+                                    textAlign: TextAlign.left,
+                                    style: textStyle.copyWith(
+                                      color: textStyle.color?.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.normal,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    widget.translatedLines![index],
+                                    textAlign: TextAlign.left,
+                                    style: textStyle.copyWith(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              )
                       : Text(
                           widget.lyricLines[index].text,
                           textAlign: TextAlign.left,

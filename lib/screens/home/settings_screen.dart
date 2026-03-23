@@ -87,6 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     _loadOverlayNextButtonSetting();
     _loadTranslationLanguageSetting();
+    _loadTranslationDisplayModeSetting();
     _loadArtworkBackgroundSetting();
     _bootstrapYtAuthState();
   }
@@ -131,6 +132,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final language = prefs.getString('translation_language') ?? 'auto';
     translationLanguageNotifier.value = language;
+  }
+
+  Future<void> _loadTranslationDisplayModeSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final replaceOriginal =
+        prefs.getBool('translation_replace_original') ?? false;
+    translationReplaceOriginalNotifier.value = replaceOriginal;
   }
 
   Future<void> _loadArtworkBackgroundSetting() async {
@@ -2906,6 +2914,183 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _showTranslationDisplayModeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.text_fields_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'translation_display_mode',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'translation_display_mode_desc',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: translationReplaceOriginalNotifier,
+                      builder: (context, replaceOriginal, _) {
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildTranslationDisplayModeOption(
+                              context: context,
+                              title: LocaleProvider.tr(
+                                'translation_display_mode_append',
+                              ),
+                              icon: Icons.notes_rounded,
+                              replaceOriginal: false,
+                              isSelected: !replaceOriginal,
+                            ),
+                            _buildTranslationDisplayModeOption(
+                              context: context,
+                              title: LocaleProvider.tr(
+                                'translation_display_mode_replace',
+                              ),
+                              icon: Icons.swap_horiz_rounded,
+                              replaceOriginal: true,
+                              isSelected: replaceOriginal,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTranslationDisplayModeOption({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required bool replaceOriginal,
+    required bool isSelected,
+  }) {
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+    final onSurfaceColor = Theme.of(context).colorScheme.onSurface;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: InkWell(
+        onTap: () async {
+          if (!isSelected) {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool(
+              'translation_replace_original',
+              replaceOriginal,
+            );
+            translationReplaceOriginalNotifier.value = replaceOriginal;
+          }
+          if (context.mounted) Navigator.of(context).pop();
+        },
+        borderRadius: BorderRadius.circular(28),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: isSelected ? primaryColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(28),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? onPrimaryColor : onSurfaceColor,
+                size: 24,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: isSelected ? onPrimaryColor : onSurfaceColor,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (isSelected)
+                Icon(Icons.check_circle, color: onPrimaryColor, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // Función para mostrar confirmación de eliminación de letras con el mismo diseño
   Future<void> _showDeleteLyricsConfirmation() async {
     showDialog<bool>(
@@ -4891,6 +5076,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: () => _showTranslationLanguageDialog(context),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: translationReplaceOriginalNotifier,
+                builder: (context, replaceOriginal, _) {
+                  return ListTile(
+                    title: Text(
+                      LocaleProvider.tr('translation_display_mode'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    subtitle: Text(
+                      replaceOriginal
+                          ? LocaleProvider.tr('translation_display_mode_replace')
+                          : LocaleProvider.tr('translation_display_mode_append'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    leading: Icon(
+                      Icons.text_fields_rounded,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                    ),
+                    onTap: () => _showTranslationDisplayModeDialog(context),
+                  );
+                },
               ),
             ),
 

@@ -3490,6 +3490,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   Future<void> _autoStartRadioAfterPlaybackStart({
     required int expectedIndex,
+    required int expectedSessionVersion,
   }) async {
     if (_radioAutoStartPending) {
       _releaseLog('radio:auto_start skipped already_pending');
@@ -3503,6 +3504,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final startedAt = DateTime.now();
       while (DateTime.now().difference(startedAt) <
           const Duration(seconds: 6)) {
+        if (expectedSessionVersion != _streamSessionVersion) {
+          _releaseLog('radio:auto_start abort session_changed');
+          return;
+        }
         if (!_deferredStreamingQueueMode || _mediaQueue.isEmpty) {
           _releaseLog('radio:auto_start abort mode_or_queue_changed');
           return;
@@ -3520,6 +3525,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
       if (!_player.playing) {
         _releaseLog('radio:auto_start abort not_playing_after_wait');
+        return;
+      }
+      if (expectedSessionVersion != _streamSessionVersion) {
+        _releaseLog('radio:auto_start abort session_changed_before_trigger');
         return;
       }
 
@@ -5067,11 +5076,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         initialIndex = 0;
       }
 
+      _resetStreamingSessionState(clearQueuedVideos: true);
+
       _deferredStreamingQueueMode = true;
       _deferredStreamingQueueIndex = initialIndex;
       _streamRadioEnabled = false;
       _streamRadioSeedVideoId = null;
       _streamRadioContinuationParams = null;
+      final sessionVersionForQueue = _streamSessionVersion;
 
       _pendingArtworkOperations.clear();
       cancelAllArtworkLoads();
@@ -5112,7 +5124,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           'radio:playYtStreamQueue autoStart requested queueSize=${_mediaQueue.length} initialIndex=$initialIndex',
         );
         unawaited(
-          _autoStartRadioAfterPlaybackStart(expectedIndex: initialIndex),
+          _autoStartRadioAfterPlaybackStart(
+            expectedIndex: initialIndex,
+            expectedSessionVersion: sessionVersionForQueue,
+          ),
         );
       }
       return {'ok': true};

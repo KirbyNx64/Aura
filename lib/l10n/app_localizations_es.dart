@@ -208,6 +208,11 @@ const Map<String, String> appLocalizationsEs = {
   'translation_language': 'Idioma de traducción',
   'translation_language_desc':
       'Selecciona el idioma al que se traducirán las letras',
+  'translation_display_mode': 'Modo de traducción',
+  'translation_display_mode_desc':
+      'Elige si la traducción se muestra debajo de la letra original o si la reemplaza',
+  'translation_display_mode_append': 'Debajo de la original',
+  'translation_display_mode_replace': 'Sustituir original',
   'auto_detect': 'Detectar automáticamente',
   'language_spanish': 'Español',
   'language_english': 'Inglés',

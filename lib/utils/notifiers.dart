@@ -87,6 +87,10 @@ final ValueNotifier<String> translationLanguageNotifier = ValueNotifier<String>(
   'auto',
 );
 
+// Notifier para mostrar la traducción sustituyendo la letra original.
+final ValueNotifier<bool> translationReplaceOriginalNotifier =
+    ValueNotifier<bool>(false);
+
 // Notifier para el badge de descargas nuevas
 final ValueNotifier<bool> hasNewDownloadsNotifier = ValueNotifier<bool>(false);
 
