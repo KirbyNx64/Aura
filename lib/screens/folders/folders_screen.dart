@@ -221,7 +221,11 @@ class _FoldersScreenState extends State<FoldersScreen>
   List<_YtLibraryPlaylistItem> _ytLibraryPlaylists = [];
   List<_YtLibraryPlaylistItem> _filteredYtLibraryPlaylists = [];
   final Map<String, List<_StreamingPlaylistItem>> _ytPlaylistItemsCache = {};
+  final Map<String, String?> _ytPlaylistContinuationTokenCache = {};
   int _ytPlaylistSongsLoadGeneration = 0;
+  String? _ytActivePlaylistContinuationToken;
+  bool _ytActivePlaylistHasMore = false;
+  bool _isLoadingMoreYtPlaylistSongs = false;
   List<SongModel> _allSongsForGrid = [];
   Map<String, List<String>> _playlistArtworkSourcesCache = {};
   hive_model.PlaylistModel? _selectedPlaylist;
@@ -5304,6 +5308,14 @@ class _FoldersScreenState extends State<FoldersScreen>
                   showingStreamingPlaylist && _searchController.text.isNotEmpty
                   ? _filteredPlaylistStreamingItems
                   : _playlistStreamingItems;
+              final showYtStreamingPagination =
+                  showingStreamingPlaylist &&
+                  _playlistSource == PlaylistSource.ytMusicCookies &&
+                  _selectedYtLibraryPlaylist != null &&
+                  _searchController.text.isEmpty;
+              final showYtStreamingFooter =
+                  showYtStreamingPagination &&
+                  (_ytActivePlaylistHasMore || _isLoadingMoreYtPlaylistSongs);
 
               if ((showingStreamingPlaylist && streamingToShow.isEmpty) ||
                   (!showingStreamingPlaylist && _filteredSongs.isEmpty)) {
@@ -5393,11 +5405,53 @@ class _FoldersScreenState extends State<FoldersScreen>
                     bottom: space,
                   ),
                   itemCount: showingStreamingPlaylist
-                      ? streamingToShow.length
+                      ? streamingToShow.length + (showYtStreamingFooter ? 1 : 0)
                       : _displaySongs.length,
                   itemBuilder: (context, i) {
                     if (showingStreamingPlaylist) {
+                      if (i >= streamingToShow.length) {
+                        if (showYtStreamingPagination &&
+                            _ytActivePlaylistHasMore &&
+                            !_isLoadingMoreYtPlaylistSongs) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            unawaited(_loadMoreYtPlaylistSongsIfNeeded());
+                          });
+                        }
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Center(
+                            child: _isLoadingMoreYtPlaylistSongs
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: LoadingIndicator(),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      TranslatedText(
+                                        'loading_more',
+                                        style: TextStyle(fontSize: 14),
+                                      ),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        );
+                      }
+
                       final item = streamingToShow[i];
+                      if (showYtStreamingPagination &&
+                          _ytActivePlaylistHasMore &&
+                          !_isLoadingMoreYtPlaylistSongs &&
+                          i >= streamingToShow.length - 5) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
+                          unawaited(_loadMoreYtPlaylistSongsIfNeeded());
+                        });
+                      }
                       final sources = _streamingArtworkSources(item);
                       final isSelected = _selectedSongPaths.contains(
                         item.rawPath,
@@ -8054,6 +8108,9 @@ class _FoldersScreenState extends State<FoldersScreen>
       _displaySongs = [];
       _playlistStreamingItems = [];
       _filteredPlaylistStreamingItems = [];
+      _ytActivePlaylistContinuationToken = null;
+      _ytActivePlaylistHasMore = false;
+      _isLoadingMoreYtPlaylistSongs = false;
       _isLoading = true;
     });
 
@@ -8073,45 +8130,39 @@ class _FoldersScreenState extends State<FoldersScreen>
         '_loadSongsFromYtLibraryPlaylist using cache: tracks=${cached.length}',
       );
       streamingItems = List<_StreamingPlaylistItem>.from(cached);
+      final cachedContinuation =
+          _ytPlaylistContinuationTokenCache[requestedPlaylistId]?.trim();
+      _ytActivePlaylistContinuationToken =
+          (cachedContinuation != null && cachedContinuation.isNotEmpty)
+          ? cachedContinuation
+          : null;
+      _ytActivePlaylistHasMore = _ytActivePlaylistContinuationToken != null;
     } else {
-      final tracks = await yt_service.getPlaylistSongs(requestedPlaylistId);
+      final firstPage = await yt_service.getPlaylistSongsPage(
+        requestedPlaylistId,
+        limit: 100,
+      );
       if (!_isYtPlaylistSongLoadActive(
         generation: loadGeneration,
         playlistId: requestedPlaylistId,
       )) {
         return;
       }
+      final tracks =
+          (firstPage['results'] as List?)
+              ?.whereType<yt_service.YtMusicResult>()
+              .toList() ??
+          <yt_service.YtMusicResult>[];
+      final nextToken = firstPage['continuationToken']?.toString().trim();
+      _ytActivePlaylistContinuationToken =
+          (nextToken != null && nextToken.isNotEmpty) ? nextToken : null;
+      _ytActivePlaylistHasMore = _ytActivePlaylistContinuationToken != null;
+      _ytPlaylistContinuationTokenCache[requestedPlaylistId] =
+          _ytActivePlaylistContinuationToken;
       _ytUiLog(
-        '_loadSongsFromYtLibraryPlaylist service tracks=${tracks.length}',
+        '_loadSongsFromYtLibraryPlaylist first page tracks=${tracks.length}, hasMore=$_ytActivePlaylistHasMore',
       );
-      streamingItems = tracks
-          .where((track) => (track.videoId?.trim().isNotEmpty ?? false))
-          .map((track) {
-            final videoId = track.videoId!.trim();
-            final durationText =
-                (track.durationText?.trim().isNotEmpty ?? false)
-                ? track.durationText!.trim()
-                : (track.durationMs != null && track.durationMs! > 0)
-                ? _formatDurationMs(track.durationMs!)
-                : null;
-            return _StreamingPlaylistItem(
-              rawPath: 'yt:$videoId',
-              title: (track.title?.trim().isNotEmpty ?? false)
-                  ? track.title!.trim()
-                  : 'YouTube Music ($videoId)',
-              artist: (track.artist?.trim().isNotEmpty ?? false)
-                  ? track.artist!.trim()
-                  : LocaleProvider.tr('artist_unknown'),
-              videoId: videoId,
-              artUri: _applyStreamingArtworkQuality(
-                track.thumbUrl,
-                videoId: videoId,
-              ),
-              durationText: durationText,
-              durationMs: track.durationMs,
-            );
-          })
-          .toList();
+      streamingItems = _mapYtTracksToStreamingItems(tracks);
 
       _ytPlaylistItemsCache[requestedPlaylistId] = List.from(streamingItems);
     }
@@ -8138,13 +8189,119 @@ class _FoldersScreenState extends State<FoldersScreen>
       return;
     }
     _ytUiLog(
-      '_loadSongsFromYtLibraryPlaylist done: visible=${_playlistStreamingItems.length}',
+      '_loadSongsFromYtLibraryPlaylist done: visible=${_playlistStreamingItems.length}, hasMore=$_ytActivePlaylistHasMore',
     );
     if (!mounted) return;
     setState(() {
       _isLoading = false;
     });
     unawaited(_saveLastViewPrefs());
+  }
+
+  List<_StreamingPlaylistItem> _mapYtTracksToStreamingItems(
+    List<yt_service.YtMusicResult> tracks,
+  ) {
+    return tracks
+        .where((track) => (track.videoId?.trim().isNotEmpty ?? false))
+        .map((track) {
+          final videoId = track.videoId!.trim();
+          final durationText = (track.durationText?.trim().isNotEmpty ?? false)
+              ? track.durationText!.trim()
+              : (track.durationMs != null && track.durationMs! > 0)
+              ? _formatDurationMs(track.durationMs!)
+              : null;
+          return _StreamingPlaylistItem(
+            rawPath: 'yt:$videoId',
+            title: (track.title?.trim().isNotEmpty ?? false)
+                ? track.title!.trim()
+                : 'YouTube Music ($videoId)',
+            artist: (track.artist?.trim().isNotEmpty ?? false)
+                ? track.artist!.trim()
+                : LocaleProvider.tr('artist_unknown'),
+            videoId: videoId,
+            artUri: _applyStreamingArtworkQuality(
+              track.thumbUrl,
+              videoId: videoId,
+            ),
+            durationText: durationText,
+            durationMs: track.durationMs,
+          );
+        })
+        .toList();
+  }
+
+  Future<void> _loadMoreYtPlaylistSongsIfNeeded() async {
+    if (!mounted) return;
+    if (_playlistSource != PlaylistSource.ytMusicCookies) return;
+    if (_selectedYtLibraryPlaylist == null) return;
+    if (_searchController.text.isNotEmpty) return;
+    if (!_ytActivePlaylistHasMore) return;
+    if (_isLoadingMoreYtPlaylistSongs) return;
+
+    final playlistId = _selectedYtLibraryPlaylist!.playlistId;
+    final token = _ytActivePlaylistContinuationToken?.trim();
+    if (token == null || token.isEmpty) {
+      _ytActivePlaylistHasMore = false;
+      return;
+    }
+
+    final loadGeneration = _ytPlaylistSongsLoadGeneration;
+    setState(() {
+      _isLoadingMoreYtPlaylistSongs = true;
+    });
+
+    try {
+      final page = await yt_service.getPlaylistSongsPage(
+        playlistId,
+        continuationToken: token,
+        limit: 100,
+      );
+      if (!_isYtPlaylistSongLoadActive(
+        generation: loadGeneration,
+        playlistId: playlistId,
+      )) {
+        return;
+      }
+
+      final tracks =
+          (page['results'] as List?)
+              ?.whereType<yt_service.YtMusicResult>()
+              .toList() ??
+          <yt_service.YtMusicResult>[];
+      final mapped = _mapYtTracksToStreamingItems(tracks);
+      final nextToken = page['continuationToken']?.toString().trim();
+      final existingRawPaths = _originalPlaylistStreamingItems
+          .map((e) => e.rawPath)
+          .toSet();
+      final deduped = mapped
+          .where((item) => !existingRawPaths.contains(item.rawPath))
+          .toList();
+
+      _originalPlaylistStreamingItems.addAll(deduped);
+      _ytPlaylistItemsCache[playlistId] = List.from(
+        _originalPlaylistStreamingItems,
+      );
+      _ytActivePlaylistContinuationToken =
+          (nextToken != null && nextToken.isNotEmpty) ? nextToken : null;
+      _ytActivePlaylistHasMore = _ytActivePlaylistContinuationToken != null;
+      _ytPlaylistContinuationTokenCache[playlistId] =
+          _ytActivePlaylistContinuationToken;
+
+      await _ordenarCanciones();
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMoreYtPlaylistSongs = false;
+      });
+      _ytUiLog(
+        '_loadMoreYtPlaylistSongsIfNeeded done: added=${deduped.length}, total=${_originalPlaylistStreamingItems.length}, hasMore=$_ytActivePlaylistHasMore',
+      );
+    } catch (e) {
+      _ytUiLog('_loadMoreYtPlaylistSongsIfNeeded error: $e');
+      if (!mounted) return;
+      setState(() {
+        _isLoadingMoreYtPlaylistSongs = false;
+      });
+    }
   }
 
   /// Cargar las canciones de una playlist seleccionada
