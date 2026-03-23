@@ -1325,23 +1325,41 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       },
     );
 
-    if ((targetIndex - currentIndex).abs() == 1) {
-      if (targetIndex > currentIndex) {
-        unawaited(_skipToNextWithArtworkDirection());
-      } else {
-        unawaited(_skipToPreviousWithArtworkDirection());
-      }
-      return;
-    }
-
+    final currentIndexSnapshot = currentIndex;
     unawaited(() async {
       try {
         await _precacheMediaItemArtwork(
           queue[targetIndex],
         ).timeout(const Duration(milliseconds: 320));
       } catch (_) {}
+
       await audioHandler?.skipToQueueItem(targetIndex);
+
+      // En algunos escenarios de carrera el carrusel cambia pero el índice real
+      // de reproducción no alcanza a actualizarse. Verificamos y reintentamos.
+      await Future.delayed(const Duration(milliseconds: 260));
+      if (_isCurrentMediaItemAtQueueIndex(targetIndex)) return;
+
+      await audioHandler?.skipToQueueItem(targetIndex);
+      await Future.delayed(const Duration(milliseconds: 360));
+      if (_isCurrentMediaItemAtQueueIndex(targetIndex)) return;
+
+      // Si aún falla, restaurar carátula al ítem real para evitar desincronía visual.
+      final current = audioHandler?.mediaItem.value;
+      if (current != null) {
+        _syncArtworkCarouselToMediaItem(current);
+      } else {
+        _artworkCarouselPage = currentIndexSnapshot;
+      }
     }());
+  }
+
+  bool _isCurrentMediaItemAtQueueIndex(int index) {
+    final queue = audioHandler?.queue.value ?? const <MediaItem>[];
+    final current = audioHandler?.mediaItem.value;
+    if (current == null) return false;
+    if (index < 0 || index >= queue.length) return false;
+    return queue[index].id == current.id;
   }
 
   Future<void> _skipToNextWithArtworkDirection() async {
@@ -2228,10 +2246,21 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     });
   }
 
+  int _playerArtworkCacheSizePx() {
+    final size = MediaQuery.of(context).size;
+    final artworkSize = size.height < 650 ? size.width * 0.6 : size.width * 0.84;
+    final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+    return (artworkSize * pixelRatio).round();
+  }
+
   Future<void> _precacheMediaItemArtwork(MediaItem item) async {
     Uri? artUri = _displayArtUriFor(item);
 
-    if (artUri == null) {
+    final songId = item.extras?['songId'];
+    final songPath = item.extras?['data'];
+    final shouldResolveLocalArtwork =
+        artUri == null || artUri.scheme.toLowerCase() == 'content';
+    if (shouldResolveLocalArtwork) {
       final songId = item.extras?['songId'];
       final songPath = item.extras?['data'];
       if (songId is int && songPath is String && songPath.isNotEmpty) {
@@ -2248,7 +2277,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       provider = FileImage(File(artUri.toFilePath()));
     } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
       final url = artUri.toString();
-      provider = CachedNetworkImageProvider(url);
+      final cacheSize = _playerArtworkCacheSizePx();
+      provider = ResizeImage(
+        CachedNetworkImageProvider(url),
+        width: cacheSize,
+        height: cacheSize,
+      );
       if (_artworkDiskPreloadGuard.add(url)) {
         // Fuerza guardar en cache de disco para que la transición no dependa de red.
         unawaited(() async {
@@ -2264,9 +2298,21 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         }());
       }
     } else {
-      return;
+      if (songId is int && songPath is String && songPath.isNotEmpty) {
+        final localCached =
+            _getCachedArtwork(songPath) ??
+            await getOrCacheArtwork(songId, songPath);
+        if (localCached != null && localCached.scheme == 'file') {
+          provider = FileImage(File(localCached.toFilePath()));
+        } else {
+          return;
+        }
+      } else {
+        return;
+      }
     }
 
+    if (!mounted) return;
     try {
       await precacheImage(provider, context);
     } catch (_) {

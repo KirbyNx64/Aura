@@ -87,6 +87,10 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/url_launcher',
       '^6.3.2',
     ),
+    'url_launcher_android': _DependencyInfo(
+      'https://pub.dev/packages/url_launcher_android',
+      '^6.3.28',
+    ),
     'device_info_plus': _DependencyInfo(
       'https://pub.dev/packages/device_info_plus',
       '^12.3.0',
@@ -99,6 +103,14 @@ class DependenciesScreen extends StatelessWidget {
     'smooth_page_indicator': _DependencyInfo(
       'https://pub.dev/packages/smooth_page_indicator',
       '^2.0.1',
+    ),
+    'carousel_slider': _DependencyInfo(
+      'https://pub.dev/packages/carousel_slider',
+      '^5.1.2',
+    ),
+    'flutter_inappwebview': _DependencyInfo(
+      'https://pub.dev/packages/flutter_inappwebview',
+      '^6.1.5',
     ),
     'squiggly_slider': _DependencyInfo(
       'https://pub.dev/packages/squiggly_slider',
@@ -140,6 +152,10 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/fading_edge_scrollview',
       '^4.1.1',
     ),
+    'dynamic_color': _DependencyInfo(
+      'https://pub.dev/packages/dynamic_color',
+      '^1.8.1',
+    ),
     'flutter_sharing_intent': _DependencyInfo(
       'https://pub.dev/packages/flutter_sharing_intent',
       '^1.1.1',
@@ -156,11 +172,28 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/buttons_tabbar',
       '^1.3.15',
     ),
+    'video_player': _DependencyInfo(
+      'https://pub.dev/packages/video_player',
+      '^2.11.1',
+    ),
+    'video_player_media_kit': _DependencyInfo(
+      'https://pub.dev/packages/video_player_media_kit',
+      '^2.0.0',
+    ),
+    'media_kit_libs_android_video': _DependencyInfo(
+      'https://pub.dev/packages/media_kit_libs_android_video',
+      'any',
+    ),
     'image': _DependencyInfo('https://pub.dev/packages/image', '^4.8.0'),
     'cached_network_image': _DependencyInfo(
       'https://pub.dev/packages/cached_network_image',
       '^3.4.1',
     ),
+    'flutter_cache_manager': _DependencyInfo(
+      'https://pub.dev/packages/flutter_cache_manager',
+      '^3.4.1',
+    ),
+    'crypto': _DependencyInfo('https://pub.dev/packages/crypto', '^3.0.7'),
     'material_loading_indicator': _DependencyInfo(
       'https://pub.dev/packages/material_loading_indicator',
       '^1.0.0',
@@ -193,6 +226,18 @@ class DependenciesScreen extends StatelessWidget {
     'android_nav_setting': _DependencyInfo(
       'https://pub.dev/packages/android_nav_setting',
       '^0.0.2+2',
+    ),
+    'material_new_shapes': _DependencyInfo(
+      'https://pub.dev/packages/material_new_shapes',
+      '^1.0.0',
+    ),
+    'progress_indicator_m3e': _DependencyInfo(
+      'https://pub.dev/packages/progress_indicator_m3e',
+      '^0.1.1',
+    ),
+    'm3e_design': _DependencyInfo(
+      'https://pub.dev/packages/m3e_design',
+      '^0.2.1',
     ),
     'expressive_refresh': _DependencyInfo(
       'https://pub.dev/packages/expressive_refresh',

@@ -2308,6 +2308,477 @@ void parseSongs(List items, List<YtMusicResult> results) {
   }
 }
 
+String _normalizeLooseText(String value) {
+  final lower = value.toLowerCase();
+  const withAccents = 'áàäâãéèëêíìïîóòöôõúùüûñ';
+  const withoutAccents = 'aaaaaeeeeiiiiooooouuuun';
+  var normalized = lower;
+  for (int i = 0; i < withAccents.length; i++) {
+    normalized = normalized.replaceAll(withAccents[i], withoutAccents[i]);
+  }
+  return normalized;
+}
+
+bool _matchesListenAgainTitle(String? rawTitle) {
+  final title = _normalizeLooseText(rawTitle?.trim() ?? '');
+  if (title.isEmpty) return false;
+  return title.contains('listen again') ||
+      title.contains('escuchar de nuevo') ||
+      title.contains('vuelve a escucharlo') ||
+      title.contains('volver a escuchar') ||
+      title.contains('rehor') ||
+      title.contains('ecouter a nouveau');
+}
+
+bool _matchesDiscoveryTitle(String? rawTitle) {
+  final title = _normalizeLooseText(rawTitle?.trim() ?? '');
+  if (title.isEmpty) return false;
+  return title.contains('descub') ||
+      title.contains('discover') ||
+      title.contains('new release') ||
+      title.contains('nuevos') ||
+      title.contains('for you') ||
+      title.contains('para ti');
+}
+
+bool _matchesNewDiscoveriesTitle(String? rawTitle) {
+  final title = _normalizeLooseText(rawTitle?.trim() ?? '');
+  if (title.isEmpty) return false;
+  return title.contains('nuevos descubrimientos') ||
+      title.contains('nuevo descubrimiento') ||
+      title.contains('new discoveries') ||
+      title.contains('new discovery') ||
+      title.contains('discover mix') ||
+      title.contains('mix para descubrir');
+}
+
+bool _matchesVersionsRemixesTitle(String? rawTitle) {
+  final title = _normalizeLooseText(rawTitle?.trim() ?? '');
+  if (title.isEmpty) return false;
+  return title.contains('versiones y remixes') ||
+      title.contains('versiones') ||
+      title.contains('remixes') ||
+      title.contains('remix');
+}
+
+String? _extractShelfTitle(dynamic shelfRenderer) {
+  final text =
+      nav(shelfRenderer, [
+        'header',
+        'musicCarouselShelfBasicHeaderRenderer',
+        'title',
+        'runs',
+        0,
+        'text',
+      ]) ??
+      nav(shelfRenderer, [
+        'header',
+        'musicCarouselShelfBasicHeaderRenderer',
+        'title',
+        'simpleText',
+      ]) ??
+      nav(shelfRenderer, ['title', 'runs', 0, 'text']) ??
+      nav(shelfRenderer, ['title', 'simpleText']);
+  final value = text?.toString().trim();
+  return (value == null || value.isEmpty) ? null : value;
+}
+
+String? _extractArtistFromRuns(dynamic runs) {
+  if (runs is! List || runs.isEmpty) return null;
+  String? fallback;
+  for (final run in runs) {
+    if (run is! Map) continue;
+    final text = run['text']?.toString().trim();
+    if (text == null ||
+        text.isEmpty ||
+        text == '•' ||
+        text == '·' ||
+        text == '-' ||
+        text == '|' ||
+        text == ',') {
+      continue;
+    }
+
+    fallback ??= text;
+    final browseId = nav(run, [
+      'navigationEndpoint',
+      'browseEndpoint',
+      'browseId',
+    ])?.toString();
+    if (browseId != null && browseId.isNotEmpty) {
+      return text;
+    }
+  }
+  return fallback;
+}
+
+String? _extractDurationFromRuns(dynamic runs) {
+  if (runs is! List || runs.isEmpty) return null;
+  final regex = RegExp(r'^(\d+:)*\d+:\d+$');
+  for (final run in runs) {
+    if (run is! Map) continue;
+    final text = run['text']?.toString().trim();
+    if (text == null || text.isEmpty) continue;
+    if (regex.hasMatch(text)) return text;
+  }
+  return null;
+}
+
+YtMusicResult? _parseTwoRowRendererToResult(Map<String, dynamic> renderer) {
+  final videoId =
+      nav(renderer, [
+        'navigationEndpoint',
+        'watchEndpoint',
+        'videoId',
+      ])?.toString().trim() ??
+      nav(renderer, [
+        'overlay',
+        'musicItemThumbnailOverlayRenderer',
+        'content',
+        'musicPlayButtonRenderer',
+        'playNavigationEndpoint',
+        'watchEndpoint',
+        'videoId',
+      ])?.toString().trim();
+  if (videoId == null || videoId.isEmpty) return null;
+
+  final videoType = nav(renderer, [
+    'overlay',
+    'musicItemThumbnailOverlayRenderer',
+    'content',
+    'musicPlayButtonRenderer',
+    'playNavigationEndpoint',
+    'watchEndpoint',
+    'watchEndpointMusicSupportedConfigs',
+    'watchEndpointMusicConfig',
+    'musicVideoType',
+  ])?.toString();
+  if (videoType != null &&
+      videoType.isNotEmpty &&
+      videoType.contains('PODCAST')) {
+    return null;
+  }
+
+  final title =
+      nav(renderer, ['title', 'runs', 0, 'text'])?.toString().trim() ??
+      nav(renderer, ['title', 'simpleText'])?.toString().trim();
+  if (title == null || title.isEmpty) return null;
+
+  final subtitleRuns = nav(renderer, ['subtitle', 'runs']);
+  final artist = _extractArtistFromRuns(subtitleRuns);
+  final durationText = _extractDurationFromRuns(subtitleRuns);
+  final durationMs = _parseDurationTextMs(durationText);
+
+  dynamic thumbnails = nav(renderer, [
+    'thumbnailRenderer',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  thumbnails ??= nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  String? thumbUrl;
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    final raw = thumbnails.last['url']?.toString().trim();
+    if (raw != null && raw.isNotEmpty) {
+      thumbUrl = _cleanThumbnailUrl(raw, highQuality: true);
+    }
+  }
+
+  return YtMusicResult(
+    title: title,
+    artist: artist,
+    thumbUrl: thumbUrl,
+    videoId: videoId,
+    durationText: durationText,
+    durationMs: durationMs,
+  );
+}
+
+YtMusicResult? _parseResponsiveRendererToResult(Map<String, dynamic> renderer) {
+  final title =
+      nav(renderer, [
+        'flexColumns',
+        0,
+        'musicResponsiveListItemFlexColumnRenderer',
+        'text',
+        'runs',
+        0,
+        'text',
+      ])?.toString().trim() ??
+      nav(renderer, [
+        'flexColumns',
+        0,
+        'musicResponsiveListItemFlexColumnRenderer',
+        'text',
+        'simpleText',
+      ])?.toString().trim();
+  if (title == null || title.isEmpty) return null;
+
+  final videoId =
+      nav(renderer, [
+        'overlay',
+        'musicItemThumbnailOverlayRenderer',
+        'content',
+        'musicPlayButtonRenderer',
+        'playNavigationEndpoint',
+        'watchEndpoint',
+        'videoId',
+      ])?.toString().trim() ??
+      nav(renderer, [
+        'navigationEndpoint',
+        'watchEndpoint',
+        'videoId',
+      ])?.toString().trim();
+  if (videoId == null || videoId.isEmpty) return null;
+
+  final videoType = nav(renderer, [
+    'overlay',
+    'musicItemThumbnailOverlayRenderer',
+    'content',
+    'musicPlayButtonRenderer',
+    'playNavigationEndpoint',
+    'watchEndpoint',
+    'watchEndpointMusicSupportedConfigs',
+    'watchEndpointMusicConfig',
+    'musicVideoType',
+  ])?.toString();
+  if (videoType != null &&
+      videoType.isNotEmpty &&
+      videoType.contains('PODCAST')) {
+    return null;
+  }
+
+  final subtitleRuns = nav(renderer, [
+    'flexColumns',
+    1,
+    'musicResponsiveListItemFlexColumnRenderer',
+    'text',
+    'runs',
+  ]);
+  final artist = _extractArtistFromRuns(subtitleRuns);
+  final durationText = _extractDurationText(renderer);
+  final durationMs = _parseDurationTextMs(durationText);
+
+  dynamic thumbnails = nav(renderer, [
+    'thumbnail',
+    'musicThumbnailRenderer',
+    'thumbnail',
+    'thumbnails',
+  ]);
+  thumbnails ??= nav(renderer, ['thumbnail', 'thumbnails']);
+  String? thumbUrl;
+  if (thumbnails is List && thumbnails.isNotEmpty) {
+    final raw = thumbnails.last['url']?.toString().trim();
+    if (raw != null && raw.isNotEmpty) {
+      thumbUrl = _cleanThumbnailUrl(raw, highQuality: true);
+    }
+  }
+
+  return YtMusicResult(
+    title: title,
+    artist: artist,
+    thumbUrl: thumbUrl,
+    videoId: videoId,
+    durationText: durationText,
+    durationMs: durationMs,
+  );
+}
+
+List<YtMusicResult> _parseHomeSectionResults(
+  dynamic sectionRenderer, {
+  required int limit,
+}) {
+  final contents = nav(sectionRenderer, ['contents']);
+  if (contents is! List || contents.isEmpty) return const [];
+
+  final results = <YtMusicResult>[];
+  final seenVideoIds = <String>{};
+
+  for (final item in contents) {
+    if (results.length >= limit) break;
+    if (item is! Map) continue;
+
+    final twoRows = <Map<String, dynamic>>[];
+    _collectMapsByKey(item, 'musicTwoRowItemRenderer', twoRows);
+    for (final renderer in twoRows) {
+      if (results.length >= limit) break;
+      final parsed = _parseTwoRowRendererToResult(renderer);
+      final videoId = parsed?.videoId?.trim();
+      if (videoId == null || videoId.isEmpty) continue;
+      if (!seenVideoIds.add(videoId)) continue;
+      results.add(parsed!);
+    }
+
+    if (results.length >= limit) break;
+
+    final responsive = <Map<String, dynamic>>[];
+    _collectMapsByKey(item, 'musicResponsiveListItemRenderer', responsive);
+    for (final renderer in responsive) {
+      if (results.length >= limit) break;
+      final parsed = _parseResponsiveRendererToResult(renderer);
+      final videoId = parsed?.videoId?.trim();
+      if (videoId == null || videoId.isEmpty) continue;
+      if (!seenVideoIds.add(videoId)) continue;
+      results.add(parsed!);
+    }
+  }
+
+  return results;
+}
+
+Future<Map<String, dynamic>> getHomeListenAgainSection({int limit = 18}) async {
+  final data = {...ytServiceContext, 'browseId': 'FEmusic_home'};
+  try {
+    final ctx = (data['context'] as Map);
+    final client = (ctx['client'] as Map);
+    final locale = languageNotifier.value;
+    client['hl'] = locale.startsWith('es') ? 'es' : 'en';
+  } catch (_) {}
+
+  try {
+    final response = (await sendRequest('browse', data)).data;
+    final sections = nav(response, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+    ]);
+    if (sections is! List || sections.isEmpty) {
+      return {'title': null, 'results': <YtMusicResult>[]};
+    }
+
+    String? selectedTitle;
+    List<YtMusicResult> selectedResults = const <YtMusicResult>[];
+    var bestScore = -1;
+
+    for (final section in sections) {
+      if (section is! Map) continue;
+      final shelfRenderer =
+          section['musicCarouselShelfRenderer'] ??
+          section['musicShelfRenderer'];
+      if (shelfRenderer is! Map) continue;
+
+      final title = _extractShelfTitle(shelfRenderer);
+      final parsed = _parseHomeSectionResults(shelfRenderer, limit: limit);
+      if (parsed.isEmpty) continue;
+
+      var score = parsed.length;
+      if (_matchesListenAgainTitle(title)) {
+        score += 1000;
+      } else {
+        final normalizedTitle = _normalizeLooseText(title ?? '');
+        if (normalizedTitle.contains('listen') &&
+            normalizedTitle.contains('again')) {
+          score += 700;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        selectedTitle = title;
+        selectedResults = parsed;
+      }
+    }
+
+    if (selectedResults.isEmpty) {
+      return {'title': null, 'results': <YtMusicResult>[]};
+    }
+
+    return {
+      'title': selectedTitle,
+      'results': selectedResults.take(limit).toList(),
+    };
+  } catch (_) {
+    return {'title': null, 'results': <YtMusicResult>[]};
+  }
+}
+
+Future<Map<String, dynamic>> getHomeDiscoverySection({int limit = 12}) async {
+  final data = {...ytServiceContext, 'browseId': 'FEmusic_home'};
+  try {
+    final ctx = (data['context'] as Map);
+    final client = (ctx['client'] as Map);
+    final locale = languageNotifier.value;
+    client['hl'] = locale.startsWith('es') ? 'es' : 'en';
+  } catch (_) {}
+
+  try {
+    final response = (await sendRequest('browse', data)).data;
+    final sections = nav(response, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+    ]);
+    if (sections is! List || sections.isEmpty) {
+      return {'title': null, 'results': <YtMusicResult>[]};
+    }
+
+    String? selectedTitle;
+    List<YtMusicResult> selectedResults = const <YtMusicResult>[];
+    var bestScore = -1;
+
+    for (final section in sections) {
+      if (section is! Map) continue;
+      final shelfRenderer =
+          section['musicCarouselShelfRenderer'] ??
+          section['musicShelfRenderer'];
+      if (shelfRenderer is! Map) continue;
+
+      final title = _extractShelfTitle(shelfRenderer);
+      final parsed = _parseHomeSectionResults(shelfRenderer, limit: limit);
+      if (parsed.isEmpty) continue;
+
+      final normalizedTitle = _normalizeLooseText(title ?? '');
+      var score = parsed.length;
+      if (_matchesNewDiscoveriesTitle(title)) {
+        score += 4000;
+      } else if (_matchesDiscoveryTitle(title)) {
+        score += 1000;
+      }
+      if (normalizedTitle.contains('mix')) {
+        score += 250;
+      }
+      if (_matchesVersionsRemixesTitle(title)) {
+        score -= 1200;
+      }
+      if (_matchesListenAgainTitle(title)) {
+        score -= 400;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        selectedTitle = title;
+        selectedResults = parsed;
+      }
+    }
+
+    if (selectedResults.isEmpty) {
+      return {'title': null, 'results': <YtMusicResult>[]};
+    }
+
+    return {
+      'title': selectedTitle,
+      'results': selectedResults.take(limit).toList(),
+    };
+  } catch (_) {
+    return {'title': null, 'results': <YtMusicResult>[]};
+  }
+}
+
 // Función para buscar solo canciones con paginación
 Future<List<YtMusicResult>> searchSongsOnly(
   String query, {

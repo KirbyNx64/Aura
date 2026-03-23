@@ -257,7 +257,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   String _displayYtLibraryPlaylistTitle(String title) {
     final trimmed = title.trim();
     if (_isSpanishAppLanguage && trimmed.toLowerCase() == 'liked music') {
-      return 'Música que te gustó';
+      return 'Música que te gustó en YouTube Music';
     }
     return title;
   }
@@ -303,7 +303,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     if (name != null && name.isNotEmpty) {
       return 'YouTube Music ($name)';
     }
-    return 'YouTube Music (cookies)';
+    return 'YouTube Music';
   }
 
   Future<void> _refreshYtAccountDisplayName({bool force = false}) async {

@@ -3,6 +3,8 @@ import 'package:hive_ce/hive_ce.dart';
 class HomeYoutubeCacheDB {
   static const String _boxName = 'home_youtube_cache';
   static const String _sharedPoolKey = 'shared_pool';
+  static const String _listenAgainKey = 'home_listen_again';
+  static const String _discoveryKey = 'home_discovery';
   static const String _updatedAtKey = 'updated_at';
 
   static final HomeYoutubeCacheDB _instance = HomeYoutubeCacheDB._internal();
@@ -42,6 +44,48 @@ class HomeYoutubeCacheDB {
     await b.put(_updatedAtKey, <String, dynamic>{
       'value': DateTime.now().millisecondsSinceEpoch,
     });
+  }
+
+  Future<Map<String, dynamic>?> _getSection(String key) async {
+    final b = await box;
+    final raw = b.get(key);
+    if (raw == null) return null;
+    return Map<String, dynamic>.from(raw);
+  }
+
+  Future<void> _saveSection({
+    required String key,
+    required String? title,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    final b = await box;
+    await b.put(key, <String, dynamic>{
+      if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+      'items': items,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
+
+  Future<Map<String, dynamic>?> getHomeListenAgainSection() async {
+    return _getSection(_listenAgainKey);
+  }
+
+  Future<void> saveHomeListenAgainSection({
+    required String? title,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await _saveSection(key: _listenAgainKey, title: title, items: items);
+  }
+
+  Future<Map<String, dynamic>?> getHomeDiscoverySection() async {
+    return _getSection(_discoveryKey);
+  }
+
+  Future<void> saveHomeDiscoverySection({
+    required String? title,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await _saveSection(key: _discoveryKey, title: title, items: items);
   }
 
   Future<int?> getLastUpdatedAt() async {
