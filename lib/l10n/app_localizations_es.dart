@@ -628,6 +628,13 @@ const Map<String, String> appLocalizationsEs = {
   'yt_music_logout': 'Cerrar sesión de YouTube Music',
   'yt_music_logout_confirm':
       '¿Estás seguro de que quieres cerrar sesión de YouTube Music?',
+  'yt_music_login_screen_title': 'Iniciar sesión en YouTube',
+  'yt_music_login_info_title': 'Información de inicio de sesión',
+  'yt_music_login_info_desc':
+      'Tus datos de sesión (correo, contraseña y cookies) se usan únicamente dentro de este WebView y se guardan solo de forma local en tu dispositivo.\n\nLa sesión en Aura solo sirve para ver tus listas de reproducción de YouTube Music y reproducir el contenido que ya está en tu cuenta.\n\nNo es posible crear, editar o eliminar listas ni modificar tu cuenta desde la app.',
+  'yt_music_login_cookie_extract_error_title': 'No se pudo iniciar sesión',
+  'yt_music_login_cookie_extract_error_desc':
+      'No se pudieron extraer las cookies. Intenta de nuevo.',
   'quick_access': 'Accesos directos',
   'no_songs_to_show': 'No hay canciones para mostrar aún.',
   'quick_pick': 'Selección rápida',

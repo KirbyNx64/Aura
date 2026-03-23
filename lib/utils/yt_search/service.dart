@@ -2330,17 +2330,6 @@ bool _matchesListenAgainTitle(String? rawTitle) {
       title.contains('ecouter a nouveau');
 }
 
-bool _matchesDiscoveryTitle(String? rawTitle) {
-  final title = _normalizeLooseText(rawTitle?.trim() ?? '');
-  if (title.isEmpty) return false;
-  return title.contains('descub') ||
-      title.contains('discover') ||
-      title.contains('new release') ||
-      title.contains('nuevos') ||
-      title.contains('for you') ||
-      title.contains('para ti');
-}
-
 bool _matchesNewDiscoveriesTitle(String? rawTitle) {
   final title = _normalizeLooseText(rawTitle?.trim() ?? '');
   if (title.isEmpty) return false;
@@ -2631,6 +2620,40 @@ List<YtMusicResult> _parseHomeSectionResults(
   return results;
 }
 
+List<YtMusicLibraryPlaylist> _parseHomeSectionPlaylists(
+  dynamic sectionRenderer, {
+  required int limit,
+}) {
+  final contents = nav(sectionRenderer, ['contents']);
+  if (contents is! List || contents.isEmpty) return const [];
+
+  final twoRow = <Map<String, dynamic>>[];
+  final responsive = <Map<String, dynamic>>[];
+  _collectMapsByKey(contents, 'musicTwoRowItemRenderer', twoRow);
+  _collectMapsByKey(contents, 'musicResponsiveListItemRenderer', responsive);
+
+  final parsed = <YtMusicLibraryPlaylist>[];
+  final seenIds = <String>{};
+
+  for (final renderer in twoRow) {
+    if (parsed.length >= limit) break;
+    final item = _parseLibraryPlaylistRenderer(renderer);
+    if (item == null) continue;
+    if (!seenIds.add(item.playlistId)) continue;
+    parsed.add(item);
+  }
+
+  for (final renderer in responsive) {
+    if (parsed.length >= limit) break;
+    final item = _parseLibraryPlaylistResponsiveRenderer(renderer);
+    if (item == null) continue;
+    if (!seenIds.add(item.playlistId)) continue;
+    parsed.add(item);
+  }
+
+  return parsed;
+}
+
 Future<Map<String, dynamic>> getHomeListenAgainSection({int limit = 18}) async {
   final data = {...ytServiceContext, 'browseId': 'FEmusic_home'};
   try {
@@ -2742,13 +2765,13 @@ Future<Map<String, dynamic>> getHomeDiscoverySection({int limit = 12}) async {
       final parsed = _parseHomeSectionResults(shelfRenderer, limit: limit);
       if (parsed.isEmpty) continue;
 
+      // Mantener esta sección estricta: solo "Nuevos descubrimientos"
+      // (o su equivalente en inglés), sin fallback a otras shelves.
+      if (!_matchesNewDiscoveriesTitle(title)) continue;
+
       final normalizedTitle = _normalizeLooseText(title ?? '');
       var score = parsed.length;
-      if (_matchesNewDiscoveriesTitle(title)) {
-        score += 4000;
-      } else if (_matchesDiscoveryTitle(title)) {
-        score += 1000;
-      }
+      score += 4000;
       if (normalizedTitle.contains('mix')) {
         score += 250;
       }
@@ -2776,6 +2799,77 @@ Future<Map<String, dynamic>> getHomeDiscoverySection({int limit = 12}) async {
     };
   } catch (_) {
     return {'title': null, 'results': <YtMusicResult>[]};
+  }
+}
+
+Future<Map<String, dynamic>> getHomeNewDiscoveriesMixesSection({
+  int limit = 12,
+}) async {
+  final data = {...ytServiceContext, 'browseId': 'FEmusic_home'};
+  try {
+    final ctx = (data['context'] as Map);
+    final client = (ctx['client'] as Map);
+    final locale = languageNotifier.value;
+    client['hl'] = locale.startsWith('es') ? 'es' : 'en';
+  } catch (_) {}
+
+  try {
+    final response = (await sendRequest('browse', data)).data;
+    final sections = nav(response, [
+      'contents',
+      'singleColumnBrowseResultsRenderer',
+      'tabs',
+      0,
+      'tabRenderer',
+      'content',
+      'sectionListRenderer',
+      'contents',
+    ]);
+    if (sections is! List || sections.isEmpty) {
+      return {'title': null, 'results': <YtMusicLibraryPlaylist>[]};
+    }
+
+    String? selectedTitle;
+    List<YtMusicLibraryPlaylist> selectedResults =
+        const <YtMusicLibraryPlaylist>[];
+    var bestScore = -1;
+
+    for (final section in sections) {
+      if (section is! Map) continue;
+      final shelfRenderer =
+          section['musicCarouselShelfRenderer'] ??
+          section['musicShelfRenderer'];
+      if (shelfRenderer is! Map) continue;
+
+      final title = _extractShelfTitle(shelfRenderer);
+      if (!_matchesNewDiscoveriesTitle(title)) continue;
+
+      final parsed = _parseHomeSectionPlaylists(shelfRenderer, limit: limit);
+      if (parsed.isEmpty) continue;
+
+      final normalizedTitle = _normalizeLooseText(title ?? '');
+      var score = parsed.length + 4000;
+      if (normalizedTitle.contains('mix')) {
+        score += 300;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        selectedTitle = title;
+        selectedResults = parsed;
+      }
+    }
+
+    if (selectedResults.isEmpty) {
+      return {'title': null, 'results': <YtMusicLibraryPlaylist>[]};
+    }
+
+    return {
+      'title': selectedTitle,
+      'results': selectedResults.take(limit).toList(),
+    };
+  } catch (_) {
+    return {'title': null, 'results': <YtMusicLibraryPlaylist>[]};
   }
 }
 

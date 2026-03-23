@@ -21,11 +21,144 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:palette_generator_master/palette_generator_master.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class LyricLine {
   final Duration time;
   final String text;
   LyricLine(this.time, this.text);
+}
+
+String _currentStreamingCoverQualityForLyrics() {
+  final quality = coverQualityNotifier.value;
+  if (quality == 'high' ||
+      quality == 'medium' ||
+      quality == 'medium_low' ||
+      quality == 'low') {
+    return quality;
+  }
+  return 'medium';
+}
+
+String _ytThumbFileForQualityForLyrics(String quality) {
+  switch (quality) {
+    case 'medium':
+      return 'sddefault.jpg';
+    case 'medium_low':
+      return 'hqdefault.jpg';
+    case 'low':
+      return 'hqdefault.jpg';
+    default:
+      return 'maxresdefault.jpg';
+  }
+}
+
+String _googleThumbSizeForQualityForLyrics(String quality) {
+  switch (quality) {
+    case 'medium':
+      return 's600';
+    case 'medium_low':
+      return 's450';
+    case 'low':
+      return 's300';
+    default:
+      return 's1200';
+  }
+}
+
+String? _extractVideoIdFromMediaItemForLyrics(MediaItem mediaItem) {
+  final rawExtraVideoId = mediaItem.extras?['videoId']?.toString().trim();
+  if (rawExtraVideoId != null && rawExtraVideoId.isNotEmpty) {
+    return rawExtraVideoId;
+  }
+
+  final rawId = mediaItem.id.trim();
+  if (rawId.startsWith('yt:')) {
+    final id = rawId.substring(3).trim();
+    return id.isNotEmpty ? id : null;
+  }
+
+  final uri = Uri.tryParse(rawId);
+  if (uri != null) {
+    final queryVideoId = uri.queryParameters['v']?.trim();
+    if (queryVideoId != null && queryVideoId.isNotEmpty) {
+      return queryVideoId;
+    }
+    if (uri.host.contains('youtu.be') && uri.pathSegments.isNotEmpty) {
+      final shortId = uri.pathSegments.first.trim();
+      if (shortId.isNotEmpty) {
+        return shortId;
+      }
+    }
+  }
+
+  final idLike = RegExp(r'^[a-zA-Z0-9_-]{11}$');
+  if (idLike.hasMatch(rawId)) {
+    return rawId;
+  }
+
+  return null;
+}
+
+String? _applyStreamingArtworkQualityForLyrics(
+  String? rawUrl, {
+  String? videoId,
+}) {
+  final normalized = rawUrl?.trim();
+  if (normalized == null || normalized.isEmpty || normalized == 'null') {
+    return null;
+  }
+
+  final quality = _currentStreamingCoverQualityForLyrics();
+  final lower = normalized.toLowerCase();
+
+  if (lower.contains('googleusercontent.com')) {
+    final size = _googleThumbSizeForQualityForLyrics(quality);
+    final replaced = normalized.replaceFirst(RegExp(r'=s\d+\b'), '=$size');
+    if (replaced != normalized) return replaced;
+
+    final eqIndex = normalized.lastIndexOf('=');
+    if (eqIndex != -1 && eqIndex < normalized.length - 1) {
+      final suffix = normalized.substring(eqIndex + 1);
+      if (!suffix.contains('/')) {
+        return '${normalized.substring(0, eqIndex + 1)}$size';
+      }
+    }
+    return '$normalized=$size';
+  }
+
+  final uri = Uri.tryParse(normalized);
+  if (uri == null) return normalized;
+
+  final host = uri.host.toLowerCase();
+  if (!host.contains('ytimg.com') && !host.contains('img.youtube.com')) {
+    return normalized;
+  }
+
+  final qualityFile = _ytThumbFileForQualityForLyrics(quality);
+  final qualityWebp = qualityFile.replaceAll('.jpg', '.webp');
+  final segments = List<String>.from(uri.pathSegments);
+
+  if (segments.isNotEmpty) {
+    final last = segments.last.toLowerCase();
+    final isKnownThumb =
+        last.contains('maxresdefault') ||
+        last.contains('sddefault') ||
+        last.contains('hqdefault') ||
+        last.contains('mqdefault');
+    if (isKnownThumb) {
+      final useWebp = last.endsWith('.webp');
+      segments[segments.length - 1] = useWebp ? qualityWebp : qualityFile;
+      return uri.replace(pathSegments: segments).toString();
+    }
+  }
+
+  final id = videoId?.trim();
+  if (id != null && id.isNotEmpty) {
+    return 'https://i.ytimg.com/vi/$id/$qualityFile';
+  }
+
+  return normalized;
 }
 
 class CurrentLyricsScreen extends StatefulWidget {
@@ -196,6 +329,7 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
     final artUri = mediaItem.artUri;
     if (artUri != null) {
       final scheme = artUri.scheme.toLowerCase();
+      final videoId = _extractVideoIdFromMediaItemForLyrics(mediaItem);
       if (scheme == 'file' || scheme == 'content') {
         try {
           return Image.file(
@@ -209,14 +343,21 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
           return _buildFallbackIcon();
         }
       } else if (scheme == 'http' || scheme == 'https') {
-        return Image.network(
+        final imageUrl = _applyStreamingArtworkQualityForLyrics(
           artUri.toString(),
+          videoId: videoId,
+        );
+        if (imageUrl == null || imageUrl.isEmpty) return _buildFallbackIcon();
+        return CachedNetworkImage(
+          imageUrl: imageUrl,
           width: 52,
           height: 52,
           fit: BoxFit.cover,
-          cacheWidth: 200,
-          cacheHeight: 200,
-          errorBuilder: (context, error, stackTrace) => _buildFallbackIcon(),
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          memCacheWidth: 200,
+          memCacheHeight: 200,
+          errorWidget: (context, url, error) => _buildFallbackIcon(),
         );
       }
     }
@@ -1255,7 +1396,14 @@ class _LyricShareDialogState extends State<_LyricShareDialog> {
         }
       } catch (_) {}
     } else if (scheme == 'http' || scheme == 'https') {
-      provider = NetworkImage(artUri.toString());
+      final videoId = _extractVideoIdFromMediaItemForLyrics(widget.mediaItem);
+      final imageUrl = _applyStreamingArtworkQualityForLyrics(
+        artUri.toString(),
+        videoId: videoId,
+      );
+      if (imageUrl != null && imageUrl.isNotEmpty) {
+        provider = NetworkImage(imageUrl);
+      }
     }
 
     if (provider == null) return;
@@ -1401,6 +1549,7 @@ class _LyricShareWidget extends StatelessWidget {
     final artUri = mediaItem.artUri;
     if (artUri != null) {
       final scheme = artUri.scheme.toLowerCase();
+      final videoId = _extractVideoIdFromMediaItemForLyrics(mediaItem);
       if (scheme == 'file' || scheme == 'content') {
         return Image.file(
           File(artUri.toFilePath()),
@@ -1409,11 +1558,31 @@ class _LyricShareWidget extends StatelessWidget {
           fit: BoxFit.cover,
         );
       } else if (scheme == 'http' || scheme == 'https') {
-        return Image.network(
+        final imageUrl = _applyStreamingArtworkQualityForLyrics(
           artUri.toString(),
+          videoId: videoId,
+        );
+        if (imageUrl == null || imageUrl.isEmpty) {
+          return Container(
+            width: 60,
+            height: 60,
+            color: Colors.white10,
+            child: const Icon(Icons.music_note, color: Colors.white, size: 30),
+          );
+        }
+        return CachedNetworkImage(
+          imageUrl: imageUrl,
           width: 60,
           height: 60,
           fit: BoxFit.cover,
+          fadeInDuration: Duration.zero,
+          fadeOutDuration: Duration.zero,
+          errorWidget: (context, url, error) => Container(
+            width: 60,
+            height: 60,
+            color: Colors.white10,
+            child: const Icon(Icons.music_note, color: Colors.white, size: 30),
+          ),
         );
       }
     }

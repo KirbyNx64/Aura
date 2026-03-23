@@ -2,10 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:music/l10n/locale_provider.dart';
+import 'package:music/utils/notifiers.dart';
+import 'package:music/utils/theme_preferences.dart';
 
 const String _ytMusicMainUrl = 'https://music.youtube.com/';
-const String _ytLoginUrl =
-    'https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F';
 
 class YtCookieLoginScreen extends StatefulWidget {
   const YtCookieLoginScreen({super.key});
@@ -18,7 +19,31 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
   bool _capturingCookies = false;
   bool _showProgress = true;
   int _progress = 0;
-  String? _currentUrl;
+
+  String _resolveWebLang() {
+    final current = languageNotifier.value.toLowerCase();
+    return current.startsWith('en') ? 'en' : 'es';
+  }
+
+  WebUri _buildYtLoginUri() {
+    final lang = _resolveWebLang();
+    final continueUri = Uri.https('music.youtube.com', '/', {'hl': lang});
+    final loginUri = Uri.https('accounts.google.com', '/ServiceLogin', {
+      'service': 'youtube',
+      'continue': continueUri.toString(),
+      'hl': lang,
+    });
+    return WebUri(loginUri.toString());
+  }
+
+  Map<String, String> _buildInitialWebHeaders() {
+    final lang = _resolveWebLang();
+    return {
+      'Accept-Language': lang == 'en'
+          ? 'en-US,en;q=0.9'
+          : 'es-419,es;q=0.9,en;q=0.8',
+    };
+  }
 
   Future<void> _showStyledDialog({
     required String title,
@@ -56,9 +81,95 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Aceptar'),
+              child: Text(LocaleProvider.tr('ok')),
             ),
           ],
+        );
+      },
+    );
+  }
+
+  void _showLoginInfoDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, child) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.info_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      LocaleProvider.tr('yt_music_login_info_title'),
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Text(
+                        LocaleProvider.tr('yt_music_login_info_desc'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(
+                            LocaleProvider.tr('ok'),
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -131,8 +242,8 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
     if (cookieHeader == null || cookieHeader.trim().isEmpty) {
       _capturingCookies = false;
       await _showStyledDialog(
-        title: 'No se pudo iniciar sesión',
-        message: 'No se pudieron extraer cookies, intenta de nuevo.',
+        title: LocaleProvider.tr('yt_music_login_cookie_extract_error_title'),
+        message: LocaleProvider.tr('yt_music_login_cookie_extract_error_desc'),
         icon: Icons.error_outline_rounded,
       );
       return;
@@ -143,8 +254,44 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Iniciar sesión YouTube')),
+      appBar: AppBar(
+        title: Text(LocaleProvider.tr('yt_music_login_screen_title')),
+        leading: IconButton(
+          constraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 40,
+            maxWidth: 40,
+            maxHeight: 40,
+          ),
+          padding: EdgeInsets.zero,
+          icon: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isDark
+                  ? Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06)
+                  : Theme.of(
+                      context,
+                    ).colorScheme.secondary.withValues(alpha: 0.06),
+            ),
+            child: const Icon(Icons.arrow_back, size: 24),
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        actions: [
+          IconButton(
+            tooltip: LocaleProvider.tr('information'),
+            onPressed: _showLoginInfoDialog,
+            icon: const Icon(Icons.info_outline_rounded),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           AnimatedSwitcher(
@@ -160,7 +307,10 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
           ),
           Expanded(
             child: InAppWebView(
-              initialUrlRequest: URLRequest(url: WebUri(_ytLoginUrl)),
+              initialUrlRequest: URLRequest(
+                url: _buildYtLoginUri(),
+                headers: _buildInitialWebHeaders(),
+              ),
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
                 domStorageEnabled: true,
@@ -173,7 +323,6 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
               onLoadStart: (controller, url) {
                 setState(() {
                   _showProgress = true;
-                  _currentUrl = url?.toString();
                 });
                 unawaited(_tryFinishWithCookies(url?.uriValue));
               },
@@ -182,7 +331,6 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
                 setState(() {
                   _showProgress = false;
                   _progress = 100;
-                  _currentUrl = url?.toString();
                 });
                 await _tryFinishWithCookies(url?.uriValue);
               },
@@ -195,16 +343,6 @@ class _YtCookieLoginScreenState extends State<YtCookieLoginScreen> {
               },
             ),
           ),
-          if (_currentUrl != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Text(
-                _currentUrl!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
         ],
       ),
     );

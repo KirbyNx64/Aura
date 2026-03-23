@@ -6939,9 +6939,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Borrar letras de canciones
       await SyncedLyricsService.clearLyrics();
 
+      // Cerrar sesión de YouTube Music y limpiar cookies/datos web.
+      await yt_service.clearYtMusicAuthCookieHeader();
+      await clearYtWebViewSessionData();
+
       // Borrar SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
+
+      _hasYtAuthCookieHeader = false;
+      _ytProfilePhotoUrl = null;
+      _isResolvingYtAuthState = false;
 
       if (!mounted) return;
 

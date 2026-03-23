@@ -607,6 +607,13 @@ const Map<String, String> appLocalizationsEn = {
   'yt_music_logout': 'Sign out of YouTube Music',
   'yt_music_logout_confirm':
       'Are you sure you want to sign out of YouTube Music?',
+  'yt_music_login_screen_title': 'Sign in to YouTube',
+  'yt_music_login_info_title': 'Sign-in Information',
+  'yt_music_login_info_desc':
+      'Your session data (email, password, and cookies) is used only inside this WebView and is stored locally on your device.\n\nIn Aura, this session is only used to show your YouTube Music playlists and play content already saved in your account.\n\nYou cannot create, edit, or delete playlists, and you cannot modify your account from the app.',
+  'yt_music_login_cookie_extract_error_title': 'Could not sign in',
+  'yt_music_login_cookie_extract_error_desc':
+      'Could not extract cookies. Please try again.',
   'quick_access': 'Quick access',
   'no_songs_to_show': 'No songs to show yet.',
   'no_streaming_yet': 'No streaming songs yet.',

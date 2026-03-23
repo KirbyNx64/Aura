@@ -276,9 +276,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<_StreamingRecentItem> _homeListenAgainSongs = [];
   String? _homeListenAgainTitle;
   bool _loadingHomeListenAgain = false;
-  List<_StreamingRecentItem> _homeDiscoverySongs = [];
-  String? _homeDiscoveryTitle;
-  bool _loadingHomeDiscovery = false;
   List<SongModel> _randomSongs =
       []; // Canciones aleatorias para llenar espacios vacíos
   List<SongModel> _shuffledQuickPick = [];
@@ -1240,9 +1237,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Cargar sección "Vuelve a escucharlo" desde YouTube Home
       await _loadHomeListenAgainSection();
-
-      // Cargar sección "Nuevos descubrimientos" desde YouTube Home
-      await _loadHomeDiscoverySection();
 
       // Llenar selección rápida con canciones aleatorias
       await _fillQuickPickWithRandomSongs();
@@ -2270,47 +2264,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Si falla la red, conservar lo que ya tengamos en memoria/cache.
     } finally {
       _loadingHomeListenAgain = false;
-    }
-  }
-
-  String _defaultHomeDiscoveryTitle() {
-    final locale = languageNotifier.value.toLowerCase();
-    return locale.startsWith('es')
-        ? 'Nuevos descubrimientos'
-        : 'New discoveries';
-  }
-
-  Future<void> _loadHomeDiscoverySection({bool forceReload = false}) async {
-    if (!forceReload && _homeDiscoverySongs.isNotEmpty) return;
-    if (_loadingHomeDiscovery && !forceReload) return;
-    _loadingHomeDiscovery = true;
-    try {
-      final section = await getHomeDiscoverySection(limit: 12);
-      final rawResults = section['results'];
-      final results = rawResults is List
-          ? rawResults.whereType<YtMusicResult>().toList()
-          : <YtMusicResult>[];
-      final title = section['title']?.toString().trim();
-      final items = _buildStreamingItemsFromYtResults(results);
-      if (!mounted) return;
-      setState(() {
-        _homeDiscoverySongs = items;
-        _homeDiscoveryTitle = (title != null && title.isNotEmpty)
-            ? title
-            : _defaultHomeDiscoveryTitle();
-      });
-      unawaited(
-        _saveHomeDiscoveryCache(
-          title: (title != null && title.isNotEmpty)
-              ? title
-              : _defaultHomeDiscoveryTitle(),
-          items: items,
-        ),
-      );
-    } catch (_) {
-      // Si falla la red, conservar lo que ya tengamos en memoria/cache.
-    } finally {
-      _loadingHomeDiscovery = false;
     }
   }
 
@@ -4507,20 +4460,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           : <_StreamingRecentItem>[];
       final listenAgainTitle = listenAgainRaw?['title']?.toString().trim();
 
-      final discoveryRaw = await db.getHomeDiscoverySection();
-      final discoveryItemsRaw = discoveryRaw?['items'];
-      final discoveryItems = discoveryItemsRaw is List
-          ? discoveryItemsRaw
-                .whereType<Map>()
-                .map(
-                  (e) =>
-                      _streamingItemFromCacheMap(Map<String, dynamic>.from(e)),
-                )
-                .whereType<_StreamingRecentItem>()
-                .toList()
-          : <_StreamingRecentItem>[];
-      final discoveryTitle = discoveryRaw?['title']?.toString().trim();
-
       if (!mounted) return;
       setState(() {
         if (shared.isNotEmpty) {
@@ -4532,13 +4471,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               (listenAgainTitle != null && listenAgainTitle.isNotEmpty)
               ? listenAgainTitle
               : _defaultHomeListenAgainTitle();
-        }
-        if (discoveryItems.isNotEmpty) {
-          _homeDiscoverySongs = discoveryItems;
-          _homeDiscoveryTitle =
-              (discoveryTitle != null && discoveryTitle.isNotEmpty)
-              ? discoveryTitle
-              : _defaultHomeDiscoveryTitle();
         }
       });
     } catch (_) {
@@ -4562,21 +4494,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final payload = items.map(_streamingItemToCacheMap).toList();
       await HomeYoutubeCacheDB().saveHomeListenAgainSection(
-        title: title,
-        items: payload,
-      );
-    } catch (_) {
-      // Ignorar errores de persistencia para no interrumpir la UI.
-    }
-  }
-
-  Future<void> _saveHomeDiscoveryCache({
-    required String? title,
-    required List<_StreamingRecentItem> items,
-  }) async {
-    try {
-      final payload = items.map(_streamingItemToCacheMap).toList();
-      await HomeYoutubeCacheDB().saveHomeDiscoverySection(
         title: title,
         items: payload,
       );
@@ -5134,15 +5051,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       item: item,
       sourceItems: _homeListenAgainSongs,
       queueSource: _homeListenAgainTitle ?? _defaultHomeListenAgainTitle(),
-      autoStartRadio: true,
-    );
-  }
-
-  Future<void> _playStreamingHomeDiscovery(_StreamingRecentItem item) async {
-    await _playStreamingEntry(
-      item: item,
-      sourceItems: _homeDiscoverySongs,
-      queueSource: _homeDiscoveryTitle ?? _defaultHomeDiscoveryTitle(),
       autoStartRadio: true,
     );
   }
@@ -9575,7 +9483,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     await _loadAllSongs();
                     await _loadRecentsData();
                     await _loadHomeListenAgainSection(forceReload: true);
-                    await _loadHomeDiscoverySection(forceReload: true);
                     await _loadMostPlayed();
                     await _loadShortcuts();
                     await _loadArtists(
@@ -9880,7 +9787,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               },
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 32),
                         ],
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -9911,7 +9818,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 4),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 0),
                           child: LayoutBuilder(
@@ -10045,113 +9952,6 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                     horizontal: 10,
                                   ),
                                   child: _buildArtistWidget(artist, context),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                        if (_homeDiscoverySongs.isNotEmpty) ...[
-                          const SizedBox(height: 32),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Row(
-                              children: [
-                                Text(
-                                  _homeDiscoveryTitle ??
-                                      _defaultHomeDiscoveryTitle(),
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const Spacer(),
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.play_circle_outline,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurface,
-                                  ),
-                                  tooltip: LocaleProvider.tr('play_all'),
-                                  onPressed: () => _playStreamingHomeDiscovery(
-                                    _homeDiscoverySongs.first,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            height: 250,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              itemCount: _homeDiscoverySongs.length,
-                              separatorBuilder: (_, index) =>
-                                  const SizedBox(width: 14),
-                              itemBuilder: (context, index) {
-                                final item = _homeDiscoverySongs[index];
-                                return SizedBox(
-                                  width: 220,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(18),
-                                    onTap: () =>
-                                        _playStreamingHomeDiscovery(item),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              18,
-                                            ),
-                                            child: _StreamingArtwork(
-                                              sources: _streamingArtworkSources(
-                                                item,
-                                              ),
-                                              backgroundColor: Theme.of(context)
-                                                  .colorScheme
-                                                  .surfaceContainerHigh,
-                                              iconColor: Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          item.title,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleMedium
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          item.artist,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.copyWith(
-                                                color: isAmoled
-                                                    ? Colors.white.withValues(
-                                                        alpha: 0.8,
-                                                      )
-                                                    : null,
-                                              ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
                                 );
                               },
                             ),
