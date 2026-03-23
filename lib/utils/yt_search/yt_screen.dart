@@ -442,6 +442,38 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     final songs = <YtMusicResult>[];
     final videos = <YtMusicResult>[];
+    bool hasUsableDuration(YtMusicResult item) {
+      final durationText = item.durationText?.trim();
+      return (item.durationMs != null && item.durationMs! > 0) ||
+          (durationText != null && durationText.isNotEmpty);
+    }
+
+    YtMusicResult mergeSongEntry(
+      YtMusicResult current,
+      YtMusicResult incoming,
+    ) {
+      final currentDurationText = current.durationText?.trim();
+      final incomingDurationText = incoming.durationText?.trim();
+      return YtMusicResult(
+        title: _hasNonEmptyText(current.title) ? current.title : incoming.title,
+        artist: _hasNonEmptyText(current.artist)
+            ? current.artist
+            : incoming.artist,
+        thumbUrl: _hasNonEmptyText(current.thumbUrl)
+            ? current.thumbUrl
+            : incoming.thumbUrl,
+        videoId: _hasNonEmptyText(current.videoId)
+            ? current.videoId
+            : incoming.videoId,
+        durationText:
+            (currentDurationText != null && currentDurationText.isNotEmpty)
+            ? currentDurationText
+            : incomingDurationText,
+        durationMs: (current.durationMs != null && current.durationMs! > 0)
+            ? current.durationMs
+            : incoming.durationMs,
+      );
+    }
 
     if (sections is List) {
       for (final section in sections) {
@@ -477,13 +509,17 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
 
     // Top-up defensivo por categoria: si el parseo mixto no llega a 3,
     // intentamos completar con las busquedas filtradas.
-    if (songs.length < 3 || videos.length < 3) {
+    final songsNeedDurationEnrichment = songs
+        .take(3)
+        .any((item) => !hasUsableDuration(item));
+
+    if (songs.length < 3 || songsNeedDurationEnrichment || videos.length < 3) {
       _logSearchPerf(
-        'quickPreview top-up triggered after ${sw.elapsedMilliseconds}ms songs=${songs.length} videos=${videos.length}',
+        'quickPreview top-up triggered after ${sw.elapsedMilliseconds}ms songs=${songs.length} videos=${videos.length} songsNeedDuration=$songsNeedDurationEnrichment',
       );
 
       final fallback = await Future.wait<List<YtMusicResult>>([
-        songs.length < 3
+        (songs.length < 3 || songsNeedDurationEnrichment)
             ? searchSongsOnly(query)
             : Future.value(<YtMusicResult>[]),
         videos.length < 3
@@ -491,11 +527,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             : Future.value(<YtMusicResult>[]),
       ]);
 
-      if (songs.length < 3) {
+      if (songs.length < 3 || songsNeedDurationEnrichment) {
         for (final item in fallback[0]) {
-          if (songs.any((e) => e.videoId == item.videoId)) continue;
-          songs.add(item);
-          if (songs.length >= 3) break;
+          final existingIndex = songs.indexWhere(
+            (e) => e.videoId == item.videoId,
+          );
+          if (existingIndex != -1) {
+            songs[existingIndex] = mergeSongEntry(songs[existingIndex], item);
+            continue;
+          }
+          if (songs.length < 3) {
+            songs.add(item);
+          }
         }
       }
 
