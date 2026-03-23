@@ -903,6 +903,133 @@ Future<String?> getYtMusicAccountAvatarUrl() async {
   }
 }
 
+String? _extractTextFromRuns(dynamic runs) {
+  if (runs is! List) return null;
+  final buffer = StringBuffer();
+  for (final run in runs) {
+    final text = run is Map ? run['text']?.toString() : null;
+    if (text == null || text.trim().isEmpty) continue;
+    buffer.write(text);
+  }
+  final value = buffer.toString().trim();
+  return value.isEmpty ? null : value;
+}
+
+String? _extractAccountDisplayName(dynamic response) {
+  final candidates = <String?>[
+    nav(response, [
+      'actions',
+      0,
+      'openPopupAction',
+      'popup',
+      'multiPageMenuRenderer',
+      'header',
+      'activeAccountHeaderRenderer',
+      'accountName',
+      'simpleText',
+    ])?.toString(),
+    _extractTextFromRuns(
+      nav(response, [
+        'actions',
+        0,
+        'openPopupAction',
+        'popup',
+        'multiPageMenuRenderer',
+        'header',
+        'activeAccountHeaderRenderer',
+        'accountName',
+        'runs',
+      ]),
+    ),
+    nav(response, [
+      'actions',
+      0,
+      'openPopupAction',
+      'popup',
+      'multiPageMenuRenderer',
+      'header',
+      'activeAccountHeaderRenderer',
+      'channelHandle',
+      'simpleText',
+    ])?.toString(),
+    _extractTextFromRuns(
+      nav(response, [
+        'actions',
+        0,
+        'openPopupAction',
+        'popup',
+        'multiPageMenuRenderer',
+        'header',
+        'activeAccountHeaderRenderer',
+        'channelHandle',
+        'runs',
+      ]),
+    ),
+    nav(response, [
+      'actions',
+      0,
+      'openPopupAction',
+      'popup',
+      'multiPageMenuRenderer',
+      'header',
+      'activeAccountHeaderRenderer',
+      'email',
+      'simpleText',
+    ])?.toString(),
+  ];
+
+  for (final candidate in candidates) {
+    final normalized = candidate?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      return normalized;
+    }
+  }
+
+  final activeHeader = _findObjectByKey(
+    response,
+    'activeAccountHeaderRenderer',
+  );
+  if (activeHeader is Map) {
+    final fallback = _extractTextFromRuns(
+      nav(activeHeader, ['accountName', 'runs']),
+    );
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+  }
+
+  return null;
+}
+
+Future<String?> getYtMusicAccountDisplayName() async {
+  try {
+    final response = (await sendRequest('account/account_menu', {
+      ...ytServiceContext,
+    })).data;
+    final name = _extractAccountDisplayName(response);
+    _ytLibLog(
+      'getYtMusicAccountDisplayName account/account_menu -> ${name != null && name.isNotEmpty}',
+    );
+    if (name != null && name.isNotEmpty) return name;
+  } catch (e) {
+    _ytLibLog(
+      'getYtMusicAccountDisplayName account/account_menu exception: $e',
+    );
+  }
+
+  try {
+    final response = (await sendRequest('account/get_account_menu', {
+      ...ytServiceContext,
+    })).data;
+    final name = _extractAccountDisplayName(response);
+    _ytLibLog(
+      'getYtMusicAccountDisplayName account/get_account_menu -> ${name != null && name.isNotEmpty}',
+    );
+    return name;
+  } catch (e) {
+    _ytLibLog('getYtMusicAccountDisplayName exception: $e');
+    return null;
+  }
+}
+
 // Búsqueda recursiva de una clave dentro de un árbol Map/List
 dynamic _findObjectByKey(dynamic node, String key) {
   if (node == null) return null;

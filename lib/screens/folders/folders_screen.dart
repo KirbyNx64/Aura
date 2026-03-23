@@ -231,6 +231,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   hive_model.PlaylistModel? _selectedPlaylist;
   _YtLibraryPlaylistItem? _selectedYtLibraryPlaylist;
   bool _hasYtAuthCookieSession = false;
+  String? _ytAccountDisplayName;
   bool _isLoadingYtLibraryPlaylists = false;
   final TextEditingController _playlistSearchController =
       TextEditingController();
@@ -294,6 +295,41 @@ class _FoldersScreenState extends State<FoldersScreen>
         return 'streaming';
       case PlaylistSource.ytMusicCookies:
         return 'ytMusicCookies';
+    }
+  }
+
+  String get _ytCookiesSourceLabel {
+    final name = _ytAccountDisplayName?.trim();
+    if (name != null && name.isNotEmpty) {
+      return 'YouTube Music ($name)';
+    }
+    return 'YouTube Music (cookies)';
+  }
+
+  Future<void> _refreshYtAccountDisplayName({bool force = false}) async {
+    if (!force) {
+      final cached = _ytAccountDisplayName?.trim();
+      if (cached != null && cached.isNotEmpty) return;
+    }
+
+    final hasAuth = await yt_service.hasYtMusicAuthCookieHeader();
+    if (!mounted) return;
+    if (!hasAuth) {
+      if (_ytAccountDisplayName != null) {
+        setState(() {
+          _ytAccountDisplayName = null;
+        });
+      }
+      return;
+    }
+
+    final accountName = await yt_service.getYtMusicAccountDisplayName();
+    if (!mounted) return;
+    final normalized = accountName?.trim();
+    if (_ytAccountDisplayName != normalized) {
+      setState(() {
+        _ytAccountDisplayName = normalized;
+      });
     }
   }
 
@@ -791,6 +827,7 @@ class _FoldersScreenState extends State<FoldersScreen>
     });
     if (_playlistSource == PlaylistSource.ytMusicCookies) {
       unawaited(_loadYtLibraryPlaylists());
+      unawaited(_refreshYtAccountDisplayName());
     }
     unawaited(_saveLastViewPrefs());
   }
@@ -4101,7 +4138,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                         size: 20,
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(child: Text('YouTube Music (cookies)')),
+                      Expanded(child: Text(_ytCookiesSourceLabel)),
                       if (_playlistSource == PlaylistSource.ytMusicCookies)
                         Icon(
                           Icons.check,
@@ -7491,6 +7528,9 @@ class _FoldersScreenState extends State<FoldersScreen>
       _playlistArtworkSourcesCache = streamingArtworkCache;
       _hasYtAuthCookieSession = hasYtAuth;
       if (!hasYtAuth) {
+        _ytAccountDisplayName = null;
+      }
+      if (!hasYtAuth) {
         _ytLibraryPlaylists = [];
         _filteredYtLibraryPlaylists = [];
       }
@@ -7500,10 +7540,14 @@ class _FoldersScreenState extends State<FoldersScreen>
 
     if (_playlistSource == PlaylistSource.ytMusicCookies && hasYtAuth) {
       unawaited(_loadYtLibraryPlaylists(forceRefresh: true));
+      unawaited(_refreshYtAccountDisplayName(force: true));
     } else if (_playlistSource == PlaylistSource.ytMusicCookies && !hasYtAuth) {
       _ytUiLog(
         '_loadPlaylists source=ytMusicCookies but no auth cookie; remote list will stay empty',
       );
+    }
+    if (hasYtAuth) {
+      unawaited(_refreshYtAccountDisplayName());
     }
 
     unawaited(_saveLastViewPrefs());
