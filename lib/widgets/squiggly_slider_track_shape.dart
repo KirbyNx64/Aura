@@ -122,44 +122,56 @@ class SquigglySliderTrackShape extends SliderTrackShape
     final double heightCenter = (lt + lb) / 2;
 
     const ppp = 1.0; // pixels per point -- the resolution of the curve
-    final int pointCount = ((lr - ll) / ppp).ceil();
+    final double totalLength = lr - ll;
+    final int pointCount = (totalLength / ppp).ceil();
+    final double easeLength = squiggleWavelength * 3;
+
+    double easeAt(double xOff) {
+      if (easeLength <= 0 || totalLength <= 0) {
+        return 0.0;
+      }
+
+      final double leftEase = (xOff / easeLength).clamp(0.0, 1.0);
+      final double rightEase = ((totalLength - xOff) / easeLength).clamp(
+        0.0,
+        1.0,
+      );
+
+      // Evita una transición brusca en tramos cortos:
+      // activa el easing derecho gradualmente de [easeLength, 2*easeLength].
+      final double transition = ((totalLength - easeLength) / easeLength).clamp(
+        0.0,
+        1.0,
+      );
+      final double smoothTransition =
+          transition * transition * (3 - 2 * transition);
+      final double blendedRightEase =
+          1.0 + ((rightEase - 1.0) * smoothTransition);
+
+      return min(leftEase, blendedRightEase);
+    }
+
+    double yAt(double xOff, double x) {
+      final double easeFactor = easeAt(xOff);
+      final double wave = (squiggleWavelength == 0)
+          ? 0.0
+          : sin(x / squiggleWavelength + phase * 2 * pi);
+      return heightCenter + (wave * squiggleAmplitude * easeFactor);
+    }
 
     final List<Offset> points = List.generate(pointCount, (index) {
       final double xOff = index * ppp;
       final double x = ll + xOff;
-      final double easeLength = squiggleWavelength * 3;
-      final double totalLength = lr - ll;
-
-      double easeFactor = 1.0;
-      if (easeLength <= 0 || totalLength <= 0) {
-        easeFactor = 0.0;
-      } else if (totalLength < easeLength * 2) {
-        if (xOff < totalLength / 2) {
-          easeFactor = xOff / easeLength;
-        } else {
-          easeFactor = (totalLength - xOff) / easeLength;
-        }
-      } else {
-        if (xOff < easeLength) {
-          easeFactor = xOff / easeLength;
-        } else if (xOff > totalLength - easeLength) {
-          easeFactor = (totalLength - xOff) / easeLength;
-        }
-      }
-
-      final double wave = (easeLength <= 0)
-          ? 0.0
-          : sin(x / squiggleWavelength + phase * 2 * pi);
-
-      return Offset(x, heightCenter + (wave * squiggleAmplitude * easeFactor));
+      return Offset(x, yAt(xOff, x));
     });
 
-    // Asegurar que el último punto esté exactamente en lr evaluando la curva para evitar cortes
+    // Asegurar que el último punto esté exactamente en lr, siguiendo la curva.
     if (points.isNotEmpty) {
+      final endPoint = Offset(lr, yAt(totalLength, lr));
       if (points.last.dx < lr) {
-        points.add(Offset(lr, heightCenter));
+        points.add(endPoint);
       } else {
-        points.last = Offset(lr, heightCenter);
+        points.last = endPoint;
       }
     }
 

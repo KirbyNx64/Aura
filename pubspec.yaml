@@ -42,6 +42,7 @@ dependencies:
   dio: ^5.9.2
   open_file: ^3.5.11
   smooth_page_indicator: ^2.0.1
+  carousel_slider: ^5.1.2
   android_intent_plus: ^6.0.0
   package_info_plus: ^9.0.0
   ota_update: ^7.1.0

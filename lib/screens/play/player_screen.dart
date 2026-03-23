@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:android_nav_setting/android_nav_setting.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:music/widgets/title_marquee.dart';
@@ -212,6 +213,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   static const Duration _sourceBounceGuardDuration = Duration(
     milliseconds: 850,
   );
+  final CarouselSliderController _artworkCarouselController =
+      CarouselSliderController();
+  int? _artworkCarouselPage;
+  bool _artworkManualSwipeInProgress = false;
+  Timer? _artworkManualSwipeGuardTimer;
   final Set<String> _artworkDiskPreloadGuard = <String>{};
   Timer? _precacheNextTimer;
 
@@ -935,16 +941,77 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   Widget _buildArtworkOrVideo(MediaItem mediaItem, double artworkSize) {
     if (!_isVideoModeActiveForItem(mediaItem)) {
-      return AnimatedSwitcher(
-        duration: _suppressSourceSwitchTransitions
-            ? Duration.zero
-            : const Duration(milliseconds: 75),
-        child: KeyedSubtree(
-          key: ValueKey(
-            'player_art_${(mediaItem.extras?['songId'] ?? mediaItem.id).toString()}',
-          ),
-          child: buildArtwork(mediaItem, artworkSize),
-        ),
+      return StreamBuilder<List<MediaItem>>(
+        stream: audioHandler?.queue,
+        initialData: audioHandler?.queue.value ?? const <MediaItem>[],
+        builder: (context, snapshot) {
+          final queue = snapshot.data ?? const <MediaItem>[];
+          final currentIndex = queue.indexWhere(
+            (item) => item.id == mediaItem.id,
+          );
+
+          if (queue.length < 2 || currentIndex < 0) {
+            _artworkCarouselPage = currentIndex >= 0 ? currentIndex : null;
+            return buildArtwork(mediaItem, artworkSize);
+          }
+
+          final seededPage = _artworkCarouselPage ?? currentIndex;
+          _artworkCarouselPage = seededPage.clamp(0, queue.length - 1);
+          final carouselInitialPage = _artworkCarouselPage!;
+
+          final screenWidth = MediaQuery.of(context).size.width;
+          return SizedBox(
+            width: artworkSize,
+            height: artworkSize,
+            child: OverflowBox(
+              alignment: Alignment.center,
+              minWidth: screenWidth,
+              maxWidth: screenWidth,
+              minHeight: artworkSize,
+              maxHeight: artworkSize,
+              child: SizedBox(
+                width: screenWidth,
+                height: artworkSize,
+                child: CarouselSlider.builder(
+                  carouselController: _artworkCarouselController,
+                  itemCount: queue.length,
+                  itemBuilder: (context, index, _) {
+                    final item = queue[index];
+                    final artworkKey = ValueKey(
+                      'player_art_${(item.extras?['songId'] ?? item.id).toString()}',
+                    );
+                    return Align(
+                      alignment: Alignment.center,
+                      child: KeyedSubtree(
+                        key: artworkKey,
+                        child: buildArtwork(item, artworkSize),
+                      ),
+                    );
+                  },
+                  options: CarouselOptions(
+                    height: artworkSize,
+                    viewportFraction: 1.0,
+                    initialPage: carouselInitialPage,
+                    enableInfiniteScroll: false,
+                    padEnds: false,
+                    enlargeCenterPage: false,
+                    pageSnapping: true,
+                    scrollPhysics: _disableChangeSongGesture
+                        ? const NeverScrollableScrollPhysics()
+                        : const PageScrollPhysics(),
+                    onPageChanged: (index, reason) {
+                      _artworkCarouselPage = index;
+                      if (reason == CarouselPageChangedReason.manual &&
+                          !_disableChangeSongGesture) {
+                        _handleManualArtworkSwipeToIndex(index);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       );
     }
 
@@ -1165,6 +1232,98 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
         });
       },
     );
+  }
+
+  void _updateArtworkSlideDirection(MediaItem mediaItem) {
+    _syncArtworkCarouselToMediaItem(mediaItem);
+  }
+
+  void _syncArtworkCarouselToMediaItem(MediaItem mediaItem) {
+    final queue = audioHandler?.queue.value ?? const <MediaItem>[];
+    final targetIndex = queue.indexWhere((item) => item.id == mediaItem.id);
+    if (targetIndex < 0) return;
+
+    final currentPage = _artworkCarouselPage;
+    if (currentPage == null) {
+      _artworkCarouselPage = targetIndex;
+      return;
+    }
+    if (currentPage == targetIndex) return;
+
+    final shouldAnimate =
+        !_suppressSourceSwitchTransitions &&
+        (currentPage - targetIndex).abs() == 1;
+
+    _artworkCarouselPage = targetIndex;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      try {
+        if (!shouldAnimate) {
+          _artworkCarouselController.jumpToPage(targetIndex);
+          return;
+        }
+        _artworkCarouselController.animateToPage(
+          targetIndex,
+          duration: const Duration(milliseconds: 360),
+          curve: Curves.easeOutCubic,
+        );
+      } catch (_) {
+        // Error silencioso si el carrusel aún no está montado.
+      }
+    });
+  }
+
+  void _handleManualArtworkSwipeToIndex(int targetIndex) {
+    if (_artworkManualSwipeInProgress) return;
+
+    final queue = audioHandler?.queue.value ?? const <MediaItem>[];
+    final currentMediaItem = audioHandler?.mediaItem.value;
+    if (queue.isEmpty || currentMediaItem == null) return;
+
+    final currentIndex = queue.indexWhere(
+      (item) => item.id == currentMediaItem.id,
+    );
+    if (currentIndex < 0 || targetIndex == currentIndex) return;
+    if (targetIndex < 0 || targetIndex >= queue.length) return;
+
+    _artworkManualSwipeInProgress = true;
+    _artworkManualSwipeGuardTimer?.cancel();
+    _artworkManualSwipeGuardTimer = Timer(
+      const Duration(milliseconds: 1400),
+      () {
+        _artworkManualSwipeInProgress = false;
+        _artworkManualSwipeGuardTimer = null;
+      },
+    );
+
+    if ((targetIndex - currentIndex).abs() == 1) {
+      if (targetIndex > currentIndex) {
+        unawaited(_skipToNextWithArtworkDirection());
+      } else {
+        unawaited(_skipToPreviousWithArtworkDirection());
+      }
+      return;
+    }
+
+    unawaited(() async {
+      try {
+        await _precacheMediaItemArtwork(
+          queue[targetIndex],
+        ).timeout(const Duration(milliseconds: 320));
+      } catch (_) {}
+      await audioHandler?.skipToQueueItem(targetIndex);
+    }());
+  }
+
+  Future<void> _skipToNextWithArtworkDirection() async {
+    await _precacheArtworkForQueueOffset(1);
+    await audioHandler?.skipToNext();
+  }
+
+  Future<void> _skipToPreviousWithArtworkDirection() async {
+    await _precacheArtworkForQueueOffset(-1);
+    await audioHandler?.skipToPrevious();
   }
 
   MediaItem? _resolveStableMediaItem(MediaItem? incomingMediaItem) {
@@ -2031,14 +2190,80 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     });
   }
 
-  /// Precarga la siguiente carátula en la cola directamente en el caché de Flutter
-  /// Esto evita el flicker/parpadeo al cambiar de canción ya que la imagen estará decodificada.
+  /// Precarga carátulas adyacentes (siguiente y anterior) directamente en el caché de Flutter.
+  /// Esto reduce el parpadeo al cambiar de canción, porque la imagen ya llega decodificada.
   /// Usa debounce para evitar lanzar descargas concurrentes durante skips rápidos.
   void _precacheNextInQueue() {
     _precacheNextTimer?.cancel();
     _precacheNextTimer = Timer(const Duration(milliseconds: 300), () {
       _precacheNextInQueueImmediate();
     });
+  }
+
+  Future<void> _precacheMediaItemArtwork(MediaItem item) async {
+    Uri? artUri = _displayArtUriFor(item);
+
+    if (artUri == null) {
+      final songId = item.extras?['songId'];
+      final songPath = item.extras?['data'];
+      if (songId is int && songPath is String && songPath.isNotEmpty) {
+        artUri =
+            _getCachedArtwork(songPath) ??
+            await getOrCacheArtwork(songId, songPath);
+      }
+    }
+
+    if (!mounted || artUri == null) return;
+
+    ImageProvider? provider;
+    if (artUri.scheme == 'file') {
+      provider = FileImage(File(artUri.toFilePath()));
+    } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
+      final url = artUri.toString();
+      provider = CachedNetworkImageProvider(url);
+      if (_artworkDiskPreloadGuard.add(url)) {
+        // Fuerza guardar en cache de disco para que la transición no dependa de red.
+        unawaited(() async {
+          try {
+            await DefaultCacheManager().downloadFile(url);
+          } catch (_) {
+            // Error silencioso durante precarga.
+          } finally {
+            if (_artworkDiskPreloadGuard.length > 60) {
+              _artworkDiskPreloadGuard.clear();
+            }
+          }
+        }());
+      }
+    } else {
+      return;
+    }
+
+    try {
+      await precacheImage(provider, context);
+    } catch (_) {
+      // Error silencioso de decodificación/precache.
+    }
+  }
+
+  Future<void> _precacheArtworkForQueueOffset(int offset) async {
+    final queue = audioHandler?.queue.value ?? [];
+    final currentItem = audioHandler?.mediaItem.value;
+    if (queue.isEmpty || currentItem == null) return;
+
+    final currentIndex = queue.indexWhere((item) => item.id == currentItem.id);
+    if (currentIndex == -1) return;
+
+    final targetIndex = currentIndex + offset;
+    if (targetIndex < 0 || targetIndex >= queue.length) return;
+
+    try {
+      await _precacheMediaItemArtwork(
+        queue[targetIndex],
+      ).timeout(const Duration(milliseconds: 320));
+    } catch (_) {
+      // Si no llega a tiempo, no bloquear el skip.
+    }
   }
 
   void _precacheNextInQueueImmediate() {
@@ -2049,47 +2274,23 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (queue.isEmpty || currentItem == null) return;
 
     final currentIndex = queue.indexWhere((item) => item.id == currentItem.id);
-    if (currentIndex != -1 && currentIndex < queue.length - 1) {
-      final nextItem = queue[currentIndex + 1];
-      final artUri = _displayArtUriFor(nextItem);
+    if (currentIndex == -1) return;
 
-      if (artUri != null) {
-        ImageProvider provider;
-        if (artUri.scheme == 'file') {
-          provider = FileImage(File(artUri.toFilePath()));
-        } else if (artUri.scheme == 'http' || artUri.scheme == 'https') {
-          final url = artUri.toString();
-          provider = CachedNetworkImageProvider(url);
-          if (_artworkDiskPreloadGuard.add(url)) {
-            // Fuerza guardar en cache de disco para que la siguiente canción
-            // abra su carátula instantáneamente incluso tras rebuilds.
-            unawaited(() async {
-              try {
-                await DefaultCacheManager().downloadFile(url);
-              } catch (_) {
-                // Error silencioso durante precarga.
-              } finally {
-                if (_artworkDiskPreloadGuard.length > 60) {
-                  _artworkDiskPreloadGuard.clear();
-                }
-              }
-            }());
-          }
-        } else {
-          return;
-        }
-
-        // Precargar en el caché de Flutter
-        precacheImage(provider, context).catchError((e) {
-          // Error silencioso
-        });
-      }
+    if (currentIndex < queue.length - 1) {
+      unawaited(_precacheMediaItemArtwork(queue[currentIndex + 1]));
+    }
+    if (currentIndex > 0) {
+      unawaited(_precacheMediaItemArtwork(queue[currentIndex - 1]));
+    }
+    if (currentIndex < queue.length - 2) {
+      unawaited(_precacheMediaItemArtwork(queue[currentIndex + 2]));
     }
   }
 
   @override
   void dispose() {
     _precacheNextTimer?.cancel();
+    _artworkManualSwipeGuardTimer?.cancel();
     _seekDebounceTimer?.cancel();
     _hideIndicatorsTimer?.cancel();
     _streamingArtworkDebounceTimer?.cancel();
@@ -4161,7 +4362,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
         // Solo procesar si es una canción nueva
         if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
+          _updateArtworkSlideDirection(mediaItem);
           _handleMediaSourceTransition(mediaItem);
+          _artworkManualSwipeInProgress = false;
+          _artworkManualSwipeGuardTimer?.cancel();
+          _artworkManualSwipeGuardTimer = null;
 
           // Resetear progreso visual para evitar arrastrar la posición de la cola anterior.
           _lastKnownPosition = Duration.zero;
@@ -4547,6 +4752,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           children: [
                                             Stack(
                                               alignment: Alignment.center,
+                                              clipBehavior: Clip.none,
                                               children: [
                                                 Builder(
                                                   builder: (context) {
@@ -4559,27 +4765,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     return GestureDetector(
                                                       behavior: HitTestBehavior
                                                           .opaque,
-                                                      onHorizontalDragEnd: (details) {
-                                                        // Detectar la dirección del deslizamiento horizontal solo en la carátula
-                                                        // Solo si el gesto de cambiar canción no está desactivado
-                                                        if (!_disableChangeSongGesture &&
-                                                            details.primaryVelocity !=
-                                                                null) {
-                                                          if (details
-                                                                  .primaryVelocity! >
-                                                              0) {
-                                                            // Deslizar hacia la derecha: canción anterior
-                                                            audioHandler
-                                                                ?.skipToPrevious();
-                                                          } else if (details
-                                                                  .primaryVelocity! <
-                                                              0) {
-                                                            // Deslizar hacia la izquierda: siguiente canción
-                                                            audioHandler
-                                                                ?.skipToNext();
-                                                          }
-                                                        }
-                                                      },
                                                       onTap: () async {
                                                         // Check if lyrics on cover is enabled
                                                         final prefs =
@@ -4798,6 +4983,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                       );
                                                                     },
                                                                 child: Stack(
+                                                                  clipBehavior:
+                                                                      Clip.none,
                                                                   children: [
                                                                     _buildArtworkOrVideo(
                                                                       currentMediaItem,
@@ -6658,7 +6845,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                         if (isBusy) {
                                                                                           return;
                                                                                         }
-                                                                                        audioHandler?.skipToPrevious();
+                                                                                        unawaited(
+                                                                                          _skipToPreviousWithArtworkDirection(),
+                                                                                        );
                                                                                       },
                                                                                     ),
                                                                                     Padding(
@@ -6844,7 +7033,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                         if (isBusy) {
                                                                                           return;
                                                                                         }
-                                                                                        audioHandler?.skipToNext();
+                                                                                        unawaited(
+                                                                                          _skipToNextWithArtworkDirection(),
+                                                                                        );
                                                                                       },
                                                                                     ),
                                                                                     SizedBox(
