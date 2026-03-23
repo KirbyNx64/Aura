@@ -216,6 +216,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   final CarouselSliderController _artworkCarouselController =
       CarouselSliderController();
   int? _artworkCarouselPage;
+  int _artworkCarouselSyncRequestId = 0;
   bool _artworkManualSwipeInProgress = false;
   Timer? _artworkManualSwipeGuardTimer;
   final Set<String> _artworkDiskPreloadGuard = <String>{};
@@ -1238,10 +1239,31 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     _syncArtworkCarouselToMediaItem(mediaItem);
   }
 
+  bool _isPlayerPanelVisibleForCarouselAnimation() {
+    final panelNotifier = widget.panelPositionNotifier;
+    if (panelNotifier == null) return true;
+    return panelNotifier.value >= 0.95;
+  }
+
   void _syncArtworkCarouselToMediaItem(MediaItem mediaItem) {
     final queue = audioHandler?.queue.value ?? const <MediaItem>[];
     final targetIndex = queue.indexWhere((item) => item.id == mediaItem.id);
     if (targetIndex < 0) return;
+
+    if (!_isPlayerPanelVisibleForCarouselAnimation()) {
+      _artworkCarouselPage = targetIndex;
+      final requestId = ++_artworkCarouselSyncRequestId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (requestId != _artworkCarouselSyncRequestId) return;
+        try {
+          _artworkCarouselController.jumpToPage(targetIndex);
+        } catch (_) {
+          // Error silencioso si el carrusel aún no está montado.
+        }
+      });
+      return;
+    }
 
     final currentPage = _artworkCarouselPage;
     if (currentPage == null) {
@@ -1251,14 +1273,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (currentPage == targetIndex) return;
 
     final shouldAnimate =
+        _isPlayerPanelVisibleForCarouselAnimation() &&
         !_suppressSourceSwitchTransitions &&
         (currentPage - targetIndex).abs() == 1;
 
     _artworkCarouselPage = targetIndex;
+    final requestId = ++_artworkCarouselSyncRequestId;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      if (requestId != _artworkCarouselSyncRequestId) return;
       try {
+        if (!_isPlayerPanelVisibleForCarouselAnimation()) {
+          return;
+        }
         if (!shouldAnimate) {
           _artworkCarouselController.jumpToPage(targetIndex);
           return;
