@@ -27,6 +27,7 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:ionicons/ionicons.dart';
 
 class HomeDiscoveryScreen extends StatefulWidget {
   const HomeDiscoveryScreen({super.key});
@@ -879,7 +880,7 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.share_rounded),
+                leading: const Icon(Ionicons.arrow_redo_outline),
                 title: const TranslatedText('share_link'),
                 onTap: () async {
                   Navigator.of(context).pop();

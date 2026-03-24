@@ -748,6 +748,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.5"
+  ionicons:
+    dependency: "direct main"
+    description:
+      name: ionicons
+      sha256: "5496bc65a16115ecf05b15b78f494ee4a8869504357668f0a11d689e970523cf"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.2"
   isolate_channel:
     dependency: transitive
     description:
@@ -852,6 +860,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.3.0"
+  lucide_icons_flutter:
+    dependency: "direct main"
+    description:
+      name: lucide_icons_flutter
+      sha256: f9fc191c852901b7f8d0d5739166327bd71a0fc32ae32c1ba07501d16b966a1a
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.10"
   m3e_design:
     dependency: "direct main"
     description:

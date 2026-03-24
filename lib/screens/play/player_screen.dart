@@ -47,6 +47,8 @@ import 'package:music/screens/play/current_lyrics_screen.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:video_player/video_player.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:ionicons/ionicons.dart';
 
 enum PanelContent { playlist, lyrics }
 
@@ -166,7 +168,7 @@ class FullPlayerScreen extends StatefulWidget {
 }
 
 class _FullPlayerScreenState extends State<FullPlayerScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   bool _showLyrics = false;
   String? _syncedLyrics;
   bool _loadingLyrics = false;
@@ -217,6 +219,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       CarouselSliderController();
   int? _artworkCarouselPage;
   int _artworkCarouselSyncRequestId = 0;
+  String? _mediaItemIdWhenAppWentBackground;
+  String? _resumeMediaItemIdToSkipCarouselAnimation;
   bool _artworkManualSwipeInProgress = false;
   Timer? _artworkManualSwipeGuardTimer;
   final Set<String> _artworkDiskPreloadGuard = <String>{};
@@ -1250,6 +1254,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final targetIndex = queue.indexWhere((item) => item.id == mediaItem.id);
     if (targetIndex < 0) return;
 
+    final shouldSkipAnimationOnResume =
+        _resumeMediaItemIdToSkipCarouselAnimation == mediaItem.id;
+    if (shouldSkipAnimationOnResume) {
+      _resumeMediaItemIdToSkipCarouselAnimation = null;
+    }
+
     if (!_isPlayerPanelVisibleForCarouselAnimation()) {
       _artworkCarouselPage = targetIndex;
       final requestId = ++_artworkCarouselSyncRequestId;
@@ -1274,6 +1284,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     final shouldAnimate =
         _isPlayerPanelVisibleForCarouselAnimation() &&
+        !shouldSkipAnimationOnResume &&
         !_suppressSourceSwitchTransitions &&
         (currentPage - targetIndex).abs() == 1;
 
@@ -1954,6 +1965,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadGesturePreferences();
     _setupGesturePreferencesListener();
     _checkNavSetting();
@@ -1974,6 +1986,31 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     // Eliminado: _loadQueueSource();
     // Eliminado: (audioHandler as MyAudioHandler).queueSourceNotifier.addListener(_onQueueSourceChanged);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      final mediaItemIdBeforeBackground = _mediaItemIdWhenAppWentBackground;
+      _mediaItemIdWhenAppWentBackground = null;
+
+      final currentMediaItemId =
+          audioHandler?.mediaItem.valueOrNull?.id ?? _lastMediaItemId;
+      if (mediaItemIdBeforeBackground != null &&
+          currentMediaItemId != null &&
+          mediaItemIdBeforeBackground != currentMediaItemId) {
+        _resumeMediaItemIdToSkipCarouselAnimation = currentMediaItemId;
+      }
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _mediaItemIdWhenAppWentBackground =
+          audioHandler?.mediaItem.valueOrNull?.id ?? _lastMediaItemId;
+    }
   }
 
   Future<void> _checkNavSetting() async {
@@ -2248,7 +2285,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   int _playerArtworkCacheSizePx() {
     final size = MediaQuery.of(context).size;
-    final artworkSize = size.height < 650 ? size.width * 0.6 : size.width * 0.84;
+    final artworkSize = size.height < 650
+        ? size.width * 0.6
+        : size.width * 0.84;
     final pixelRatio = MediaQuery.of(context).devicePixelRatio;
     return (artworkSize * pixelRatio).round();
   }
@@ -2363,6 +2402,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _precacheNextTimer?.cancel();
     _artworkManualSwipeGuardTimer?.cancel();
     _seekDebounceTimer?.cancel();
@@ -3077,7 +3117,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           ListTile(
-                                            leading: const Icon(Icons.link),
+                                            leading: const Icon(
+                                              Ionicons.arrow_redo_outline,
+                                            ),
                                             title: Text(
                                               LocaleProvider.tr('share_link'),
                                             ),
@@ -5559,9 +5601,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                             isSmall
                                                                             ? 12
                                                                             : 14,
-                                                                        top: 6,
+                                                                        top: 8,
                                                                         bottom:
-                                                                            6,
+                                                                            8,
                                                                         right:
                                                                             4,
                                                                       ),
@@ -5897,7 +5939,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                           ? 14
                                                                           : 20,
                                                                       vertical:
-                                                                          6,
+                                                                          8,
                                                                     ),
                                                                 margin:
                                                                     EdgeInsets.only(
@@ -5990,7 +6032,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                         isSmall
                                                                         ? 12
                                                                         : 14,
-                                                                    vertical: 6,
+                                                                    vertical: 8,
                                                                   ),
                                                                   margin: EdgeInsets.only(
                                                                     right:
@@ -6083,7 +6125,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                           ? 12
                                                                           : 14,
                                                                       vertical:
-                                                                          6,
+                                                                          8,
                                                                     ),
                                                                 margin:
                                                                     EdgeInsets.only(
@@ -6176,7 +6218,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                           ? 12
                                                                           : 14,
                                                                       vertical:
-                                                                          6,
+                                                                          8,
                                                                     ),
                                                                 margin:
                                                                     EdgeInsets.only(
@@ -6300,13 +6342,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                           ? 14
                                                                           : 20,
                                                                       vertical:
-                                                                          6,
+                                                                          8,
                                                                     ),
                                                                 child: Row(
                                                                   children: [
                                                                     Icon(
-                                                                      Icons
-                                                                          .share,
+                                                                      Ionicons
+                                                                          .arrow_redo_outline,
                                                                       color: Theme.of(
                                                                         context,
                                                                       ).colorScheme.onSurface,
@@ -6700,14 +6742,14 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     case AudioServiceRepeatMode
                                                         .all:
                                                       repeatIcon =
-                                                          Icons.repeat_rounded;
+                                                          LucideIcons.repeat;
                                                       repeatColor = Theme.of(
                                                         context,
                                                       ).colorScheme.primary;
                                                       break;
                                                     default:
                                                       repeatIcon =
-                                                          Icons.repeat_rounded;
+                                                          LucideIcons.repeat;
                                                       repeatColor =
                                                           Theme.of(
                                                                 context,
@@ -6834,7 +6876,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                             ),
                                                                                             child: IconButton(
                                                                                               icon: const Icon(
-                                                                                                Icons.shuffle_rounded,
+                                                                                                LucideIcons.shuffle,
                                                                                                 weight: 600,
                                                                                               ),
                                                                                               color: Colors.white,
@@ -6854,7 +6896,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                           )
                                                                                         : IconButton(
                                                                                             icon: const Icon(
-                                                                                              Icons.shuffle_rounded,
+                                                                                              LucideIcons.shuffle,
                                                                                               grade: 200,
                                                                                             ),
                                                                                             color: isShuffle

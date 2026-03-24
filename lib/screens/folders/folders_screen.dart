@@ -33,6 +33,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:ionicons/ionicons.dart';
 
 enum OrdenCarpetas {
   normal,
@@ -2351,7 +2353,7 @@ class _FoldersScreenState extends State<FoldersScreen>
   String _streamingDisplayUrl(_StreamingPlaylistItem item) {
     final id = item.videoId?.trim();
     if (id != null && id.isNotEmpty) {
-      return 'https://www.youtube.com/watch?v=$id';
+      return 'https://music.youtube.com/watch?v=$id';
     }
     return item.rawPath;
   }
@@ -2781,7 +2783,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.share_rounded),
+                    leading: const Icon(Ionicons.arrow_redo_outline),
                     title: TranslatedText('share_link'),
                     onTap: () async {
                       Navigator.of(context).pop();
@@ -5224,7 +5226,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onPressed: () => _showAddSongsToPlaylistDialog(),
                 ),
               IconButton(
-                icon: const Icon(Icons.shuffle_rounded, size: 28, weight: 600),
+                icon: const Icon(LucideIcons.shuffle, size: 28, weight: 600),
                 tooltip: LocaleProvider.tr('shuffle'),
                 onPressed: () {
                   final showingStreamingPlaylist = _isStreamingPlaylistDetail;

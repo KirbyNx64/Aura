@@ -33,6 +33,7 @@ import 'package:music/widgets/sliding_up_panel/sliding_up_panel_overlay.dart'
     as overlay_panel;
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ionicons/ionicons.dart';
 import 'dart:io';
 
 class _ArtistStreamingArtwork extends StatefulWidget {
@@ -2867,7 +2868,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.share_rounded),
+                  leading: const Icon(Ionicons.arrow_redo_outline),
                   title: TranslatedText('share_link'),
                   onTap: () async {
                     Navigator.of(modalContext).pop();

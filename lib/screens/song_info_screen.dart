@@ -15,7 +15,7 @@ import 'package:music/utils/db/download_history_model.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
-
+import 'package:ionicons/ionicons.dart';
 import 'package:share_plus/share_plus.dart';
 
 class _StreamingMetadata {
@@ -468,7 +468,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
       _extractVideoIdFromPath(widget.mediaItem.id),
     ]);
     if (videoId == null || videoId.isEmpty) return null;
-    return 'https://www.youtube.com/watch?v=$videoId';
+    return 'https://music.youtube.com/watch?v=$videoId';
   }
 
   String _currentStreamingCoverQuality() {
@@ -690,7 +690,7 @@ class _SongInfoScreenState extends State<SongInfoScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.share),
+            icon: Icon(Ionicons.arrow_redo_outline),
             onPressed: _shareMedia,
             tooltip: LocaleProvider.tr('share'),
           ),

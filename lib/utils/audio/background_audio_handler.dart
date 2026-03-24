@@ -73,7 +73,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -2172,7 +2172,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
 
     final legacyHigh = _prefs?.getBool(_kPrefLegacyCoverQualityHigh);
-    return legacyHigh == false ? 'low' : 'medium';
+    if (legacyHigh == true) return 'high';
+    if (legacyHigh == false) return 'low';
+    return 'medium_low';
   }
 
   String _streamingThumbFileNameForQuality(String quality) {
@@ -2275,22 +2277,42 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return 'https://i.ytimg.com/vi/$id/$qualityFileName';
   }
 
-  String? _toHighestQualityYtThumb(String? url, String? videoId) {
-    final raw = url?.trim();
-    if (raw == null || raw.isEmpty) {
-      return _fallbackStreamingDisplayArtUri(videoId);
+  bool _isNetworkArtworkUri(Uri uri) {
+    final scheme = uri.scheme.toLowerCase();
+    return scheme == 'http' || scheme == 'https';
+  }
+
+  bool _isGoogleusercontentThumb(String rawUrl) {
+    final lower = rawUrl.toLowerCase();
+    return lower.contains('googleusercontent.com') ||
+        lower.contains('ggpht.com');
+  }
+
+  String? _normalizeStreamingThumbCandidate(String? rawUrl) {
+    final normalized = rawUrl?.trim();
+    if (normalized == null || normalized.isEmpty || normalized == 'null') {
+      return null;
     }
-
-    final lower = raw.toLowerCase();
-
-    // Mantener la fuente original de YT Music (googleusercontent) para
-    // preservar el encuadre cuadrado consistente con overlay.
-    if (lower.contains('lh3.googleusercontent.com') ||
-        lower.contains('googleusercontent.com')) {
-      return _applyQualityToGoogleusercontentThumbUrl(raw);
+    final uri = Uri.tryParse(normalized);
+    if (uri == null || !_isNetworkArtworkUri(uri)) {
+      return null;
     }
+    return normalized;
+  }
 
-    return _applyQualityToYoutubeThumbUrl(raw, videoId);
+  String _stableArtworkUrlHash(String input) {
+    var hash = 0x811c9dc5;
+    for (final unit in input.codeUnits) {
+      hash ^= unit;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    return hash.toRadixString(16).padLeft(8, '0');
+  }
+
+  String _streamingArtworkVariantKey(String videoId, Uri remoteUri) {
+    final normalizedVideoId = videoId.trim();
+    final normalizedUrl = remoteUri.toString().trim();
+    return '${normalizedVideoId}_${_stableArtworkUrlHash(normalizedUrl)}';
   }
 
   String? _resolveStreamingDisplayArtUri({
@@ -2298,15 +2320,61 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     Uri? artUri,
     String? videoId,
   }) {
-    final p = preferred?.trim();
-    if (p != null && p.isNotEmpty) {
-      return _toHighestQualityYtThumb(p, videoId);
+    final candidates = <String>[];
+
+    void addCandidate(String? rawUrl) {
+      final candidate = _normalizeStreamingThumbCandidate(rawUrl);
+      if (candidate == null) return;
+      if (!candidates.contains(candidate)) {
+        candidates.add(candidate);
+      }
     }
-    final a = artUri?.toString().trim();
-    if (a != null && a.isNotEmpty) {
-      return _toHighestQualityYtThumb(a, videoId);
+
+    addCandidate(preferred);
+    addCandidate(artUri?.toString());
+
+    // Priorizar siempre la fuente de YT Music (googleusercontent/ggpht)
+    // para mantener el recorte correcto de carátula.
+    for (final candidate in candidates) {
+      if (_isGoogleusercontentThumb(candidate)) {
+        return _applyQualityToGoogleusercontentThumbUrl(candidate);
+      }
     }
+
+    for (final candidate in candidates) {
+      final qualityAdjusted = _applyQualityToYoutubeThumbUrl(
+        candidate,
+        videoId,
+      );
+      final normalized = _normalizeStreamingThumbCandidate(qualityAdjusted);
+      if (normalized != null) {
+        return normalized;
+      }
+    }
+
     return _fallbackStreamingDisplayArtUri(videoId);
+  }
+
+  Uri? _resolveStreamingRemoteArtworkUri(MediaItem item, {String? videoId}) {
+    final rawVideoId = videoId?.trim();
+    final extrasVideoId = item.extras?['videoId']?.toString().trim();
+    final fallbackVideoId = item.id.replaceFirst('yt:', '').trim();
+    final effectiveVideoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+        ? rawVideoId
+        : ((extrasVideoId != null && extrasVideoId.isNotEmpty)
+              ? extrasVideoId
+              : fallbackVideoId);
+
+    final resolvedDisplayArtUri = _resolveStreamingDisplayArtUri(
+      preferred: item.extras?['displayArtUri']?.toString(),
+      artUri: item.artUri,
+      videoId: effectiveVideoId.isNotEmpty ? effectiveVideoId : null,
+    );
+    final remoteUri = Uri.tryParse(resolvedDisplayArtUri ?? '');
+    if (remoteUri == null || !_isNetworkArtworkUri(remoteUri)) {
+      return null;
+    }
+    return remoteUri;
   }
 
   void _resetStreamingSessionState({bool clearQueuedVideos = false}) {
@@ -2898,22 +2966,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       if (!_isStreamingMediaItem(item)) continue;
       if (item.extras?['radioGenerated'] == true) continue;
 
-      final artUri = item.artUri;
-      if (artUri == null) continue;
-      final scheme = artUri.scheme.toLowerCase();
-      if (scheme != 'http' && scheme != 'https') continue;
-
       final rawVideoId = item.extras?['videoId']?.toString().trim();
       final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
           ? rawVideoId
           : item.id.replaceFirst('yt:', '').trim();
       if (videoId.isEmpty) continue;
-
-      // Verificar si ya está cacheada — si no, no forzar descarga aquí.
-      if (_streamArtworkFileCache.containsKey(videoId)) continue;
+      final remoteUri = _resolveStreamingRemoteArtworkUri(
+        item,
+        videoId: videoId,
+      );
+      if (remoteUri == null) continue;
 
       unawaited(() async {
-        final localUri = await _getOrCacheStreamingArtwork(videoId, artUri);
+        final localUri = await _getOrCacheStreamingArtwork(videoId, remoteUri);
         if (localUri == null) return;
         if (!mounted || idx >= _mediaQueue.length) return;
         final current = _mediaQueue[idx];
@@ -2930,17 +2995,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     bool trackGeneration = false,
   }) async {
     if (index < 0 || index >= _mediaQueue.length) return;
-    final artUri = currentMediaItem.artUri;
-    if (artUri == null) return;
-
-    final scheme = artUri.scheme.toLowerCase();
-    if (scheme != 'http' && scheme != 'https') return;
-
     final rawVideoId = currentMediaItem.extras?['videoId']?.toString().trim();
     final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
         ? rawVideoId
         : currentMediaItem.id.replaceFirst('yt:', '').trim();
     if (videoId.isEmpty) return;
+    final remoteUri = _resolveStreamingRemoteArtworkUri(
+      currentMediaItem,
+      videoId: videoId,
+    );
+    if (remoteUri == null) return;
+    final resolvedDisplayArtUri = remoteUri.toString();
 
     // Para pistas agregadas por radio, evitamos I/O local de carátula en cada
     // cambio para priorizar fluidez del skip en cola diferida.
@@ -2950,7 +3015,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Pasar la generación actual para que descargas obsoletas se cancelen.
     final localUri = await _getOrCacheStreamingArtwork(
       videoId,
-      artUri,
+      remoteUri,
       artworkGen: trackGeneration ? _artworkGeneration : null,
       highPriority: true,
     );
@@ -2958,11 +3023,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (!mounted || index >= _mediaQueue.length) return;
     final current = _mediaQueue[index];
     if (current.id != currentSongId) return;
-    var updated = current;
-    if (localUri != null && current.artUri != localUri) {
-      updated = current.copyWith(artUri: localUri);
-      _mediaQueue[index] = updated;
+    var updated = current.copyWith(
+      extras: {...?current.extras, 'displayArtUri': resolvedDisplayArtUri},
+    );
+    if (localUri != null && updated.artUri != localUri) {
+      updated = updated.copyWith(artUri: localUri);
     }
+    _mediaQueue[index] = updated;
     if ((_player.currentIndex ?? -1) == index ||
         mediaItem.value?.id == updated.id) {
       mediaItem.add(updated);
@@ -2979,39 +3046,37 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Solo la tratamos como prioridad normal para que no bloquee la actual.
     final bool isOutdatedRequest =
         artworkGen != null && artworkGen != _artworkGeneration;
+    final normalizedVideoId = videoId.trim();
+    final variantKey = _streamingArtworkVariantKey(
+      normalizedVideoId,
+      remoteUri,
+    );
+    final tempDir = await getTemporaryDirectory();
+    final variantFile = File(
+      '${tempDir.path}/yt_stream_art_v5_$variantKey.jpg',
+    );
 
-    final cachedUri = _streamArtworkFileCache[videoId];
+    final cachedUri = _streamArtworkFileCache[variantKey];
     if (cachedUri != null) {
       try {
         final file = File(cachedUri.toFilePath());
-        if (await file.exists() && await file.length() > 0) {
+        if (file.path == variantFile.path &&
+            await file.exists() &&
+            await file.length() > 0) {
           return cachedUri;
         }
       } catch (_) {
-        _streamArtworkFileCache.remove(videoId);
+        _streamArtworkFileCache.remove(variantKey);
       }
     }
 
-    // Usamos cache v4 sin recorte para preservar la carátula original.
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final v4File = File('${tempDir.path}/yt_stream_art_v4_$videoId.jpg');
-      if (await v4File.exists() && await v4File.length() > 0) {
-        final uri = Uri.file(v4File.path);
-        _streamArtworkFileCache[videoId] = uri;
-        return uri;
-      }
+    if (await variantFile.exists() && await variantFile.length() > 0) {
+      final uri = Uri.file(variantFile.path);
+      _streamArtworkFileCache[variantKey] = uri;
+      return uri;
+    }
 
-      final legacyFile = File('${tempDir.path}/yt_stream_art_$videoId.jpg');
-      if (await legacyFile.exists() && await legacyFile.length() > 0) {
-        await legacyFile.copy(v4File.path);
-        final uri = Uri.file(v4File.path);
-        _streamArtworkFileCache[videoId] = uri;
-        return uri;
-      }
-    } catch (_) {}
-
-    final pending = _streamArtworkPreloadTasks[videoId];
+    final pending = _streamArtworkPreloadTasks[variantKey];
     if (pending != null) {
       return await pending;
     }
@@ -3023,12 +3088,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
 
     _activeArtworkDownloads++;
-    final future = _downloadStreamingArtworkToFile(videoId, remoteUri);
-    _streamArtworkPreloadTasks[videoId] = future;
+    final future = _downloadStreamingArtworkToFile(
+      remoteUri,
+      targetPath: variantFile.path,
+    );
+    _streamArtworkPreloadTasks[variantKey] = future;
     try {
       final result = await future;
       if (result != null) {
-        _streamArtworkFileCache[videoId] = result;
+        _streamArtworkFileCache[variantKey] = result;
         if (_streamArtworkFileCache.length > _streamArtworkCacheMaxEntries) {
           final firstKey = _streamArtworkFileCache.keys.first;
           _streamArtworkFileCache.remove(firstKey);
@@ -3037,14 +3105,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       return result;
     } finally {
       _activeArtworkDownloads--;
-      _streamArtworkPreloadTasks.remove(videoId);
+      _streamArtworkPreloadTasks.remove(variantKey);
     }
   }
 
   Future<Uri?> _downloadStreamingArtworkToFile(
-    String videoId,
-    Uri remoteUri,
-  ) async {
+    Uri remoteUri, {
+    required String targetPath,
+  }) async {
     HttpClient? client;
     try {
       client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
@@ -3060,9 +3128,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final bytes = await consolidateHttpClientResponseBytes(response);
       if (bytes.isEmpty) return null;
 
-      final tempDir = await getTemporaryDirectory();
-      // v4 invalida el cache recortado anterior para usar la carátula completa.
-      final file = File('${tempDir.path}/yt_stream_art_v4_$videoId.jpg');
+      final file = File(targetPath);
       await file.writeAsBytes(bytes, flush: true);
       return Uri.file(file.path);
     } catch (_) {
@@ -4258,7 +4324,28 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // 1) Actualizar UI instantáneamente: índice, metadata y estado de carga.
     _deferredStreamingQueueIndex = targetIndex;
-    final item = _mediaQueue[targetIndex];
+    var item = _mediaQueue[targetIndex];
+    final rawVideoId = item.extras?['videoId']?.toString().trim();
+    final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
+        ? rawVideoId
+        : item.id.replaceFirst('yt:', '').trim();
+    final resolvedRemoteUri = videoId.isNotEmpty
+        ? _resolveStreamingRemoteArtworkUri(item, videoId: videoId)
+        : null;
+    if (resolvedRemoteUri != null) {
+      final resolvedDisplayArtUri = resolvedRemoteUri.toString();
+      final currentDisplayArtUri = item.extras?['displayArtUri']
+          ?.toString()
+          .trim();
+      if (currentDisplayArtUri != resolvedDisplayArtUri ||
+          item.artUri?.toString() != resolvedDisplayArtUri) {
+        item = item.copyWith(
+          artUri: resolvedRemoteUri,
+          extras: {...?item.extras, 'displayArtUri': resolvedDisplayArtUri},
+        );
+        _mediaQueue[targetIndex] = item;
+      }
+    }
     mediaItem.add(item);
     _ensureTrackingForMediaItem(item);
     // La sincronización de flags se hace una sola vez dentro de
@@ -4272,14 +4359,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
 
     // Usar carátula cacheada localmente si existe para UI instantánea.
-    final rawVideoId = item.extras?['videoId']?.toString().trim();
-    final videoId = (rawVideoId != null && rawVideoId.isNotEmpty)
-        ? rawVideoId
-        : item.id.replaceFirst('yt:', '').trim();
-    if (videoId.isNotEmpty) {
-      final cachedUri = _streamArtworkFileCache[videoId];
+    if (videoId.isNotEmpty && resolvedRemoteUri != null) {
+      final cacheKey = _streamingArtworkVariantKey(videoId, resolvedRemoteUri);
+      final cachedUri = _streamArtworkFileCache[cacheKey];
       if (cachedUri != null) {
-        final updated = item.copyWith(artUri: cachedUri);
+        final updated = item.copyWith(
+          artUri: cachedUri,
+          extras: {
+            ...?item.extras,
+            'displayArtUri': resolvedRemoteUri.toString(),
+          },
+        );
         _mediaQueue[targetIndex] = updated;
         mediaItem.add(updated);
       }
@@ -5248,9 +5338,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             ? targetVideoId
             : currentVideoId,
       );
+      final effectiveArtUri = Uri.tryParse(resolvedDisplayArtUri ?? rawArtUri);
 
       final updatedCurrentItem = currentItem.copyWith(
-        artUri: Uri.tryParse(rawArtUri),
+        artUri: effectiveArtUri,
         extras: {
           ...?currentItem.extras,
           'displayArtUri': resolvedDisplayArtUri,
@@ -5277,7 +5368,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
           if (shouldUpdateQueue) {
             _mediaQueue[queueIndex] = queueItem.copyWith(
-              artUri: Uri.tryParse(rawArtUri),
+              artUri: effectiveArtUri,
               extras: {
                 ...?queueItem.extras,
                 'displayArtUri': resolvedDisplayArtUri,

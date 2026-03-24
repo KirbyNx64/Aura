@@ -43,6 +43,8 @@ import 'dart:io';
 import 'package:music/widgets/refresh_m3e.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:ionicons/ionicons.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 
@@ -1066,7 +1068,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.share_rounded),
+                leading: const Icon(Ionicons.arrow_redo_outline),
                 title: TranslatedText('share_link'),
                 onTap: () async {
                   Navigator.of(context).pop();
@@ -6614,11 +6616,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             : _showingRecents
             ? [
                 IconButton(
-                  icon: const Icon(
-                    Icons.shuffle_rounded,
-                    size: 28,
-                    weight: 600,
-                  ),
+                  icon: const Icon(LucideIcons.shuffle, size: 28, weight: 600),
                   tooltip: LocaleProvider.tr('shuffle'),
                   onPressed: () {
                     if (_recentSongsSource == RecentSongsSource.local) {
@@ -6740,7 +6738,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ] else ...[
                   IconButton(
                     icon: const Icon(
-                      Icons.shuffle_rounded,
+                      LucideIcons.shuffle,
                       size: 28,
                       weight: 600,
                     ),

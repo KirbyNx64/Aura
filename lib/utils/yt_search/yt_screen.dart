@@ -41,6 +41,7 @@ import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:open_settings_plus/open_settings_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:ionicons/ionicons.dart';
 import 'dart:io';
 
 // Top-level function para usar con compute
@@ -3735,7 +3736,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.share_rounded),
+                  leading: const Icon(Ionicons.arrow_redo_outline),
                   title: TranslatedText('share_link'),
                   onTap: () async {
                     Navigator.of(modalContext).pop();
