@@ -86,6 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadArtworkQuality();
 
     _loadOverlayNextButtonSetting();
+    _loadCarouselAnimationSetting();
     _loadTranslationLanguageSetting();
     _loadTranslationDisplayModeSetting();
     _loadArtworkBackgroundSetting();
@@ -126,6 +127,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final nextButtonEnabled =
         prefs.getBool('overlay_next_button_enabled') ?? true;
     overlayNextButtonEnabled.value = nextButtonEnabled;
+  }
+
+  Future<void> _loadCarouselAnimationSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isEnabled = prefs.getBool('artwork_carousel_animation_enabled');
+    artworkCarouselAnimationEnabledNotifier.value = isEnabled ?? true;
   }
 
   Future<void> _loadTranslationLanguageSetting() async {
@@ -5000,6 +5007,72 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   bottomRight: Radius.circular(4),
                 ),
               ),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: artworkCarouselAnimationEnabledNotifier,
+                builder: (context, value, child) {
+                  return SwitchListTile(
+                    value: value,
+                    onChanged: (v) async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.setBool(
+                        'artwork_carousel_animation_enabled',
+                        v,
+                      );
+                      artworkCarouselAnimationEnabledNotifier.value = v;
+                      setState(() {});
+                    },
+                    title: Text(
+                      LocaleProvider.tr('carousel_animation'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    subtitle: Text(
+                      LocaleProvider.tr('carousel_animation_desc'),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    secondary: Icon(
+                      Icons.view_carousel_rounded,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(4)),
+                    ),
+                    thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
+                      Set<WidgetState> states,
+                    ) {
+                      final iconColor = isAmoled && isDark
+                          ? Colors.white
+                          : null;
+                      if (states.contains(WidgetState.selected)) {
+                        return Icon(Icons.check, size: 20, color: iconColor);
+                      } else {
+                        return const Icon(Icons.close, size: 20);
+                      }
+                    }),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
               child: Column(
                 children: [
                   ListTile(
@@ -5104,8 +5177,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     subtitle: Text(
                       replaceOriginal
-                          ? LocaleProvider.tr('translation_display_mode_replace')
-                          : LocaleProvider.tr('translation_display_mode_append'),
+                          ? LocaleProvider.tr(
+                              'translation_display_mode_replace',
+                            )
+                          : LocaleProvider.tr(
+                              'translation_display_mode_append',
+                            ),
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(

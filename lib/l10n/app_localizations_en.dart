@@ -183,6 +183,9 @@ const Map<String, String> appLocalizationsEn = {
   'show_lyrics_on_cover': 'Show lyrics on cover',
   'show_lyrics_on_cover_desc':
       'Display song lyrics directly on the player cover',
+  'carousel_animation': 'Carousel animation',
+  'carousel_animation_desc':
+      'Animate cover transitions when the song changes in the player',
   'api_unavailable': 'API unavailable',
   'no_connection': 'No connection',
   'no_lyrics_found': 'No lyrics found',

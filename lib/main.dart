@@ -405,6 +405,8 @@ void main() async {
       prefs.getBool('use_dynamic_color_background') ?? false;
   useDynamicColorInDialogsNotifier.value =
       prefs.getBool('use_dynamic_color_in_dialogs') ?? false;
+  artworkCarouselAnimationEnabledNotifier.value =
+      prefs.getBool('artwork_carousel_animation_enabled') ?? true;
 
   // Cargar directorio de descargas
   final downloadDir =
@@ -827,6 +829,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             prefs.getBool('use_dynamic_color_background') ?? false;
         useDynamicColorInDialogsNotifier.value =
             prefs.getBool('use_dynamic_color_in_dialogs') ?? false;
+        artworkCarouselAnimationEnabledNotifier.value =
+            prefs.getBool('artwork_carousel_animation_enabled') ?? true;
 
         final lyricsProviderIndex =
             prefs.getInt('lyrics_service_provider') ??

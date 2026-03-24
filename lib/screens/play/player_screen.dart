@@ -963,6 +963,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           final seededPage = _artworkCarouselPage ?? currentIndex;
           _artworkCarouselPage = seededPage.clamp(0, queue.length - 1);
           final carouselInitialPage = _artworkCarouselPage!;
+          final isCarouselAnimationEnabled =
+              artworkCarouselAnimationEnabledNotifier.value;
 
           final screenWidth = MediaQuery.of(context).size.width;
           return SizedBox(
@@ -977,40 +979,59 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               child: SizedBox(
                 width: screenWidth,
                 height: artworkSize,
-                child: CarouselSlider.builder(
-                  carouselController: _artworkCarouselController,
-                  itemCount: queue.length,
-                  itemBuilder: (context, index, _) {
-                    final item = queue[index];
-                    final artworkKey = ValueKey(
-                      'player_art_${(item.extras?['songId'] ?? item.id).toString()}',
-                    );
-                    return Align(
-                      alignment: Alignment.center,
-                      child: KeyedSubtree(
-                        key: artworkKey,
-                        child: buildArtwork(item, artworkSize),
-                      ),
-                    );
-                  },
-                  options: CarouselOptions(
-                    height: artworkSize,
-                    viewportFraction: 1.0,
-                    initialPage: carouselInitialPage,
-                    enableInfiniteScroll: false,
-                    padEnds: false,
-                    enlargeCenterPage: false,
-                    pageSnapping: true,
-                    scrollPhysics: _disableChangeSongGesture
-                        ? const NeverScrollableScrollPhysics()
-                        : const PageScrollPhysics(),
-                    onPageChanged: (index, reason) {
-                      _artworkCarouselPage = index;
-                      if (reason == CarouselPageChangedReason.manual &&
-                          !_disableChangeSongGesture) {
-                        _handleManualArtworkSwipeToIndex(index);
-                      }
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onHorizontalDragEnd:
+                      (!isCarouselAnimationEnabled &&
+                          !_disableChangeSongGesture)
+                      ? (details) {
+                          final velocity = details.primaryVelocity ?? 0;
+                          const threshold = 260.0;
+                          if (velocity <= -threshold) {
+                            unawaited(_skipToNextWithArtworkDirection());
+                          } else if (velocity >= threshold) {
+                            unawaited(_skipToPreviousWithArtworkDirection());
+                          }
+                        }
+                      : null,
+                  child: CarouselSlider.builder(
+                    carouselController: _artworkCarouselController,
+                    itemCount: queue.length,
+                    itemBuilder: (context, index, _) {
+                      final item = queue[index];
+                      final artworkKey = ValueKey(
+                        'player_art_${(item.extras?['songId'] ?? item.id).toString()}',
+                      );
+                      return Align(
+                        alignment: Alignment.center,
+                        child: KeyedSubtree(
+                          key: artworkKey,
+                          child: buildArtwork(item, artworkSize),
+                        ),
+                      );
                     },
+                    options: CarouselOptions(
+                      height: artworkSize,
+                      viewportFraction: 1.0,
+                      initialPage: carouselInitialPage,
+                      enableInfiniteScroll: false,
+                      padEnds: false,
+                      enlargeCenterPage: false,
+                      pageSnapping: true,
+                      scrollPhysics:
+                          (_disableChangeSongGesture ||
+                              !isCarouselAnimationEnabled)
+                          ? const NeverScrollableScrollPhysics()
+                          : const PageScrollPhysics(),
+                      onPageChanged: (index, reason) {
+                        _artworkCarouselPage = index;
+                        if (isCarouselAnimationEnabled &&
+                            reason == CarouselPageChangedReason.manual &&
+                            !_disableChangeSongGesture) {
+                          _handleManualArtworkSwipeToIndex(index);
+                        }
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -1253,6 +1274,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final queue = audioHandler?.queue.value ?? const <MediaItem>[];
     final targetIndex = queue.indexWhere((item) => item.id == mediaItem.id);
     if (targetIndex < 0) return;
+    final isCarouselAnimationEnabled =
+        artworkCarouselAnimationEnabledNotifier.value;
 
     final shouldSkipAnimationOnResume =
         _resumeMediaItemIdToSkipCarouselAnimation == mediaItem.id;
@@ -1284,6 +1307,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     final shouldAnimate =
         _isPlayerPanelVisibleForCarouselAnimation() &&
+        isCarouselAnimationEnabled &&
         !shouldSkipAnimationOnResume &&
         !_suppressSourceSwitchTransitions &&
         (currentPage - targetIndex).abs() == 1;

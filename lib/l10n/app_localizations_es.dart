@@ -189,6 +189,9 @@ const Map<String, String> appLocalizationsEs = {
   'show_lyrics_on_cover': 'Mostrar letra de canciones en carátula',
   'show_lyrics_on_cover_desc':
       'Muestra las letras de las canciones directamente en la carátula del reproductor',
+  'carousel_animation': 'Animación del carrusel',
+  'carousel_animation_desc':
+      'Anima la carátula al cambiar de canción en el reproductor',
   'api_unavailable': 'API no disponible',
   'no_connection': 'Sin conexión',
   'no_lyrics_found': 'No se encontraron letras',
