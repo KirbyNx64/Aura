@@ -1,9 +1,9 @@
 {
-  "version": "2.0.4",
+  "version": "2.0.5",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.4/AuraMusic-v2.0.4-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.4/AuraMusic-v2.0.4-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.4/AuraMusic-v2.0.4-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.5/AuraMusic-v2.0.5-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.5/AuraMusic-v2.0.5-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.5/AuraMusic-v2.0.5-x86_64.apk"
   },
-  "changelog": "• Ahora puedes iniciar sesión con tu cuenta de Google / YouTube para acceder a tus listas de reproducción guardadas. Puedes ver, reproducir y descargar música desde ellas, aunque no es posible editarlas, eliminarlas ni añadir nuevas canciones.\n\n• Se añadió una nueva sección en la pantalla de inicio llamada “Vuelve a escucharlo”, que muestra canciones recomendadas por YouTube.\n\n• Se incorporó una nueva animación tipo carrusel en las carátulas al cambiar de canción.\n\n• Se corrigieron errores menores y se mejoró la estabilidad general de la aplicación."
+  "changelog": "• La animación tipo carrusel ahora puede desactivarse desde la configuración.\n\n• Se implementó la detección de si una canción cuenta con un video válido al reproducirse vía streaming, como parte de la API de YouTube Music.\n\n• Se corrigieron errores menores y se optimizó la estabilidad general de la aplicación."
 }
