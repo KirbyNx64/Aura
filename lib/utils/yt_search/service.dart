@@ -270,6 +270,11 @@ final Map<String, dynamic> ytServiceContext = {
   },
 };
 
+final Map<String, Map<String, String?>> _songTypeInfoByVideoIdCache =
+    <String, Map<String, String?>>{};
+final Map<String, Future<Map<String, String?>>> _songTypeInfoInFlightByVideoId =
+    <String, Future<Map<String, String?>>>{};
+
 class YtMusicResult {
   final String? title;
   final String? artist;
@@ -277,6 +282,8 @@ class YtMusicResult {
   final String? videoId;
   final String? durationText;
   final int? durationMs;
+  final String? resultType;
+  final String? videoType;
 
   YtMusicResult({
     this.title,
@@ -285,7 +292,151 @@ class YtMusicResult {
     this.videoId,
     this.durationText,
     this.durationMs,
+    this.resultType,
+    this.videoType,
   });
+}
+
+String? _normalizeYtResultType(String? raw) {
+  final value = raw?.trim().toLowerCase();
+  if (value == null || value.isEmpty) return null;
+  return value;
+}
+
+String? _normalizeYtVideoType(String? raw) {
+  final value = raw?.trim();
+  if (value == null || value.isEmpty) return null;
+  return value.toUpperCase();
+}
+
+String? _extractRendererMusicVideoType(dynamic renderer) {
+  if (renderer == null) return null;
+
+  final overlayType = nav(renderer, [
+    'overlay',
+    'musicItemThumbnailOverlayRenderer',
+    'content',
+    'musicPlayButtonRenderer',
+    'playNavigationEndpoint',
+    'watchEndpoint',
+    'watchEndpointMusicSupportedConfigs',
+    'watchEndpointMusicConfig',
+    'musicVideoType',
+  ])?.toString();
+
+  final navigationType = nav(renderer, [
+    'navigationEndpoint',
+    'watchEndpoint',
+    'watchEndpointMusicSupportedConfigs',
+    'watchEndpointMusicConfig',
+    'musicVideoType',
+  ])?.toString();
+
+  final menuType = nav(renderer, [
+    'menu',
+    'menuRenderer',
+    'items',
+    0,
+    'menuNavigationItemRenderer',
+    'navigationEndpoint',
+    'watchEndpoint',
+    'watchEndpointMusicSupportedConfigs',
+    'watchEndpointMusicConfig',
+    'musicVideoType',
+  ])?.toString();
+
+  return _normalizeYtVideoType(overlayType ?? navigationType ?? menuType);
+}
+
+String _inferResultTypeFromVideoType(
+  String? videoType, {
+  String fallback = 'video',
+}) {
+  final normalizedVideoType = _normalizeYtVideoType(videoType);
+  if (normalizedVideoType == 'MUSIC_VIDEO_TYPE_ATV' ||
+      normalizedVideoType == 'MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK') {
+    return 'song';
+  }
+  if (normalizedVideoType == 'MUSIC_VIDEO_TYPE_PODCAST_EPISODE') {
+    return 'episode';
+  }
+  return _normalizeYtResultType(fallback) ?? 'video';
+}
+
+Future<Map<String, String?>> getSongTypeInfoByVideoId(String videoId) async {
+  final normalizedVideoId = videoId.trim();
+  if (normalizedVideoId.isEmpty) {
+    // ignore: avoid_print
+    print('[YT_TYPE_DEBUG] getSongTypeInfoByVideoId:skip_empty_video_id');
+    return const <String, String?>{'resultType': null, 'videoType': null};
+  }
+
+  final cached = _songTypeInfoByVideoIdCache[normalizedVideoId];
+  if (cached != null) {
+    // ignore: avoid_print
+    print(
+      '[YT_TYPE_DEBUG] getSongTypeInfoByVideoId:cache_hit videoId=$normalizedVideoId resultType=${cached['resultType']} videoType=${cached['videoType']}',
+    );
+    return Map<String, String?>.from(cached);
+  }
+
+  final inFlight = _songTypeInfoInFlightByVideoId[normalizedVideoId];
+  if (inFlight != null) {
+    // ignore: avoid_print
+    print(
+      '[YT_TYPE_DEBUG] getSongTypeInfoByVideoId:inflight_hit videoId=$normalizedVideoId',
+    );
+    return await inFlight;
+  }
+
+  final future = () async {
+    // ignore: avoid_print
+    print(
+      '[YT_TYPE_DEBUG] getSongTypeInfoByVideoId:request_start videoId=$normalizedVideoId',
+    );
+    try {
+      final data = <String, dynamic>{
+        ...ytServiceContext,
+        'videoId': normalizedVideoId,
+        // ytmusicapi usa `video_id` en get_song; enviamos ambos por compatibilidad.
+        'video_id': normalizedVideoId,
+      };
+      final response = (await sendRequest('player', data)).data;
+      final rawVideoType = nav(response, [
+        'videoDetails',
+        'musicVideoType',
+      ])?.toString();
+      final videoType = _normalizeYtVideoType(rawVideoType);
+      final resultType = videoType == null
+          ? null
+          : _inferResultTypeFromVideoType(videoType);
+      final payload = <String, String?>{
+        'resultType': resultType,
+        'videoType': videoType,
+      };
+      // ignore: avoid_print
+      print(
+        '[YT_TYPE_DEBUG] getSongTypeInfoByVideoId:request_done videoId=$normalizedVideoId resultType=$resultType videoType=$videoType',
+      );
+      _songTypeInfoByVideoIdCache[normalizedVideoId] = payload;
+      return payload;
+    } catch (e) {
+      // ignore: avoid_print
+      print(
+        '[YT_TYPE_DEBUG] getSongTypeInfoByVideoId:request_error videoId=$normalizedVideoId error=$e',
+      );
+      return const <String, String?>{'resultType': null, 'videoType': null};
+    } finally {
+      _songTypeInfoInFlightByVideoId.remove(normalizedVideoId);
+      // ignore: avoid_print
+      print(
+        '[YT_TYPE_DEBUG] getSongTypeInfoByVideoId:request_end videoId=$normalizedVideoId',
+      );
+    }
+  }();
+
+  _songTypeInfoInFlightByVideoId[normalizedVideoId] = future;
+  return await future;
 }
 
 class YtMusicLibraryPlaylist {
@@ -2095,6 +2246,8 @@ Map<String, dynamic>? _parsePlaylistPanelTrack(dynamic rawItem) {
   final durationMs = _parseDurationTextMs(
     nav(renderer, ['lengthText', 'runs', 0, 'text'])?.toString(),
   );
+  final videoType = _extractRendererMusicVideoType(renderer);
+  final resultType = _inferResultTypeFromVideoType(videoType, fallback: 'song');
 
   return {
     'videoId': videoId,
@@ -2102,6 +2255,8 @@ Map<String, dynamic>? _parsePlaylistPanelTrack(dynamic rawItem) {
     'artist': artist,
     'thumbUrl': thumbUrl,
     'durationMs': durationMs,
+    'resultType': resultType,
+    'videoType': videoType,
   };
 }
 
@@ -2241,17 +2396,7 @@ void parseSongs(List items, List<YtMusicResult> results) {
     final renderer = item['musicResponsiveListItemRenderer'];
     if (renderer != null) {
       // Verificar si es una canción (no un video)
-      final videoType = nav(renderer, [
-        'overlay',
-        'musicItemThumbnailOverlayRenderer',
-        'content',
-        'musicPlayButtonRenderer',
-        'playNavigationEndpoint',
-        'watchEndpoint',
-        'watchEndpointMusicSupportedConfigs',
-        'watchEndpointMusicConfig',
-        'musicVideoType',
-      ]);
+      final videoType = _extractRendererMusicVideoType(renderer);
 
       // Solo procesar si es una canción (MUSIC_VIDEO_TYPE_ATV) o si no hay tipo específico
       if (videoType == null || videoType == 'MUSIC_VIDEO_TYPE_ATV') {
@@ -2300,6 +2445,8 @@ void parseSongs(List items, List<YtMusicResult> results) {
               videoId: videoId,
               durationText: durationText,
               durationMs: durationMs,
+              resultType: 'song',
+              videoType: videoType,
             ),
           );
         }
@@ -2431,17 +2578,7 @@ YtMusicResult? _parseTwoRowRendererToResult(Map<String, dynamic> renderer) {
       ])?.toString().trim();
   if (videoId == null || videoId.isEmpty) return null;
 
-  final videoType = nav(renderer, [
-    'overlay',
-    'musicItemThumbnailOverlayRenderer',
-    'content',
-    'musicPlayButtonRenderer',
-    'playNavigationEndpoint',
-    'watchEndpoint',
-    'watchEndpointMusicSupportedConfigs',
-    'watchEndpointMusicConfig',
-    'musicVideoType',
-  ])?.toString();
+  final videoType = _extractRendererMusicVideoType(renderer);
   if (videoType != null &&
       videoType.isNotEmpty &&
       videoType.contains('PODCAST')) {
@@ -2485,6 +2622,8 @@ YtMusicResult? _parseTwoRowRendererToResult(Map<String, dynamic> renderer) {
     videoId: videoId,
     durationText: durationText,
     durationMs: durationMs,
+    resultType: _inferResultTypeFromVideoType(videoType),
+    videoType: videoType,
   );
 }
 
@@ -2525,17 +2664,7 @@ YtMusicResult? _parseResponsiveRendererToResult(Map<String, dynamic> renderer) {
       ])?.toString().trim();
   if (videoId == null || videoId.isEmpty) return null;
 
-  final videoType = nav(renderer, [
-    'overlay',
-    'musicItemThumbnailOverlayRenderer',
-    'content',
-    'musicPlayButtonRenderer',
-    'playNavigationEndpoint',
-    'watchEndpoint',
-    'watchEndpointMusicSupportedConfigs',
-    'watchEndpointMusicConfig',
-    'musicVideoType',
-  ])?.toString();
+  final videoType = _extractRendererMusicVideoType(renderer);
   if (videoType != null &&
       videoType.isNotEmpty &&
       videoType.contains('PODCAST')) {
@@ -2575,6 +2704,8 @@ YtMusicResult? _parseResponsiveRendererToResult(Map<String, dynamic> renderer) {
     videoId: videoId,
     durationText: durationText,
     durationMs: durationMs,
+    resultType: _inferResultTypeFromVideoType(videoType),
+    videoType: videoType,
   );
 }
 
@@ -3207,20 +3338,11 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
         for (var item in contents) {
           final renderer = item['musicResponsiveListItemRenderer'];
           if (renderer != null) {
-            final videoType = nav(renderer, [
-              'overlay',
-              'musicItemThumbnailOverlayRenderer',
-              'content',
-              'musicPlayButtonRenderer',
-              'playNavigationEndpoint',
-              'watchEndpoint',
-              'watchEndpointMusicSupportedConfigs',
-              'watchEndpointMusicConfig',
-              'musicVideoType',
-            ]);
+            final videoType = _extractRendererMusicVideoType(renderer);
             if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
                 videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
-                videoType == 'MUSIC_VIDEO_TYPE_UGC') {
+                videoType == 'MUSIC_VIDEO_TYPE_UGC' ||
+                videoType == 'MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC') {
               final title =
                   renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
               final subtitleRuns =
@@ -3261,6 +3383,8 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
                     videoId: videoId,
                     durationText: durationText,
                     durationMs: durationMs,
+                    resultType: 'video',
+                    videoType: videoType,
                   ),
                 );
               }
@@ -3310,20 +3434,11 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
         for (var item in videoItems) {
           final renderer = item['musicResponsiveListItemRenderer'];
           if (renderer != null) {
-            final videoType = nav(renderer, [
-              'overlay',
-              'musicItemThumbnailOverlayRenderer',
-              'content',
-              'musicPlayButtonRenderer',
-              'playNavigationEndpoint',
-              'watchEndpoint',
-              'watchEndpointMusicSupportedConfigs',
-              'watchEndpointMusicConfig',
-              'musicVideoType',
-            ]);
+            final videoType = _extractRendererMusicVideoType(renderer);
             if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
                 videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
-                videoType == 'MUSIC_VIDEO_TYPE_UGC') {
+                videoType == 'MUSIC_VIDEO_TYPE_UGC' ||
+                videoType == 'MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC') {
               final title =
                   renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
               final subtitleRuns =
@@ -3364,6 +3479,8 @@ Future<List<YtMusicResult>> searchVideosWithPagination(
                     videoId: videoId,
                     durationText: durationText,
                     durationMs: durationMs,
+                    resultType: 'video',
+                    videoType: videoType,
                   ),
                 );
               }
@@ -3924,6 +4041,7 @@ Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
         }
 
         if (videoId != null && title != null) {
+          final videoType = _extractRendererMusicVideoType(renderer);
           final durationText = _extractDurationText(renderer);
           final durationMs = _parseDurationTextMs(durationText);
           results.add(
@@ -3934,6 +4052,8 @@ Future<List<YtMusicResult>> getAlbumSongs(String browseId) async {
               videoId: videoId,
               durationText: durationText,
               durationMs: durationMs,
+              resultType: 'song',
+              videoType: videoType,
             ),
           );
         }
@@ -4568,6 +4688,7 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
 
   final durationText = _extractDurationText(renderer);
   final durationMs = _parseDurationTextMs(durationText);
+  final videoType = _extractRendererMusicVideoType(renderer);
 
   // Obtener thumbnail
   String? thumbUrl;
@@ -4592,6 +4713,8 @@ YtMusicResult? _parsePlaylistSong(Map<String, dynamic> renderer) {
     videoId: videoId,
     durationText: durationText,
     durationMs: durationMs,
+    resultType: 'song',
+    videoType: videoType,
   );
 }
 

@@ -36,7 +36,10 @@ class MostPlayedDB {
     String? artist,
     String? videoId,
     String? artUri,
+    String? durationText,
     int? durationMs,
+    String? resultType,
+    String? videoType,
   }) async {
     final b = await box;
     final playCount = b.get(path)?['play_count'] ?? 0;
@@ -55,7 +58,13 @@ class MostPlayedDB {
       if (videoId != null && videoId.trim().isNotEmpty)
         'videoId': videoId.trim(),
       if (artUri != null && artUri.trim().isNotEmpty) 'artUri': artUri.trim(),
+      if (durationText != null && durationText.trim().isNotEmpty)
+        'durationText': durationText.trim(),
       if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+      if (resultType != null && resultType.trim().isNotEmpty)
+        'resultType': resultType.trim().toLowerCase(),
+      if (videoType != null && videoType.trim().isNotEmpty)
+        'videoType': videoType.trim().toUpperCase(),
     };
     if (next.isNotEmpty) {
       await mb.put(path, next);

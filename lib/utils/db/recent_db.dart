@@ -42,6 +42,8 @@ class RecentsDB {
     String? artUri,
     String? durationText,
     int? durationMs,
+    String? resultType,
+    String? videoType,
   }) async {
     final b = await box;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -61,6 +63,10 @@ class RecentsDB {
       if (durationText != null && durationText.trim().isNotEmpty)
         'durationText': durationText.trim(),
       if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+      if (resultType != null && resultType.trim().isNotEmpty)
+        'resultType': resultType.trim().toLowerCase(),
+      if (videoType != null && videoType.trim().isNotEmpty)
+        'videoType': videoType.trim().toUpperCase(),
     };
     if (next.isNotEmpty) {
       await mb.put(path, next);

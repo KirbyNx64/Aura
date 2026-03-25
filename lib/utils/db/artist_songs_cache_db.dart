@@ -40,6 +40,8 @@ class ArtistSongsCacheDB {
       final artUri = raw['artUri']?.toString().trim();
       final durationText = raw['durationText']?.toString().trim();
       final durationMs = _asPositiveInt(raw['durationMs']);
+      final resultType = raw['resultType']?.toString().trim();
+      final videoType = raw['videoType']?.toString().trim();
       final path = raw['path']?.toString().trim();
 
       final safeVideoId = (videoId != null && videoId.isNotEmpty)
@@ -56,6 +58,10 @@ class ArtistSongsCacheDB {
         if (durationText != null && durationText.isNotEmpty)
           'durationText': durationText,
         if (durationMs != null) 'durationMs': durationMs,
+        if (resultType != null && resultType.isNotEmpty)
+          'resultType': resultType.toLowerCase(),
+        if (videoType != null && videoType.isNotEmpty)
+          'videoType': videoType.toUpperCase(),
       });
     }
 

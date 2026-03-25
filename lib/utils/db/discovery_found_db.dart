@@ -44,6 +44,8 @@ class DiscoveryFoundDB {
       final artUri = track['artUri']?.toString().trim();
       final durationText = track['durationText']?.toString().trim();
       final durationMs = track['durationMs'];
+      final resultType = track['resultType']?.toString().trim();
+      final videoType = track['videoType']?.toString().trim();
 
       await mb.put(path, <String, dynamic>{
         if (title != null && title.isNotEmpty) 'title': title,
@@ -53,6 +55,10 @@ class DiscoveryFoundDB {
         if (durationText != null && durationText.isNotEmpty)
           'durationText': durationText,
         if (durationMs is int && durationMs > 0) 'durationMs': durationMs,
+        if (resultType != null && resultType.isNotEmpty)
+          'resultType': resultType.toLowerCase(),
+        if (videoType != null && videoType.isNotEmpty)
+          'videoType': videoType.toUpperCase(),
       });
     }
 

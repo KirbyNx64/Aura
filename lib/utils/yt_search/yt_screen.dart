@@ -123,6 +123,30 @@ int? _parseDurationTextToMilliseconds(String? text) {
   return totalSeconds * 1000;
 }
 
+String? _normalizeYtResultType(String? raw) {
+  final value = raw?.trim().toLowerCase();
+  if (value == null || value.isEmpty) return null;
+  return value;
+}
+
+String? _normalizeYtVideoType(String? raw) {
+  final value = raw?.trim();
+  if (value == null || value.isEmpty) return null;
+  return value.toUpperCase();
+}
+
+Map<String, dynamic> _ytTypePayload({
+  String? resultType,
+  String? videoType,
+}) {
+  final normalizedResultType = _normalizeYtResultType(resultType);
+  final normalizedVideoType = _normalizeYtVideoType(videoType);
+  return <String, dynamic>{
+    if (normalizedResultType != null) 'resultType': normalizedResultType,
+    if (normalizedVideoType != null) 'videoType': normalizedVideoType,
+  };
+}
+
 String _artistWithDurationText({
   String? artist,
   String? fallbackArtist,
@@ -338,7 +362,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       final renderer = item['musicResponsiveListItemRenderer'];
       if (renderer == null) continue;
 
-      final videoType = nav(renderer, [
+      final rawVideoType = nav(renderer, [
         'overlay',
         'musicItemThumbnailOverlayRenderer',
         'content',
@@ -349,10 +373,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         'watchEndpointMusicConfig',
         'musicVideoType',
       ]);
+      final videoType = _normalizeYtVideoType(rawVideoType?.toString());
 
       if (videoType != 'MUSIC_VIDEO_TYPE_MV' &&
           videoType != 'MUSIC_VIDEO_TYPE_OMV' &&
-          videoType != 'MUSIC_VIDEO_TYPE_UGC') {
+          videoType != 'MUSIC_VIDEO_TYPE_UGC' &&
+          videoType != 'MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC') {
         continue;
       }
 
@@ -412,6 +438,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             videoId: videoId,
             durationText: durationText,
             durationMs: durationMs,
+            resultType: 'video',
+            videoType: videoType,
           ),
         );
       }
@@ -455,6 +483,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
     ) {
       final currentDurationText = current.durationText?.trim();
       final incomingDurationText = incoming.durationText?.trim();
+      final mergedResultType = _hasNonEmptyText(current.resultType)
+          ? _normalizeYtResultType(current.resultType)
+          : _normalizeYtResultType(incoming.resultType);
+      final mergedVideoType = _hasNonEmptyText(current.videoType)
+          ? _normalizeYtVideoType(current.videoType)
+          : _normalizeYtVideoType(incoming.videoType);
       return YtMusicResult(
         title: _hasNonEmptyText(current.title) ? current.title : incoming.title,
         artist: _hasNonEmptyText(current.artist)
@@ -473,6 +507,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         durationMs: (current.durationMs != null && current.durationMs! > 0)
             ? current.durationMs
             : incoming.durationMs,
+        resultType: mergedResultType,
+        videoType: mergedVideoType,
       );
     }
 
@@ -1760,6 +1796,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         videoId: videoId,
                                         durationMs: durationMs,
                                         durationText: durationText,
+                                        resultType: 'video',
                                       );
                                       await _addSongToFavorites(videoAsResult);
                                       _showMessage(
@@ -1801,6 +1838,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                                         videoId: videoId,
                                         durationMs: durationMs,
                                         durationText: durationText,
+                                        resultType: 'video',
                                       );
                                       await _showAddSongToPlaylistDialog(
                                         videoAsResult,
@@ -2879,6 +2917,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       'title': title,
       'artist': artist,
       'artUri': artUri,
+      ..._ytTypePayload(
+        resultType: item.resultType,
+        videoType: item.videoType,
+      ),
       if (item.durationMs != null && item.durationMs! > 0)
         'durationMs': item.durationMs,
       if (item.durationText != null && item.durationText!.trim().isNotEmpty)
@@ -2909,6 +2951,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       artUri: artUri,
       durationText: item.durationText,
       durationMs: item.durationMs,
+      resultType: item.resultType,
+      videoType: item.videoType,
     );
     if (notifyReload) {
       favoritesShouldReload.value = !favoritesShouldReload.value;
@@ -3149,6 +3193,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         'data': 'yt:$videoId',
         'videoId': videoId,
         'isStreaming': true,
+        ..._ytTypePayload(
+          resultType: item.resultType,
+          videoType: item.videoType,
+        ),
         if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
         if (durationText != null && durationText.isNotEmpty)
           'durationText': durationText,
@@ -3193,6 +3241,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
         artUri: artUri,
         durationText: item.durationText,
         durationMs: item.durationMs,
+        resultType: item.resultType,
+        videoType: item.videoType,
       );
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
@@ -3383,6 +3433,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
           durationText: item.durationText,
           durationMs: item.durationMs,
+          resultType: item.resultType,
+          videoType: item.videoType,
         );
       }
       playlistsShouldReload.value = !playlistsShouldReload.value;
@@ -3891,6 +3943,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
               : 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
           durationText: item.durationText,
           durationMs: item.durationMs,
+          resultType: item.resultType,
+          videoType: item.videoType,
         );
       }
       playlistsShouldReload.value = !playlistsShouldReload.value;
@@ -4030,6 +4084,12 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
   ) {
     final currentDurationText = current.durationText?.trim();
     final incomingDurationText = incoming.durationText?.trim();
+    final mergedResultType = _hasNonEmptyText(current.resultType)
+        ? _normalizeYtResultType(current.resultType)
+        : _normalizeYtResultType(incoming.resultType);
+    final mergedVideoType = _hasNonEmptyText(current.videoType)
+        ? _normalizeYtVideoType(current.videoType)
+        : _normalizeYtVideoType(incoming.videoType);
 
     return YtMusicResult(
       title: _hasNonEmptyText(current.title) ? current.title : incoming.title,
@@ -4049,6 +4109,8 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       durationMs: (current.durationMs != null && current.durationMs! > 0)
           ? current.durationMs
           : incoming.durationMs,
+      resultType: mergedResultType,
+      videoType: mergedVideoType,
     );
   }
 
@@ -9299,6 +9361,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
             'artUri': (entry.thumbUrl?.trim().isNotEmpty ?? false)
                 ? entry.thumbUrl!.trim()
                 : 'https://i.ytimg.com/vi/$id/hqdefault.jpg',
+            ..._ytTypePayload(
+              resultType: entry.resultType,
+              videoType: entry.videoType,
+            ),
             if (entryDurationMs != null && entryDurationMs > 0)
               'durationMs': entryDurationMs,
             if (entryDurationText != null && entryDurationText.isNotEmpty)
@@ -9349,6 +9415,10 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
                   'artUri': immediateArtworkUri,
                   if (item.thumbUrl?.trim().isNotEmpty == true)
                     'displayArtUri': item.thumbUrl!.trim(),
+                  ..._ytTypePayload(
+                    resultType: item.resultType,
+                    videoType: item.videoType,
+                  ),
                   if (durationMs != null && durationMs > 0)
                     'durationMs': durationMs,
                   if (durationText != null && durationText.isNotEmpty)

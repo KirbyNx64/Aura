@@ -46,6 +46,8 @@ class StreamingArtistsDB {
     String? artUri,
     String? durationText,
     int? durationMs,
+    String? resultType,
+    String? videoType,
   }) async {
     final normalizedPath = path.trim();
     if (normalizedPath.isEmpty) return;
@@ -90,6 +92,10 @@ class StreamingArtistsDB {
         if (durationText != null && durationText.trim().isNotEmpty)
           'durationText': durationText.trim(),
         if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
+        if (resultType != null && resultType.trim().isNotEmpty)
+          'resultType': resultType.trim().toLowerCase(),
+        if (videoType != null && videoType.trim().isNotEmpty)
+          'videoType': videoType.trim().toUpperCase(),
         'play_count': nextSongPlayCount,
         'last_played_ms': nowMs,
       };
@@ -166,6 +172,8 @@ class StreamingArtistsDB {
         'artUri': map['artUri']?.toString().trim(),
         'durationText': map['durationText']?.toString().trim(),
         'durationMs': (map['durationMs'] as num?)?.toInt(),
+        'resultType': map['resultType']?.toString().trim(),
+        'videoType': map['videoType']?.toString().trim(),
         'play_count': ((map['play_count'] as num?) ?? 0).toInt(),
         'last_played_ms': ((map['last_played_ms'] as num?) ?? 0).toInt(),
       };

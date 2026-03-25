@@ -43,7 +43,6 @@ import 'dart:io';
 import 'package:music/widgets/refresh_m3e.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ionicons/ionicons.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
@@ -58,6 +57,8 @@ class _StreamingRecentItem {
   final String? artUri;
   final String? durationText;
   final int? durationMs;
+  final String? resultType;
+  final String? videoType;
   final bool isPinned;
 
   const _StreamingRecentItem({
@@ -68,6 +69,8 @@ class _StreamingRecentItem {
     this.artUri,
     this.durationText,
     this.durationMs,
+    this.resultType,
+    this.videoType,
     this.isPinned = false,
   });
 }
@@ -715,6 +718,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       artUri: item.artUri,
                                       durationText: item.durationText,
                                       durationMs: item.durationMs,
+                                      resultType: item.resultType,
+                                      videoType: item.videoType,
                                     );
                                     playlistsShouldReload.value =
                                         !playlistsShouldReload.value;
@@ -751,6 +756,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                               artUri: item.artUri,
                               durationText: item.durationText,
                               durationMs: item.durationMs,
+                              resultType: item.resultType,
+                              videoType: item.videoType,
                             );
                             playlistsShouldReload.value =
                                 !playlistsShouldReload.value;
@@ -790,6 +797,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           artUri: item.artUri,
                           durationText: item.durationText,
                           durationMs: item.durationMs,
+                          resultType: item.resultType,
+                          videoType: item.videoType,
                         );
                         playlistsShouldReload.value =
                             !playlistsShouldReload.value;
@@ -830,6 +839,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         'durationMs': item.durationMs,
       if (item.durationText != null && item.durationText!.trim().isNotEmpty)
         'durationText': item.durationText!.trim(),
+      ..._ytTypePayload(resultType: item.resultType, videoType: item.videoType),
     });
   }
 
@@ -991,6 +1001,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     artUri: artUri,
                     durationText: item.durationText,
                     durationMs: item.durationMs,
+                    resultType: item.resultType,
+                    videoType: item.videoType,
                   );
                   favoritesShouldReload.value = !favoritesShouldReload.value;
                 },
@@ -1023,6 +1035,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       artUri: artUri,
                       durationText: item.durationText,
                       durationMs: item.durationMs,
+                      resultType: item.resultType,
+                      videoType: item.videoType,
                     );
                   }
                   shortcutsShouldReload.value = !shortcutsShouldReload.value;
@@ -1090,6 +1104,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       'videoId': videoId,
                       'isStreaming': true,
                       'displayArtUri': artUri,
+                      ..._ytTypePayload(
+                        resultType: item.resultType,
+                        videoType: item.videoType,
+                      ),
                     },
                   );
                   await SongInfoDialog.show(
@@ -2156,6 +2174,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final artist = meta['artist']?.toString().trim();
       final durationText = meta['durationText']?.toString().trim();
       final durationMs = _parseDurationMs(meta['durationMs']);
+      final resultType = _normalizeYtResultType(meta['resultType']?.toString());
+      final videoType = _normalizeYtVideoType(meta['videoType']?.toString());
       final artUri = _applyStreamingArtworkQuality(
         meta['artUri']?.toString().trim(),
         videoId: videoId,
@@ -2174,6 +2194,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ? durationText
               : null,
           durationMs: durationMs,
+          resultType: resultType,
+          videoType: videoType,
         ),
       );
     }
@@ -2214,6 +2236,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ? durationText
               : null,
           durationMs: durationMs,
+          resultType: _normalizeYtResultType(song.resultType),
+          videoType: _normalizeYtVideoType(song.videoType),
         ),
       );
     }
@@ -4376,6 +4400,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ? durationText
                   : null,
               durationMs: durationMs,
+              resultType: _normalizeYtResultType(result.resultType),
+              videoType: _normalizeYtVideoType(result.videoType),
             ),
           );
         }
@@ -4398,6 +4424,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         'durationText': item.durationText!.trim(),
       if (item.durationMs != null && item.durationMs! > 0)
         'durationMs': item.durationMs,
+      if (item.resultType != null && item.resultType!.trim().isNotEmpty)
+        'resultType': item.resultType!.trim().toLowerCase(),
+      if (item.videoType != null && item.videoType!.trim().isNotEmpty)
+        'videoType': item.videoType!.trim().toUpperCase(),
       if (item.isPinned) 'isPinned': true,
     };
   }
@@ -4415,6 +4445,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final artUri = raw['artUri']?.toString().trim();
     final durationText = raw['durationText']?.toString().trim();
     final durationMs = _parseDurationMs(raw['durationMs']);
+    final resultType = _normalizeYtResultType(raw['resultType']?.toString());
+    final videoType = _normalizeYtVideoType(raw['videoType']?.toString());
     final isPinnedRaw = raw['isPinned'];
     final isPinned = isPinnedRaw is bool ? isPinnedRaw : false;
 
@@ -4432,6 +4464,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ? durationText
           : null,
       durationMs: durationMs,
+      resultType: resultType,
+      videoType: videoType,
       isPinned: isPinned,
     );
   }
@@ -4771,6 +4805,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
     final metaDurationText = meta?['durationText']?.toString().trim();
     final metaDurationMs = _parseDurationMs(meta?['durationMs']);
+    final resultType = _normalizeYtResultType(meta?['resultType']?.toString());
+    final videoType = _normalizeYtVideoType(meta?['videoType']?.toString());
     final historyDurationMs = (history != null && history.duration > 0)
         ? history.duration * 1000
         : null;
@@ -4806,6 +4842,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       artUri: resolvedMetaArtUri,
       durationText: durationText,
       durationMs: durationMs,
+      resultType: resultType,
+      videoType: videoType,
     );
   }
 
@@ -4895,6 +4933,8 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             artUri: item.artUri,
             durationText: item.durationText,
             durationMs: item.durationMs,
+            resultType: item.resultType,
+            videoType: item.videoType,
             isPinned: true,
           ),
         );
@@ -5001,6 +5041,10 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               if (entry.durationText != null &&
                   entry.durationText!.trim().isNotEmpty)
                 'durationText': entry.durationText!.trim(),
+              ..._ytTypePayload(
+                resultType: entry.resultType,
+                videoType: entry.videoType,
+              ),
             };
           })
           .toList();
@@ -6269,6 +6313,27 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return '$minutes:$seconds';
   }
 
+  String? _normalizeYtResultType(String? raw) {
+    final value = raw?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  String? _normalizeYtVideoType(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value.toUpperCase();
+  }
+
+  Map<String, dynamic> _ytTypePayload({String? resultType, String? videoType}) {
+    final normalizedResultType = _normalizeYtResultType(resultType);
+    final normalizedVideoType = _normalizeYtVideoType(videoType);
+    return <String, dynamic>{
+      if (normalizedResultType != null) 'resultType': normalizedResultType,
+      if (normalizedVideoType != null) 'videoType': normalizedVideoType,
+    };
+  }
+
   String _formatStreamingArtistWithDuration(_StreamingRecentItem item) {
     final artist = item.artist.trim().isEmpty
         ? LocaleProvider.tr('artist_unknown')
@@ -6616,7 +6681,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             : _showingRecents
             ? [
                 IconButton(
-                  icon: const Icon(LucideIcons.shuffle, size: 28, weight: 600),
+                  icon: const Icon(Icons.shuffle, size: 28, weight: 600),
                   tooltip: LocaleProvider.tr('shuffle'),
                   onPressed: () {
                     if (_recentSongsSource == RecentSongsSource.local) {
@@ -6737,11 +6802,7 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ] else ...[
                   IconButton(
-                    icon: const Icon(
-                      LucideIcons.shuffle,
-                      size: 28,
-                      weight: 600,
-                    ),
+                    icon: const Icon(Icons.shuffle, size: 28, weight: 600),
                     tooltip: LocaleProvider.tr('shuffle'),
                     onPressed: () {
                       final List<SongModel> songsToShow =

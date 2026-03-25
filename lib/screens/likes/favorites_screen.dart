@@ -32,7 +32,6 @@ import 'package:music/widgets/song_info_dialog.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/widgets/refresh_m3e.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ionicons/ionicons.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
@@ -49,6 +48,8 @@ class _StreamingFavoriteItem {
   final String? artUri;
   final String? durationText;
   final int? durationMs;
+  final String? resultType;
+  final String? videoType;
 
   const _StreamingFavoriteItem({
     required this.rawPath,
@@ -58,6 +59,8 @@ class _StreamingFavoriteItem {
     this.artUri,
     this.durationText,
     this.durationMs,
+    this.resultType,
+    this.videoType,
   });
 }
 
@@ -636,6 +639,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       );
       final metaDurationText = meta?['durationText']?.toString().trim();
       final metaDurationMs = _parseDurationMs(meta?['durationMs']);
+      final resultType = _normalizeYtResultType(
+        meta?['resultType']?.toString(),
+      );
+      final videoType = _normalizeYtVideoType(meta?['videoType']?.toString());
       final historyDurationMs = (history != null && history.duration > 0)
           ? history.duration * 1000
           : null;
@@ -669,6 +676,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
           artUri: resolvedMetaArtUri,
           durationText: durationText,
           durationMs: durationMs,
+          resultType: resultType,
+          videoType: videoType,
         ),
       );
     }
@@ -769,6 +778,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               if (entry.durationText != null &&
                   entry.durationText!.trim().isNotEmpty)
                 'durationText': entry.durationText!.trim(),
+              ..._ytTypePayload(
+                resultType: entry.resultType,
+                videoType: entry.videoType,
+              ),
             };
           })
           .toList();
@@ -854,6 +867,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                 if (item.durationText != null &&
                     item.durationText!.trim().isNotEmpty)
                   'durationText': item.durationText!.trim(),
+                ..._ytTypePayload(
+                  resultType: item.resultType,
+                  videoType: item.videoType,
+                ),
               },
             ],
             'initialIndex': 0,
@@ -891,6 +908,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
         'durationMs': item.durationMs,
       if (item.durationText != null && item.durationText!.trim().isNotEmpty)
         'durationText': item.durationText!.trim(),
+      ..._ytTypePayload(resultType: item.resultType, videoType: item.videoType),
     });
   }
 
@@ -1032,6 +1050,27 @@ class _FavoritesScreenState extends State<FavoritesScreen>
       return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:$seconds';
     }
     return '$minutes:$seconds';
+  }
+
+  String? _normalizeYtResultType(String? raw) {
+    final value = raw?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  String? _normalizeYtVideoType(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value.toUpperCase();
+  }
+
+  Map<String, dynamic> _ytTypePayload({String? resultType, String? videoType}) {
+    final normalizedResultType = _normalizeYtResultType(resultType);
+    final normalizedVideoType = _normalizeYtVideoType(videoType);
+    return <String, dynamic>{
+      if (normalizedResultType != null) 'resultType': normalizedResultType,
+      if (normalizedVideoType != null) 'videoType': normalizedVideoType,
+    };
   }
 
   String _formatStreamingArtistWithDuration(_StreamingFavoriteItem item) {
@@ -1673,6 +1712,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       artUri: item.artUri,
                       durationText: item.durationText,
                       durationMs: item.durationMs,
+                      resultType: item.resultType,
+                      videoType: item.videoType,
                     );
                   }
                   shortcutsShouldReload.value = !shortcutsShouldReload.value;
@@ -1750,6 +1791,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                       'data': item.rawPath,
                       'videoId': item.videoId,
                       'isStreaming': true,
+                      ..._ytTypePayload(
+                        resultType: item.resultType,
+                        videoType: item.videoType,
+                      ),
                       if (item.artUri != null && item.artUri!.trim().isNotEmpty)
                         'displayArtUri': item.artUri!.trim(),
                     },
@@ -1929,6 +1974,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                                       artUri: item.artUri,
                                       durationText: item.durationText,
                                       durationMs: item.durationMs,
+                                      resultType: item.resultType,
+                                      videoType: item.videoType,
                                     );
                                     playlistsShouldReload.value =
                                         !playlistsShouldReload.value;
@@ -1965,6 +2012,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                               artUri: item.artUri,
                               durationText: item.durationText,
                               durationMs: item.durationMs,
+                              resultType: item.resultType,
+                              videoType: item.videoType,
                             );
                             playlistsShouldReload.value =
                                 !playlistsShouldReload.value;
@@ -2004,6 +2053,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
                           artUri: item.artUri,
                           durationText: item.durationText,
                           durationMs: item.durationMs,
+                          resultType: item.resultType,
+                          videoType: item.videoType,
                         );
                         playlistsShouldReload.value =
                             !playlistsShouldReload.value;
@@ -2285,6 +2336,8 @@ class _FavoritesScreenState extends State<FavoritesScreen>
             artUri: item.artUri,
             durationText: item.durationText,
             durationMs: item.durationMs,
+            resultType: item.resultType,
+            videoType: item.videoType,
           );
         }
       } else {
@@ -3646,7 +3699,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
               ]
             : [
                 IconButton(
-                  icon: const Icon(LucideIcons.shuffle, size: 28, weight: 600),
+                  icon: const Icon(Icons.shuffle, size: 28, weight: 600),
                   tooltip: LocaleProvider.tr('shuffle'),
                   onPressed: () {
                     if (_favoritesSource == FavoritesSource.local) {

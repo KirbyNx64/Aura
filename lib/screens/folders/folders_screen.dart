@@ -33,7 +33,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:ionicons/ionicons.dart';
 
 enum OrdenCarpetas {
@@ -5226,7 +5225,7 @@ class _FoldersScreenState extends State<FoldersScreen>
                   onPressed: () => _showAddSongsToPlaylistDialog(),
                 ),
               IconButton(
-                icon: const Icon(LucideIcons.shuffle, size: 28, weight: 600),
+                icon: const Icon(Icons.shuffle, size: 28, weight: 600),
                 tooltip: LocaleProvider.tr('shuffle'),
                 onPressed: () {
                   final showingStreamingPlaylist = _isStreamingPlaylistDetail;

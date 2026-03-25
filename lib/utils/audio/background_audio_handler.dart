@@ -73,7 +73,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          // androidStopForegroundOnPause: false,
+          androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -922,6 +922,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
       final extras = item.extras;
       final videoId = extras?['videoId']?.toString().trim();
+      final durationText = extras?['durationText']?.toString().trim();
+      final resultType = _normalizeStreamingResultType(extras?['resultType']);
+      final videoType = _normalizeStreamingVideoType(extras?['videoType']);
       final artUri =
           extras?['displayArtUri']?.toString().trim().isNotEmpty == true
           ? extras!['displayArtUri'].toString().trim()
@@ -934,7 +937,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         artUri: (artUri != null && artUri.trim().isNotEmpty)
             ? artUri.trim()
             : null,
+        durationText: (durationText != null && durationText.isNotEmpty)
+            ? durationText
+            : null,
         durationMs: item.duration?.inMilliseconds,
+        resultType: resultType,
+        videoType: videoType,
       );
       _releaseLog('tracking:most_played_saved key=$recentKey streaming=true');
       await StreamingArtistsDB().incrementArtistPlay(
@@ -945,7 +953,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         artUri: (artUri != null && artUri.trim().isNotEmpty)
             ? artUri.trim()
             : null,
+        durationText: (durationText != null && durationText.isNotEmpty)
+            ? durationText
+            : null,
         durationMs: item.duration?.inMilliseconds,
+        resultType: resultType,
+        videoType: videoType,
       );
     } catch (e) {
       // Error al actualizar más reproducidas
@@ -991,6 +1004,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (_isStreamingMediaItem(item)) {
       final extras = item.extras;
       final videoId = extras?['videoId']?.toString().trim();
+      final durationText = extras?['durationText']?.toString().trim();
+      final resultType = _normalizeStreamingResultType(extras?['resultType']);
+      final videoType = _normalizeStreamingVideoType(extras?['videoType']);
       final artUri =
           extras?['displayArtUri']?.toString().trim().isNotEmpty == true
           ? extras!['displayArtUri'].toString().trim()
@@ -1003,7 +1019,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         artUri: (artUri != null && artUri.trim().isNotEmpty)
             ? artUri.trim()
             : null,
+        durationText: (durationText != null && durationText.isNotEmpty)
+            ? durationText
+            : null,
         durationMs: item.duration?.inMilliseconds,
+        resultType: resultType,
+        videoType: videoType,
       );
       _releaseLog('tracking:recent_saved key=$recentKey streaming=true');
       return;
@@ -2162,6 +2183,30 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return item.id.startsWith('yt:') || item.id.startsWith('yt_stream_');
   }
 
+  String? _normalizeStreamingResultType(dynamic raw) {
+    final value = raw?.toString().trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  String? _normalizeStreamingVideoType(dynamic raw) {
+    final value = raw?.toString().trim();
+    if (value == null || value.isEmpty) return null;
+    return value.toUpperCase();
+  }
+
+  Map<String, dynamic> _streamingTypeExtras({
+    dynamic resultType,
+    dynamic videoType,
+  }) {
+    final normalizedResultType = _normalizeStreamingResultType(resultType);
+    final normalizedVideoType = _normalizeStreamingVideoType(videoType);
+    return <String, dynamic>{
+      if (normalizedResultType != null) 'resultType': normalizedResultType,
+      if (normalizedVideoType != null) 'videoType': normalizedVideoType,
+    };
+  }
+
   String _resolveStreamingCoverQualityPref() {
     final quality = _prefs?.getString(_kPrefCoverQuality);
     if (quality == 'high' ||
@@ -3179,6 +3224,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'isStreaming': true,
         'radioMode': true,
         'radioGenerated': true,
+        ..._streamingTypeExtras(
+          resultType: rawTrack['resultType'],
+          videoType: rawTrack['videoType'],
+        ),
         'streamUrl': rawTrack['streamUrl']?.toString().trim(),
         'displayArtUri': resolvedDisplayArtUri,
       },
@@ -3649,6 +3698,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
     final title = extras?['title']?.toString().trim();
     final artist = extras?['artist']?.toString().trim();
+    final typeExtras = _streamingTypeExtras(
+      resultType: extras?['resultType'],
+      videoType: extras?['videoType'],
+    );
     var streamUrl = extras?['streamUrl']?.toString().trim();
 
     MediaItem buildQueueItem({
@@ -3668,6 +3721,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           'isStreaming': true,
           'radioMode': _streamRadioEnabled,
           'radioGenerated': false,
+          ...typeExtras,
           'streamUrl': effectiveStreamUrl,
           'displayArtUri': resolvedDisplayArtUri,
           'queueIndex': queueIndex,
@@ -5134,6 +5188,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
         final title = data['title']?.toString().trim();
         final artist = data['artist']?.toString().trim();
+        final typeExtras = _streamingTypeExtras(
+          resultType: data['resultType'],
+          videoType: data['videoType'],
+        );
 
         queueItems.add(
           MediaItem(
@@ -5150,6 +5208,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               'videoId': videoId,
               'isStreaming': true,
               'radioMode': false,
+              ...typeExtras,
               'streamUrl': data['streamUrl']?.toString().trim(),
               'displayArtUri': resolvedDisplayArtUri,
               'queueIndex': i,
@@ -5409,6 +5468,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               : null,
           videoId: videoId,
         );
+        final typeExtras = _streamingTypeExtras(
+          resultType: extras?['resultType'],
+          videoType: extras?['videoType'],
+        );
         final artist = extras?['artist']?.toString().trim();
 
         final streamMediaItem = MediaItem(
@@ -5426,6 +5489,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             'isStreaming': true,
             'radioMode': radioMode,
             'playlistId': extras?['playlistId']?.toString().trim(),
+            ...typeExtras,
             'streamUrl': streamUrl,
             'displayArtUri': resolvedDisplayArtUri,
           },
@@ -5467,6 +5531,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       } else {
         if (item.extras?['isStreaming'] == true) {
           final videoId = item.extras?['videoId']?.toString().trim();
+          final durationText = item.extras?['durationText']?.toString().trim();
+          final resultType = _normalizeStreamingResultType(
+            item.extras?['resultType'],
+          );
+          final videoType = _normalizeStreamingVideoType(
+            item.extras?['videoType'],
+          );
           final displayArtUri = item.extras?['displayArtUri']
               ?.toString()
               .trim();
@@ -5480,9 +5551,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             artist: item.artist,
             videoId: videoId,
             artUri: artUri,
+            durationText: (durationText != null && durationText.isNotEmpty)
+                ? durationText
+                : null,
             durationMs: (durationMs != null && durationMs > 0)
                 ? durationMs
                 : null,
+            resultType: resultType,
+            videoType: videoType,
           );
         } else {
           await FavoritesDB().addFavoritePath(favoritePath);

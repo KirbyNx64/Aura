@@ -47,7 +47,7 @@ import 'package:music/screens/play/current_lyrics_screen.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:video_player/video_player.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:music/utils/yt_search/service.dart' as yt_service;
 import 'package:ionicons/ionicons.dart';
 
 enum PanelContent { playlist, lyrics }
@@ -235,9 +235,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   VideoPlayerController? _videoInitializingController;
   Timer? _videoSyncTimer;
   Timer? _videoResolveDebounceTimer;
-  MediaItem? _videoResolvePendingItem;
   bool _videoSyncInProgress = false;
   int _videoResolveRequestId = 0;
+  final Map<String, String> _resolvedResultTypeByVideoId = <String, String>{};
+  final Map<String, String> _resolvedVideoTypeByVideoId = <String, String>{};
+  final Set<String> _resolvingTypeVideoIds = <String>{};
   final Expando<bool> _videoControllerDisposeRequested = Expando<bool>(
     'videoControllerDisposeRequested',
   );
@@ -245,9 +247,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   static const Duration _videoSyncInterval = Duration(milliseconds: 500);
   static const Duration _videoHardSyncMinInterval = Duration(seconds: 2);
   static const int _videoHardSyncDriftMs = 1400;
-  static const Duration _videoResolveDebounceDelay = Duration(
-    milliseconds: 180,
-  );
 
   void _videoLog(String message) {
     // ignore: avoid_print
@@ -547,7 +546,29 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     if (mediaItem == null) return false;
     if (mediaItem.extras?['isStreaming'] != true) return false;
     final videoId = _extractVideoIdFromMediaItem(mediaItem);
-    return videoId != null && videoId.isNotEmpty;
+    if (videoId == null || videoId.isEmpty) return false;
+
+    final normalizedResultType =
+        _normalizeYtResultType(mediaItem.extras?['resultType']) ??
+        _resolvedResultTypeByVideoId[videoId];
+    final normalizedVideoType =
+        _normalizeYtVideoType(mediaItem.extras?['videoType']) ??
+        _resolvedVideoTypeByVideoId[videoId];
+
+    if (_isSongLikeStreamingType(
+      resultType: normalizedResultType,
+      videoType: normalizedVideoType,
+    )) {
+      return false;
+    }
+
+    // Si todavía no conocemos el tipo, deshabilitar de forma conservadora
+    // hasta resolver por videoId al cambiar de canción.
+    if (normalizedResultType == null && normalizedVideoType == null) {
+      return false;
+    }
+
+    return true;
   }
 
   bool _isVideoModeActiveForItem(MediaItem? mediaItem) {
@@ -600,30 +621,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   void _cancelPendingVideoResolve({bool cancelService = true}) {
     _videoResolveDebounceTimer?.cancel();
     _videoResolveDebounceTimer = null;
-    _videoResolvePendingItem = null;
     _videoResolveRequestId++;
     _disposeInitializingVideoController();
     if (cancelService) {
       StreamService.cancelPendingVideoResolves();
     }
-  }
-
-  void _scheduleVideoResolveForItem(
-    MediaItem mediaItem, {
-    bool forceRefresh = false,
-    Duration delay = _videoResolveDebounceDelay,
-  }) {
-    _videoResolveDebounceTimer?.cancel();
-    _videoResolvePendingItem = mediaItem;
-    _videoResolveDebounceTimer = Timer(delay, () {
-      if (!mounted) return;
-      final pending = _videoResolvePendingItem;
-      _videoResolvePendingItem = null;
-      if (pending == null) return;
-      unawaited(
-        _ensureVideoControllerForItem(pending, forceRefresh: forceRefresh),
-      );
-    });
   }
 
   void _disposeVideoController() {
@@ -752,7 +754,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // (debounce + resoluciones previas) para evitar jank acumulado.
     _videoResolveDebounceTimer?.cancel();
     _videoResolveDebounceTimer = null;
-    _videoResolvePendingItem = null;
     _disposeInitializingVideoController();
     StreamService.cancelPendingVideoResolves();
 
@@ -896,6 +897,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   Future<void> _toggleVideoModeForItem(MediaItem mediaItem) async {
     final canEnable = _canEnableVideoForItem(mediaItem);
     if (!canEnable) {
+      unawaited(_ensureStreamingTypeForItem(mediaItem));
       _videoLog('toggleVideoMode:unavailable mediaItem=${mediaItem.id}');
       if (_preferVideoMode) {
         _setStateSafely(() {
@@ -931,17 +933,198 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   void _handleVideoModeOnSongChange(MediaItem mediaItem) {
+    final videoId = _extractVideoIdFromMediaItem(mediaItem);
+    _videoLog(
+      'song_change:handle id=${mediaItem.id} videoId=$videoId isStreaming=${mediaItem.extras?['isStreaming'] == true} '
+      'extras.resultType=${mediaItem.extras?['resultType']} extras.videoType=${mediaItem.extras?['videoType']} '
+      'preferVideo=$_preferVideoMode',
+    );
+    unawaited(_ensureStreamingTypeForItem(mediaItem));
     if (!_preferVideoMode) return;
-    if (!_canEnableVideoForItem(mediaItem)) {
-      _cancelPendingVideoResolve();
+    _videoLog(
+      'handleVideoModeOnSongChange:auto_disable mediaItem=${mediaItem.id}',
+    );
+    _cancelPendingVideoResolve();
+    _stopVideoSyncLoop();
+    _disposeVideoController();
+    _setStateSafely(() {
       _preferVideoMode = false;
       _videoModeLoading = false;
       _videoModeError = null;
-      _stopVideoSyncLoop();
-      _disposeVideoController();
+    }, reason: 'video_auto_disable_on_song_change');
+  }
+
+  String? _normalizeYtResultType(dynamic raw) {
+    final value = raw?.toString().trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  String? _normalizeYtVideoType(dynamic raw) {
+    final value = raw?.toString().trim().toUpperCase();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  bool _isSongLikeStreamingType({String? resultType, String? videoType}) {
+    final normalizedResultType = _normalizeYtResultType(resultType);
+    final normalizedVideoType = _normalizeYtVideoType(videoType);
+    if (normalizedVideoType != null) {
+      return normalizedVideoType == 'MUSIC_VIDEO_TYPE_ATV' ||
+          normalizedVideoType == 'MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK';
+    }
+    return normalizedResultType == 'song';
+  }
+
+  String _resultTypeFromVideoType(String normalizedVideoType) {
+    if (normalizedVideoType == 'MUSIC_VIDEO_TYPE_ATV' ||
+        normalizedVideoType == 'MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK') {
+      return 'song';
+    }
+    if (normalizedVideoType == 'MUSIC_VIDEO_TYPE_PODCAST_EPISODE') {
+      return 'episode';
+    }
+    return 'video';
+  }
+
+  bool _isInconsistentStreamingType({String? resultType, String? videoType}) {
+    final normalizedResultType = _normalizeYtResultType(resultType);
+    final normalizedVideoType = _normalizeYtVideoType(videoType);
+    if (normalizedResultType == null || normalizedVideoType == null) {
+      return false;
+    }
+    final inferredResultType = _resultTypeFromVideoType(normalizedVideoType);
+    return normalizedResultType != inferredResultType;
+  }
+
+  Future<void> _ensureStreamingTypeForItem(MediaItem mediaItem) async {
+    if (mediaItem.extras?['isStreaming'] != true) {
+      _videoLog(
+        'song_type:skip_not_streaming id=${mediaItem.id} isStreaming=${mediaItem.extras?['isStreaming']}',
+      );
       return;
     }
-    _scheduleVideoResolveForItem(mediaItem);
+    final videoId = _extractVideoIdFromMediaItem(mediaItem);
+    if (videoId == null || videoId.isEmpty) {
+      _videoLog('song_type:skip_missing_video_id id=${mediaItem.id}');
+      return;
+    }
+
+    final existingResultType = _normalizeYtResultType(
+      mediaItem.extras?['resultType'],
+    );
+    final existingVideoType = _normalizeYtVideoType(
+      mediaItem.extras?['videoType'],
+    );
+    final hasExistingType =
+        existingResultType != null || existingVideoType != null;
+    final hasInconsistentType = _isInconsistentStreamingType(
+      resultType: existingResultType,
+      videoType: existingVideoType,
+    );
+
+    if (hasExistingType && !hasInconsistentType) {
+      _videoLog(
+        'song_type:skip_existing_extras videoId=$videoId resultType=$existingResultType videoType=$existingVideoType',
+      );
+      if (existingResultType != null) {
+        _resolvedResultTypeByVideoId[videoId] = existingResultType;
+      }
+      if (existingVideoType != null) {
+        _resolvedVideoTypeByVideoId[videoId] = existingVideoType;
+      }
+      return;
+    }
+
+    if (hasExistingType && hasInconsistentType) {
+      _videoLog(
+        'song_type:existing_inconsistent_force_fetch videoId=$videoId resultType=$existingResultType videoType=$existingVideoType',
+      );
+      _resolvedResultTypeByVideoId.remove(videoId);
+      _resolvedVideoTypeByVideoId.remove(videoId);
+    }
+
+    if (_resolvedResultTypeByVideoId.containsKey(videoId) ||
+        _resolvedVideoTypeByVideoId.containsKey(videoId)) {
+      _videoLog(
+        'song_type:skip_cached_local videoId=$videoId resultType=${_resolvedResultTypeByVideoId[videoId]} videoType=${_resolvedVideoTypeByVideoId[videoId]}',
+      );
+      return;
+    }
+    if (_resolvingTypeVideoIds.contains(videoId)) {
+      _videoLog('song_type:skip_inflight videoId=$videoId');
+      return;
+    }
+
+    _resolvingTypeVideoIds.add(videoId);
+    _videoLog('song_type:fetch_start videoId=$videoId id=${mediaItem.id}');
+    try {
+      final resolved = await yt_service.getSongTypeInfoByVideoId(videoId);
+      final resultType = _normalizeYtResultType(resolved['resultType']);
+      final videoType = _normalizeYtVideoType(resolved['videoType']);
+      _videoLog(
+        'song_type:fetch_done videoId=$videoId resultType=$resultType videoType=$videoType',
+      );
+      if (resultType == null && videoType == null) {
+        _videoLog('song_type:skip_empty_result videoId=$videoId');
+        return;
+      }
+
+      if (resultType != null) {
+        _resolvedResultTypeByVideoId[videoId] = resultType;
+      }
+      if (videoType != null) {
+        _resolvedVideoTypeByVideoId[videoId] = videoType;
+      }
+
+      final current = audioHandler?.mediaItem.valueOrNull;
+      if (current != null && current.id == mediaItem.id) {
+        final currentExtras = Map<String, dynamic>.from(current.extras ?? {});
+        bool changed = false;
+        if (resultType != null &&
+            _normalizeYtResultType(currentExtras['resultType']) != resultType) {
+          currentExtras['resultType'] = resultType;
+          changed = true;
+        }
+        if (videoType != null &&
+            _normalizeYtVideoType(currentExtras['videoType']) != videoType) {
+          currentExtras['videoType'] = videoType;
+          changed = true;
+        }
+        if (changed) {
+          _videoLog(
+            'song_type:update_media_item_extras videoId=$videoId id=${current.id} resultType=$resultType videoType=$videoType',
+          );
+          audioHandler.myHandler?.mediaItem.add(
+            current.copyWith(extras: currentExtras),
+          );
+        } else {
+          _videoLog(
+            'song_type:media_item_already_updated videoId=$videoId id=${current.id}',
+          );
+        }
+      } else {
+        _videoLog(
+          'song_type:skip_media_item_update_not_current videoId=$videoId currentId=${current?.id} expectedId=${mediaItem.id}',
+        );
+      }
+
+      if (!mounted) return;
+      _setStateSafely(() {}, reason: 'resolved_streaming_type');
+      final refreshed = audioHandler?.mediaItem.valueOrNull;
+      if (refreshed != null && refreshed.id == mediaItem.id) {
+        _videoLog(
+          'song_type:retrigger_song_change_handler videoId=$videoId id=${refreshed.id}',
+        );
+        _handleVideoModeOnSongChange(refreshed);
+      }
+    } catch (e) {
+      _videoLog('song_type:fetch_error videoId=$videoId error=$e');
+      // Ignorar: mantenemos fallback por metadata existente.
+    } finally {
+      _resolvingTypeVideoIds.remove(videoId);
+      _videoLog('song_type:fetch_end videoId=$videoId');
+    }
   }
 
   Widget _buildArtworkOrVideo(MediaItem mediaItem, double artworkSize) {
@@ -4483,6 +4666,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           : (artworkSize * 1.5).clamp(0, width * 0.9);
     }
     final buttonFontSize = (width * 0.04 + 10).clamp(10.0, 100.0);
+    final bottomViewPadding = MediaQuery.of(context).viewPadding.bottom;
+    final treatAsGestureNavigation =
+        _isGestureNavigation && bottomViewPadding < 24;
+    final bottomUtilityRowOffsetY = treatAsGestureNavigation ? 15.0 : -2.0;
 
     // En modo panel (onClose != null), usamos Listener en vez de GestureDetector
     // para no competir con el SlidingUpPanel del overlay que maneja el deslizar para cerrar.
@@ -4502,6 +4689,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
         // Solo procesar si es una canción nueva
         if (mediaItem != null && mediaItem.id != _lastMediaItemId) {
+          _videoLog(
+            'song_change:detected prev=$_lastMediaItemId next=${mediaItem.id} '
+            'videoId=${_extractVideoIdFromMediaItem(mediaItem)} isStreaming=${mediaItem.extras?['isStreaming'] == true}',
+          );
           _updateArtworkSlideDirection(mediaItem);
           _handleMediaSourceTransition(mediaItem);
           _artworkManualSwipeInProgress = false;
@@ -6765,15 +6956,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                       break;
                                                     case AudioServiceRepeatMode
                                                         .all:
-                                                      repeatIcon =
-                                                          LucideIcons.repeat;
+                                                      repeatIcon = Icons.repeat;
                                                       repeatColor = Theme.of(
                                                         context,
                                                       ).colorScheme.primary;
                                                       break;
                                                     default:
-                                                      repeatIcon =
-                                                          LucideIcons.repeat;
+                                                      repeatIcon = Icons.repeat;
                                                       repeatColor =
                                                           Theme.of(
                                                                 context,
@@ -6900,7 +7089,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                             ),
                                                                                             child: IconButton(
                                                                                               icon: const Icon(
-                                                                                                LucideIcons.shuffle,
+                                                                                                Icons.shuffle,
                                                                                                 weight: 600,
                                                                                               ),
                                                                                               color: Colors.white,
@@ -6920,7 +7109,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                           )
                                                                                         : IconButton(
                                                                                             icon: const Icon(
-                                                                                              LucideIcons.shuffle,
+                                                                                              Icons.shuffle,
                                                                                               grade: 200,
                                                                                             ),
                                                                                             color: isShuffle
@@ -7274,9 +7463,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 Transform.translate(
                                                   offset: Offset(
                                                     0,
-                                                    _isGestureNavigation
-                                                        ? 18
-                                                        : -4,
+                                                    bottomUtilityRowOffsetY,
                                                   ),
                                                   child: SizedBox(
                                                     height: 46,

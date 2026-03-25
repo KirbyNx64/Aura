@@ -298,6 +298,27 @@ class _ArtistScreenState extends State<ArtistScreen> {
     return totalSeconds * 1000;
   }
 
+  String? _normalizeYtResultType(String? raw) {
+    final value = raw?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  String? _normalizeYtVideoType(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value.toUpperCase();
+  }
+
+  Map<String, dynamic> _ytTypePayload({String? resultType, String? videoType}) {
+    final normalizedResultType = _normalizeYtResultType(resultType);
+    final normalizedVideoType = _normalizeYtVideoType(videoType);
+    return <String, dynamic>{
+      if (normalizedResultType != null) 'resultType': normalizedResultType,
+      if (normalizedVideoType != null) 'videoType': normalizedVideoType,
+    };
+  }
+
   bool _isStreamingPlaylistPath(String path) {
     final normalized = path.trim().toLowerCase();
     if (normalized.isEmpty) return false;
@@ -1342,7 +1363,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           for (var item in contents) {
             final renderer = item['musicResponsiveListItemRenderer'];
             if (renderer != null) {
-              final videoType = nav(renderer, [
+              final rawVideoType = nav(renderer, [
                 'overlay',
                 'musicItemThumbnailOverlayRenderer',
                 'content',
@@ -1353,9 +1374,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                 'watchEndpointMusicConfig',
                 'musicVideoType',
               ]);
+              final videoType = _normalizeYtVideoType(rawVideoType?.toString());
               if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
                   videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
-                  videoType == 'MUSIC_VIDEO_TYPE_UGC') {
+                  videoType == 'MUSIC_VIDEO_TYPE_UGC' ||
+                  videoType == 'MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC') {
                 final title =
                     renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
                 final subtitleRuns =
@@ -1398,6 +1421,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                       videoId: videoId,
                       durationText: durationText,
                       durationMs: durationMs,
+                      resultType: 'video',
+                      videoType: videoType,
                     ),
                   );
                 }
@@ -1447,7 +1472,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             for (var item in videoItems) {
               final renderer = item['musicResponsiveListItemRenderer'];
               if (renderer != null) {
-                final videoType = nav(renderer, [
+                final rawVideoType = nav(renderer, [
                   'overlay',
                   'musicItemThumbnailOverlayRenderer',
                   'content',
@@ -1458,9 +1483,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   'watchEndpointMusicConfig',
                   'musicVideoType',
                 ]);
+                final videoType = _normalizeYtVideoType(
+                  rawVideoType?.toString(),
+                );
                 if (videoType == 'MUSIC_VIDEO_TYPE_MV' ||
                     videoType == 'MUSIC_VIDEO_TYPE_OMV' ||
-                    videoType == 'MUSIC_VIDEO_TYPE_UGC') {
+                    videoType == 'MUSIC_VIDEO_TYPE_UGC' ||
+                    videoType == 'MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC') {
                   final title =
                       renderer['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']?[0]?['text'];
                   final subtitleRuns =
@@ -1503,6 +1532,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                         videoId: videoId,
                         durationText: durationText,
                         durationMs: durationMs,
+                        resultType: 'video',
+                        videoType: videoType,
                       ),
                     );
                   }
@@ -1841,6 +1872,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
               'durationMs': entryDurationMs,
             if (entryDurationText != null && entryDurationText.isNotEmpty)
               'durationText': entryDurationText,
+            ..._ytTypePayload(
+              resultType: entry.resultType,
+              videoType: entry.videoType,
+            ),
           };
         }).toList();
         await handler
@@ -1882,6 +1917,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     'durationMs': durationMs,
                   if (durationText != null && durationText.isNotEmpty)
                     'durationText': durationText,
+                  ..._ytTypePayload(
+                    resultType: selected.resultType,
+                    videoType: selected.videoType,
+                  ),
                 },
               ],
               'initialIndex': 0,
@@ -2003,6 +2042,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         'durationMs': item.durationMs,
       if (item.durationText != null && item.durationText!.trim().isNotEmpty)
         'durationText': item.durationText!.trim(),
+      ..._ytTypePayload(resultType: item.resultType, videoType: item.videoType),
     });
   }
 
@@ -2033,6 +2073,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
       artUri: artUri,
       durationText: item.durationText,
       durationMs: item.durationMs,
+      resultType: item.resultType,
+      videoType: item.videoType,
     );
     favoritesShouldReload.value = !favoritesShouldReload.value;
   }
@@ -2087,6 +2129,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
         'data': 'yt:$videoId',
         'videoId': videoId,
         'isStreaming': true,
+        ..._ytTypePayload(
+          resultType: item.resultType,
+          videoType: item.videoType,
+        ),
         if (durationMs != null && durationMs > 0) 'durationMs': durationMs,
         if (durationText != null && durationText.isNotEmpty)
           'durationText': durationText,
@@ -2141,6 +2187,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
         artUri: artUri,
         durationText: item.durationText,
         durationMs: item.durationMs,
+        resultType: item.resultType,
+        videoType: item.videoType,
       );
       playlistsShouldReload.value = !playlistsShouldReload.value;
     }
@@ -2330,6 +2378,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
               _qualityFallbackArtworkUrl(videoId),
           durationText: item.durationText,
           durationMs: item.durationMs,
+          resultType: item.resultType,
+          videoType: item.videoType,
         );
       }
       playlistsShouldReload.value = !playlistsShouldReload.value;
@@ -2819,6 +2869,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           artUri: artUri,
                           durationText: item.durationText,
                           durationMs: item.durationMs,
+                          resultType: item.resultType,
+                          videoType: item.videoType,
                         );
                       }
                       shortcutsShouldReload.value =
@@ -6612,6 +6664,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
               _qualityFallbackArtworkUrl(videoId),
           durationText: item.durationText,
           durationMs: item.durationMs,
+          resultType: item.resultType,
+          videoType: item.videoType,
         );
       }
       playlistsShouldReload.value = !playlistsShouldReload.value;

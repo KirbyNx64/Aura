@@ -56,6 +56,8 @@ class _RadioTrack {
   final String artist;
   final String artUri;
   final int? durationMs;
+  final String? resultType;
+  final String? videoType;
 
   const _RadioTrack({
     required this.videoId,
@@ -63,6 +65,8 @@ class _RadioTrack {
     required this.artist,
     required this.artUri,
     this.durationMs,
+    this.resultType,
+    this.videoType,
   });
 }
 
@@ -219,6 +223,27 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
     return normalized;
   }
 
+  String? _normalizeYtResultType(String? raw) {
+    final value = raw?.trim().toLowerCase();
+    if (value == null || value.isEmpty) return null;
+    return value;
+  }
+
+  String? _normalizeYtVideoType(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    return value.toUpperCase();
+  }
+
+  Map<String, dynamic> _ytTypePayload({String? resultType, String? videoType}) {
+    final normalizedResultType = _normalizeYtResultType(resultType);
+    final normalizedVideoType = _normalizeYtVideoType(videoType);
+    return <String, dynamic>{
+      if (normalizedResultType != null) 'resultType': normalizedResultType,
+      if (normalizedVideoType != null) 'videoType': normalizedVideoType,
+    };
+  }
+
   String? _extractVideoIdFromPath(String path) {
     final normalized = path.trim();
     if (normalized.isEmpty) return null;
@@ -301,6 +326,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
       final durationMs = map['durationMs'] is int
           ? map['durationMs'] as int
           : null;
+      final resultType = _normalizeYtResultType(map['resultType']?.toString());
+      final videoType = _normalizeYtVideoType(map['videoType']?.toString());
 
       tracks.add(
         _RadioTrack(
@@ -315,6 +342,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
               ? artUri
               : _qualityFallbackArtworkUrl(videoId),
           durationMs: durationMs,
+          resultType: resultType,
+          videoType: videoType,
         ),
       );
     }
@@ -381,6 +410,10 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
           final thumbRaw = raw['thumbUrl']?.toString().trim();
           final durationMsRaw = raw['durationMs'];
           final durationMs = durationMsRaw is int ? durationMsRaw : null;
+          final resultType = _normalizeYtResultType(
+            raw['resultType']?.toString(),
+          );
+          final videoType = _normalizeYtVideoType(raw['videoType']?.toString());
 
           parsedTracks.add(
             _RadioTrack(
@@ -395,6 +428,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                   ? thumbRaw
                   : _qualityFallbackArtworkUrl(videoId),
               durationMs: durationMs,
+              resultType: resultType,
+              videoType: videoType,
             ),
           );
         }
@@ -416,6 +451,10 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                   'artist': track.artist,
                   'artUri': track.artUri,
                   if (track.durationMs != null) 'durationMs': track.durationMs,
+                  ..._ytTypePayload(
+                    resultType: track.resultType,
+                    videoType: track.videoType,
+                  ),
                 },
               )
               .toList(),
@@ -480,6 +519,10 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
               'artUri': track.artUri,
               if (track.durationMs != null && track.durationMs! > 0)
                 'durationMs': track.durationMs,
+              ..._ytTypePayload(
+                resultType: track.resultType,
+                videoType: track.videoType,
+              ),
             },
           )
           .toList();
@@ -576,6 +619,10 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
       'artUri': artUri,
       if (track.durationMs != null && track.durationMs! > 0)
         'durationMs': track.durationMs,
+      ..._ytTypePayload(
+        resultType: track.resultType,
+        videoType: track.videoType,
+      ),
     });
   }
 
@@ -618,6 +665,7 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
         title: _seed!.title,
         artist: _seed!.artist,
         artUri: _seed!.artUri,
+        resultType: 'song',
       ),
     ];
   }
@@ -654,6 +702,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
         videoId: videoId,
         artUri: artUri,
         durationMs: track.durationMs,
+        resultType: track.resultType,
+        videoType: track.videoType,
       );
     }
     favoritesShouldReload.value = !favoritesShouldReload.value;
@@ -797,6 +847,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                     videoId: videoId,
                     artUri: artUri,
                     durationMs: track.durationMs,
+                    resultType: track.resultType,
+                    videoType: track.videoType,
                   );
                   favoritesShouldReload.value = !favoritesShouldReload.value;
                 },
@@ -813,6 +865,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                     videoId: videoId,
                     artUri: artUri,
                     durationMs: track.durationMs,
+                    resultType: track.resultType,
+                    videoType: track.videoType,
                   );
                 },
               ),
@@ -835,6 +889,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                       videoId: videoId,
                       artUri: artUri,
                       durationMs: track.durationMs,
+                      resultType: track.resultType,
+                      videoType: track.videoType,
                     );
                   }
                   shortcutsShouldReload.value = !shortcutsShouldReload.value;
@@ -902,6 +958,10 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
                       'videoId': videoId,
                       'isStreaming': true,
                       'displayArtUri': artUri,
+                      ..._ytTypePayload(
+                        resultType: track.resultType,
+                        videoType: track.videoType,
+                      ),
                     },
                   );
                   await SongInfoDialog.show(
@@ -925,6 +985,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
     required String videoId,
     required String artUri,
     int? durationMs,
+    String? resultType,
+    String? videoType,
   }) async {
     final allPlaylists = await PlaylistsDB().getAllPlaylists();
     final TextEditingController textController = TextEditingController();
@@ -953,6 +1015,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
             durationText: durationMs != null && durationMs > 0
                 ? _formatDuration(durationMs)
                 : null,
+            resultType: resultType,
+            videoType: videoType,
           );
           playlistsShouldReload.value = !playlistsShouldReload.value;
         }
@@ -1095,6 +1159,8 @@ class _HomeDiscoveryScreenState extends State<HomeDiscoveryScreen> {
           durationText: track.durationMs != null && track.durationMs! > 0
               ? _formatDuration(track.durationMs)
               : null,
+          resultType: track.resultType,
+          videoType: track.videoType,
         );
       }
       playlistsShouldReload.value = !playlistsShouldReload.value;
