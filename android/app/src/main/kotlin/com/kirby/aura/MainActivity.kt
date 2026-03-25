@@ -1,5 +1,7 @@
 package com.kirby.aura
 
+import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.os.StatFs
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -8,6 +10,13 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : AudioServiceActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 

@@ -454,6 +454,7 @@ void main() async {
     const SystemUiOverlayStyle(
       systemNavigationBarColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.light,
+      systemNavigationBarContrastEnforced: false,
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
       systemNavigationBarDividerColor: Colors.transparent,
@@ -722,39 +723,14 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           (themeModeNotifier.value == AppThemeMode.system &&
               MediaQuery.of(context).platformBrightness == Brightness.dark);
 
-      // Obtener el color correcto basado en el esquema de color actual
-      Color surfaceColor;
-
-      if (colorSchemeNotifier.value == AppColorScheme.amoled && isDark) {
-        // Para tema AMOLED, usar negro
-        surfaceColor = Colors.black;
-      } else if (colorSchemeNotifier.value == AppColorScheme.system) {
-        // Para tema sistema, usar los colores dinámicos si están disponibles
-        if (isDark && darkDynamic != null) {
-          surfaceColor = darkDynamic.surface;
-        } else if (!isDark && lightDynamic != null) {
-          surfaceColor = lightDynamic.surface;
-        } else {
-          // Fallback si no hay colores dinámicos
-          surfaceColor = isDark
-              ? const Color(0xFF121212)
-              : const Color(0xFFF5F5F5);
-        }
-      } else {
-        // Para otros temas, crear un tema temporal con el esquema correcto
-        final tempTheme = _buildTheme(
-          isDark ? Brightness.dark : Brightness.light,
-        );
-        surfaceColor = tempTheme.colorScheme.surface;
-      }
-
       // Configurar la barra de navegación del sistema
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
-          systemNavigationBarColor: surfaceColor,
+          systemNavigationBarColor: Colors.transparent,
           systemNavigationBarIconBrightness: isDark
               ? Brightness.light
               : Brightness.dark,
+          systemNavigationBarContrastEnforced: false,
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
           systemNavigationBarDividerColor: Colors.transparent,
@@ -767,10 +743,11 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
           if (mounted) {
             SystemChrome.setSystemUIOverlayStyle(
               SystemUiOverlayStyle(
-                systemNavigationBarColor: surfaceColor,
+                systemNavigationBarColor: Colors.transparent,
                 systemNavigationBarIconBrightness: isDark
                     ? Brightness.light
                     : Brightness.dark,
+                systemNavigationBarContrastEnforced: false,
                 statusBarColor: Colors.transparent,
                 statusBarIconBrightness: isDark
                     ? Brightness.light
@@ -787,6 +764,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         const SystemUiOverlayStyle(
           systemNavigationBarColor: Colors.transparent,
           systemNavigationBarIconBrightness: Brightness.light,
+          systemNavigationBarContrastEnforced: false,
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.light,
         ),
