@@ -1062,17 +1062,31 @@ class _FoldersScreenState extends State<FoldersScreen>
       return LocaleProvider.tr('yt_auto_generated_playlist');
     }
 
+    final countLabel = _formatYtLibraryTrackCount(item);
+    final author = item.author?.trim();
+    if (countLabel != null &&
+        author != null &&
+        author.isNotEmpty &&
+        author.toLowerCase() != countLabel.toLowerCase()) {
+      return '$countLabel • $author';
+    }
+    if (countLabel != null) return countLabel;
+    if (author != null && author.isNotEmpty) return author;
+    return LocaleProvider.tr('playlists');
+  }
+
+  String? _formatYtLibraryTrackCount(_YtLibraryPlaylistItem item) {
     final countText = item.countText?.trim();
     if (countText != null && countText.isNotEmpty) {
       return _localizeYtTrackCountText(countText);
     }
+
     final count = item.trackCount;
-    if (count != null && count > 0) {
-      return '$count ${LocaleProvider.tr('songs')}';
-    }
-    final author = item.author?.trim();
-    if (author != null && author.isNotEmpty) return author;
-    return LocaleProvider.tr('playlists');
+    if (count == null || count <= 0) return null;
+    final songLabel = count == 1
+        ? LocaleProvider.tr('mode_song')
+        : LocaleProvider.tr('songs');
+    return '$count $songLabel';
   }
 
   String _localizeYtTrackCountText(String raw) {

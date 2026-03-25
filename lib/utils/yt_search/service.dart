@@ -492,6 +492,44 @@ int? _parseCountFromText(String? text) {
   return int.tryParse(digits);
 }
 
+bool _containsTrackCountKeyword(String normalizedLowerText) {
+  return normalizedLowerText.contains('song') ||
+      normalizedLowerText.contains('track') ||
+      normalizedLowerText.contains('video') ||
+      normalizedLowerText.contains('canci') ||
+      normalizedLowerText.contains('tema');
+}
+
+bool _looksLikeBareTrackCountToken(String text) {
+  final compact = text.replaceAll(RegExp(r'[\s\u00A0]'), '');
+  return RegExp(r'^\d[\d\.,]*\+?$').hasMatch(compact);
+}
+
+bool _isTrackCountText(String text) {
+  final normalized = text.trim();
+  if (normalized.isEmpty) return false;
+  final lower = normalized.toLowerCase();
+  if (_containsTrackCountKeyword(lower)) return true;
+  return _looksLikeBareTrackCountToken(normalized);
+}
+
+String? _extractSubtitleAuthorRunText(
+  Map<String, dynamic> rawRun,
+  String text,
+) {
+  final browseId = nav(rawRun, [
+    'navigationEndpoint',
+    'browseEndpoint',
+    'browseId',
+  ])?.toString();
+  if (browseId != null &&
+      browseId.isNotEmpty &&
+      (browseId.startsWith('UC') || browseId.startsWith('MPLA'))) {
+    return text;
+  }
+  return null;
+}
+
 String? _extractPlaylistIdFromTwoRowRenderer(Map<String, dynamic> renderer) {
   String? browseId = nav(renderer, [
     'title',
@@ -637,28 +675,16 @@ YtMusicLibraryPlaylist? _parseLibraryPlaylistRenderer(
         continue;
       }
 
-      final lower = text.toLowerCase();
-      if (countText == null &&
-          (lower.contains('song') ||
-              lower.contains('track') ||
-              lower.contains('video') ||
-              lower.contains('canci') ||
-              lower.contains('tema'))) {
+      if (countText == null && _isTrackCountText(text)) {
         countText = text;
         trackCount = _parseCountFromText(text) ?? trackCount;
       }
 
       if (author == null && rawRun['navigationEndpoint'] is Map) {
-        final browseId = nav(rawRun, [
-          'navigationEndpoint',
-          'browseEndpoint',
-          'browseId',
-        ])?.toString();
-        if (browseId != null &&
-            browseId.isNotEmpty &&
-            (browseId.startsWith('UC') || browseId.startsWith('MPLA'))) {
-          author = text;
-        }
+        author = _extractSubtitleAuthorRunText(
+          rawRun.cast<String, dynamic>(),
+          text,
+        );
       }
     }
   }
@@ -762,28 +788,16 @@ YtMusicLibraryPlaylist? _parseLibraryPlaylistResponsiveRenderer(
         continue;
       }
 
-      final lower = text.toLowerCase();
-      if (countText == null &&
-          (lower.contains('song') ||
-              lower.contains('track') ||
-              lower.contains('video') ||
-              lower.contains('canci') ||
-              lower.contains('tema'))) {
+      if (countText == null && _isTrackCountText(text)) {
         countText = text;
         trackCount = _parseCountFromText(text) ?? trackCount;
       }
 
       if (author == null && rawRun['navigationEndpoint'] is Map) {
-        final artistId = nav(rawRun, [
-          'navigationEndpoint',
-          'browseEndpoint',
-          'browseId',
-        ])?.toString();
-        if (artistId != null &&
-            artistId.isNotEmpty &&
-            (artistId.startsWith('UC') || artistId.startsWith('MPLA'))) {
-          author = text;
-        }
+        author = _extractSubtitleAuthorRunText(
+          rawRun.cast<String, dynamic>(),
+          text,
+        );
       }
     }
   }
