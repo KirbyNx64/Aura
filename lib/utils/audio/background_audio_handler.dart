@@ -4595,7 +4595,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     try {
       final indices = _player.shuffleIndices;
-      if (indices == null ||
+      if (indices.isEmpty ||
           indices.isEmpty ||
           indices.length != _mediaQueue.length) {
         return List<MediaItem>.from(_mediaQueue);
