@@ -1,9 +1,9 @@
 {
-  "version": "2.0.5",
+  "version": "2.1.0",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.5/AuraMusic-v2.0.5-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.5/AuraMusic-v2.0.5-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.0.5/AuraMusic-v2.0.5-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.0/AuraMusic-v2.1.0-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.0/AuraMusic-v2.1.0-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.0/AuraMusic-v2.1.0-x86_64.apk"
   },
-  "changelog": "• La animación tipo carrusel ahora puede desactivarse desde la configuración.\n\n• Se implementó la detección de si una canción cuenta con un video válido al reproducirse vía streaming, como parte de la API de YouTube Music.\n\n• Se corrigieron errores menores y se optimizó la estabilidad general de la aplicación."
+  "changelog": "• Mejoras visuales en la interfaz de la aplicación.\n\n• Actualización de dependencias a sus versiones más recientes.\n\n• Corrección de errores y mejoras generales de estabilidad."
 }
