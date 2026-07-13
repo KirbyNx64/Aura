@@ -1323,7 +1323,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       child: IgnorePointer(
         ignoring: !canVideo,
         child: Container(
-          constraints: const BoxConstraints(maxWidth: 170),
+          constraints: const BoxConstraints(maxWidth: 100),
           padding: const EdgeInsets.all(3),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
@@ -1354,17 +1354,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             ).colorScheme.onSurface.withValues(alpha: 0.10)
                           : Colors.transparent,
                     ),
-                    child: Text(
-                      LocaleProvider.tr('mode_song'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface
-                            .withValues(
-                              alpha: !isVideoModeSelected
-                                  ? selectedTextAlpha
-                                  : unselectedTextAlpha,
-                            ),
+                    child: Icon(
+                      Icons.headphones_rounded,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(
+                        alpha: !isVideoModeSelected
+                            ? selectedTextAlpha
+                            : unselectedTextAlpha,
                       ),
                     ),
                   ),
@@ -1390,17 +1386,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                             ).colorScheme.onSurface.withValues(alpha: 0.10)
                           : Colors.transparent,
                     ),
-                    child: Text(
-                      LocaleProvider.tr('mode_video'),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface
-                            .withValues(
-                              alpha: isVideoModeSelected
-                                  ? selectedTextAlpha
-                                  : unselectedTextAlpha,
-                            ),
+                    child: Icon(
+                      Icons.smart_display_rounded,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.onSurface.withValues(
+                        alpha: isVideoModeSelected
+                            ? selectedTextAlpha
+                            : unselectedTextAlpha,
                       ),
                     ),
                   ),
@@ -2492,9 +2484,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
   int _playerArtworkCacheSizePx() {
     final size = MediaQuery.of(context).size;
-    final artworkSize = size.height < 650
-        ? size.width * 0.6
-        : size.width * 0.84;
+    final artworkSize = size.height < 650 ? size.width * 0.6 : size.width * 0.9;
     final pixelRatio = MediaQuery.of(context).devicePixelRatio;
     return (artworkSize * pixelRatio).round();
   }
@@ -4644,27 +4634,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     final is16by9 = (aspectRatio < 1.85);
 
     final isSmallScreen = height < 650;
-    final artworkSize = isSmallScreen ? width * 0.6 : width * 0.84;
-    double progressBarWidth;
-    if (width <= 400) {
-      progressBarWidth = isSmallScreen
-          ? artworkSize * 2
-          : is16by9
-          ? artworkSize * 1.8
-          : artworkSize * 2;
-    } else if (width <= 800) {
-      progressBarWidth = isSmallScreen
-          ? artworkSize * 1.3
-          : is16by9
-          ? artworkSize * 1.2
-          : artworkSize * 1.3;
-    } else {
-      progressBarWidth = isSmallScreen
-          ? (artworkSize * 1.5).clamp(0, width * 0.9)
-          : is16by9
-          ? (artworkSize * 1.4).clamp(0, width * 0.9)
-          : (artworkSize * 1.5).clamp(0, width * 0.9);
-    }
+    final artworkSize = isSmallScreen ? width * 0.6 : width * 0.9;
+    final progressBarWidth = artworkSize + 24.0;
     final buttonFontSize = (width * 0.04 + 10).clamp(10.0, 100.0);
     final bottomViewPadding = MediaQuery.of(context).viewPadding.bottom;
     final treatAsGestureNavigation =
@@ -5063,8 +5034,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                       Padding(
                                         padding: EdgeInsets.only(
                                           top: isSmallScreen
-                                              ? height * 0.015
-                                              : height * 0.03,
+                                              ? height * 0.008
+                                              : height * 0.012,
                                           left: isVideoModeActive
                                               ? 0
                                               : isSmallScreen
@@ -5567,9 +5538,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                   ),
                                               ],
                                             ),
-                                            const SizedBox(height: 30),
+                                            const SizedBox(height: 20),
                                             SizedBox(
-                                              width: width * 0.85,
+                                              width: artworkSize,
                                               child: TitleMarquee(
                                                 text: currentMediaItem.title,
                                                 maxWidth: artworkSize,
@@ -5589,7 +5560,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                             ),
                                             SizedBox(height: height * 0.0001),
                                             SizedBox(
-                                              width: width * 0.85,
+                                              width: artworkSize,
                                               child: Row(
                                                 children: [
                                                   Expanded(
@@ -5726,7 +5697,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               fontWeight:
                                                                   FontWeight
                                                                       .w400,
-                                                              fontSize: 14,
+                                                              fontSize: 16,
                                                             ),
                                                         maxLines: 1,
                                                         overflow: TextOverflow
@@ -6630,6 +6601,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 CrossAxisAlignment.center,
                                             mainAxisSize: MainAxisSize.max,
                                             children: [
+                                              const SizedBox(height: 16),
                                               const Spacer(),
                                               StreamBuilder<PlaybackState>(
                                                 stream:
@@ -6777,93 +6749,101 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                 amplitude,
                                                                                                 child,
                                                                                               ) {
-                                                                                                return SquigglySlider(
-                                                                                                  trackHeight: 3.0,
-                                                                                                  useLineThumb: true,
-                                                                                                  min: 0.0,
-                                                                                                  max: durationMs.toDouble(),
-                                                                                                  value: sliderValueMs.toDouble(),
-                                                                                                  secondaryTrackValue: isStreamingItem
-                                                                                                      ? bufferedPositionMs
-                                                                                                      : null,
-                                                                                                  secondaryActiveColor:
-                                                                                                      Theme.of(
+                                                                                                return SliderTheme(
+                                                                                                  data:
+                                                                                                      SliderTheme.of(
                                                                                                         context,
-                                                                                                      ).colorScheme.primary.withValues(
-                                                                                                        alpha: 0.55,
+                                                                                                      ).copyWith(
+                                                                                                        overlayShape: const RoundSliderOverlayShape(
+                                                                                                          overlayRadius: 12.0,
+                                                                                                        ),
                                                                                                       ),
-                                                                                                  inactiveColor:
-                                                                                                      Theme.of(
-                                                                                                        context,
-                                                                                                      ).colorScheme.primary.withValues(
-                                                                                                        alpha: 0.3,
-                                                                                                      ),
-                                                                                                  onChanged:
-                                                                                                      (
-                                                                                                        value,
-                                                                                                      ) {
-                                                                                                        _dragValueSecondsNotifier.value =
-                                                                                                            value /
-                                                                                                            1000.0;
-                                                                                                      },
-                                                                                                  onChangeEnd:
-                                                                                                      (
-                                                                                                        value,
-                                                                                                      ) {
-                                                                                                        final now = DateTime.now();
-                                                                                                        final ms = value.toInt();
-                                                                                                        if (now
-                                                                                                                .difference(
-                                                                                                                  _lastSeekTime,
-                                                                                                                )
-                                                                                                                .inMilliseconds >
-                                                                                                            _seekThrottleMs) {
-                                                                                                          audioHandler?.seek(
-                                                                                                            Duration(
-                                                                                                              milliseconds: ms,
-                                                                                                            ),
-                                                                                                          );
-                                                                                                          _lastSeekTime = now;
-                                                                                                        } else {
-                                                                                                          _lastSeekMs = ms;
-                                                                                                          Future.delayed(
-                                                                                                            Duration(
-                                                                                                              milliseconds: _seekThrottleMs,
-                                                                                                            ),
-                                                                                                            () {
-                                                                                                              if (_lastSeekMs !=
-                                                                                                                      null &&
-                                                                                                                  DateTime.now()
-                                                                                                                          .difference(
-                                                                                                                            _lastSeekTime,
-                                                                                                                          )
-                                                                                                                          .inMilliseconds >=
-                                                                                                                      _seekThrottleMs) {
-                                                                                                                audioHandler?.seek(
-                                                                                                                  Duration(
-                                                                                                                    milliseconds: _lastSeekMs!,
-                                                                                                                  ),
-                                                                                                                );
-                                                                                                                _lastSeekTime = DateTime.now();
-                                                                                                                _lastSeekMs = null;
-                                                                                                              }
-                                                                                                            },
-                                                                                                          );
-                                                                                                        }
-                                                                                                        _dragValueSecondsNotifier.value = null;
-                                                                                                      },
-                                                                                                  squiggleAmplitude: amplitude,
-                                                                                                  squiggleWavelength: 6.0,
-                                                                                                  squiggleSpeed: 0.05,
+                                                                                                  child: SquigglySlider(
+                                                                                                    trackHeight: 3.0,
+                                                                                                    useLineThumb: true,
+                                                                                                    min: 0.0,
+                                                                                                    max: durationMs.toDouble(),
+                                                                                                    value: sliderValueMs.toDouble(),
+                                                                                                    secondaryTrackValue: isStreamingItem
+                                                                                                        ? bufferedPositionMs
+                                                                                                        : null,
+                                                                                                    secondaryActiveColor:
+                                                                                                        Theme.of(
+                                                                                                          context,
+                                                                                                        ).colorScheme.primary.withValues(
+                                                                                                          alpha: 0.55,
+                                                                                                        ),
+                                                                                                    inactiveColor:
+                                                                                                        Theme.of(
+                                                                                                          context,
+                                                                                                        ).colorScheme.primary.withValues(
+                                                                                                          alpha: 0.3,
+                                                                                                        ),
+                                                                                                    onChanged:
+                                                                                                        (
+                                                                                                          value,
+                                                                                                        ) {
+                                                                                                          _dragValueSecondsNotifier.value =
+                                                                                                              value /
+                                                                                                              1000.0;
+                                                                                                        },
+                                                                                                    onChangeEnd:
+                                                                                                        (
+                                                                                                          value,
+                                                                                                        ) {
+                                                                                                          final now = DateTime.now();
+                                                                                                          final ms = value.toInt();
+                                                                                                          if (now
+                                                                                                                  .difference(
+                                                                                                                    _lastSeekTime,
+                                                                                                                  )
+                                                                                                                  .inMilliseconds >
+                                                                                                              _seekThrottleMs) {
+                                                                                                            audioHandler?.seek(
+                                                                                                              Duration(
+                                                                                                                milliseconds: ms,
+                                                                                                              ),
+                                                                                                            );
+                                                                                                            _lastSeekTime = now;
+                                                                                                          } else {
+                                                                                                            _lastSeekMs = ms;
+                                                                                                            Future.delayed(
+                                                                                                              Duration(
+                                                                                                                milliseconds: _seekThrottleMs,
+                                                                                                              ),
+                                                                                                              () {
+                                                                                                                if (_lastSeekMs !=
+                                                                                                                        null &&
+                                                                                                                    DateTime.now()
+                                                                                                                            .difference(
+                                                                                                                              _lastSeekTime,
+                                                                                                                            )
+                                                                                                                            .inMilliseconds >=
+                                                                                                                        _seekThrottleMs) {
+                                                                                                                  audioHandler?.seek(
+                                                                                                                    Duration(
+                                                                                                                      milliseconds: _lastSeekMs!,
+                                                                                                                    ),
+                                                                                                                  );
+                                                                                                                  _lastSeekTime = DateTime.now();
+                                                                                                                  _lastSeekMs = null;
+                                                                                                                }
+                                                                                                              },
+                                                                                                            );
+                                                                                                          }
+                                                                                                          _dragValueSecondsNotifier.value = null;
+                                                                                                        },
+                                                                                                    squiggleAmplitude: amplitude,
+                                                                                                    squiggleWavelength: 6.0,
+                                                                                                    squiggleSpeed: 0.05,
+                                                                                                  ),
                                                                                                 );
                                                                                               },
                                                                                         ),
                                                                                   ),
                                                                                 ),
-                                                                                Padding(
-                                                                                  padding: const EdgeInsets.symmetric(
-                                                                                    horizontal: 24,
-                                                                                  ),
+                                                                                SizedBox(
+                                                                                  width: artworkSize,
                                                                                   child: Row(
                                                                                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                                                                     children: [
@@ -7148,7 +7128,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                     SizedBox(
                                                                                       width:
                                                                                           iconSize /
-                                                                                          6,
+                                                                                          3.1,
                                                                                     ),
                                                                                     IconButton(
                                                                                       icon: const Icon(
@@ -7183,158 +7163,155 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                       padding: EdgeInsets.symmetric(
                                                                                         horizontal:
                                                                                             iconSize /
-                                                                                            3,
+                                                                                            2.2,
                                                                                       ),
-                                                                                      child: Material(
-                                                                                        color: Colors.transparent,
-                                                                                        child: InkWell(
-                                                                                          customBorder: RoundedRectangleBorder(
-                                                                                            borderRadius: BorderRadius.circular(
-                                                                                              isPlaying
-                                                                                                  ? (mainIconSize /
-                                                                                                        3)
-                                                                                                  : (mainIconSize /
-                                                                                                        2),
+                                                                                      child: AnimatedTapButton(
+                                                                                        onTap: () {
+                                                                                          if (isBusy) {
+                                                                                            return;
+                                                                                          }
+                                                                                          isPlaying
+                                                                                              ? audioHandler?.pause()
+                                                                                              : audioHandler?.play();
+                                                                                        },
+                                                                                        child: IgnorePointer(
+                                                                                          child: Material(
+                                                                                            color: Colors.transparent,
+                                                                                            child: InkWell(
+                                                                                              customBorder: RoundedRectangleBorder(
+                                                                                                borderRadius: BorderRadius.circular(
+                                                                                                  mainIconSize /
+                                                                                                      2,
+                                                                                                ),
+                                                                                              ),
+                                                                                              splashColor: Colors.transparent,
+                                                                                              highlightColor: Colors.transparent,
+                                                                                              onTap: () {},
+                                                                                              child:
+                                                                                                  (useTransparentPlayerChrome ||
+                                                                                                          isDynamicTheme) &&
+                                                                                                      !isBusy
+                                                                                                  ? SizedBox(
+                                                                                                      width: mainIconSize,
+                                                                                                      height: mainIconSize,
+                                                                                                      child:
+                                                                                                          TweenAnimationBuilder<
+                                                                                                            double
+                                                                                                          >(
+                                                                                                            tween:
+                                                                                                                Tween<
+                                                                                                                  double
+                                                                                                                >(
+                                                                                                                  end:
+                                                                                                                      mainIconSize /
+                                                                                                                      2,
+                                                                                                                ),
+                                                                                                            duration: const Duration(
+                                                                                                              milliseconds: 250,
+                                                                                                            ),
+                                                                                                            curve: Curves.easeInOut,
+                                                                                                            builder:
+                                                                                                                (
+                                                                                                                  context,
+                                                                                                                  radius,
+                                                                                                                  _,
+                                                                                                                ) {
+                                                                                                                  return CustomPaint(
+                                                                                                                    painter: _HolePunchPainter(
+                                                                                                                      color: Theme.of(
+                                                                                                                        context,
+                                                                                                                      ).colorScheme.onSurface,
+                                                                                                                      radius: radius,
+                                                                                                                      icon: isPlaying
+                                                                                                                          ? Icons.pause_rounded
+                                                                                                                          : Icons.play_arrow_rounded,
+                                                                                                                      iconSize: playIconSize,
+                                                                                                                    ),
+                                                                                                                  );
+                                                                                                                },
+                                                                                                          ),
+                                                                                                    )
+                                                                                                  : AnimatedContainer(
+                                                                                                      duration: const Duration(
+                                                                                                        milliseconds: 250,
+                                                                                                      ),
+                                                                                                      curve: Curves.easeInOut,
+                                                                                                      width: mainIconSize,
+                                                                                                      height: mainIconSize,
+                                                                                                      decoration: BoxDecoration(
+                                                                                                        color:
+                                                                                                            Theme.of(
+                                                                                                                  context,
+                                                                                                                ).brightness ==
+                                                                                                                Brightness.light
+                                                                                                            ? Theme.of(
+                                                                                                                context,
+                                                                                                              ).colorScheme.onSurface.withValues(
+                                                                                                                alpha: 0.9,
+                                                                                                              )
+                                                                                                            : Theme.of(
+                                                                                                                context,
+                                                                                                              ).colorScheme.onSurface,
+                                                                                                        borderRadius: BorderRadius.circular(
+                                                                                                          mainIconSize /
+                                                                                                              2,
+                                                                                                        ),
+                                                                                                      ),
+                                                                                                      child: Center(
+                                                                                                        child: isBusy
+                                                                                                            ? SizedBox(
+                                                                                                                width:
+                                                                                                                    playIconSize -
+                                                                                                                    10,
+                                                                                                                height:
+                                                                                                                    playIconSize -
+                                                                                                                    10,
+                                                                                                                child: CircularProgressIndicator(
+                                                                                                                  strokeWidth: 5,
+                                                                                                                  strokeCap: StrokeCap.round,
+                                                                                                                  color:
+                                                                                                                      Theme.of(
+                                                                                                                            context,
+                                                                                                                          ).brightness ==
+                                                                                                                          Brightness.light
+                                                                                                                      ? Theme.of(
+                                                                                                                          context,
+                                                                                                                        ).colorScheme.surface.withValues(
+                                                                                                                          alpha: 0.9,
+                                                                                                                        )
+                                                                                                                      : Theme.of(
+                                                                                                                          context,
+                                                                                                                        ).colorScheme.surface,
+                                                                                                                ),
+                                                                                                              )
+                                                                                                            : Icon(
+                                                                                                                isPlaying
+                                                                                                                    ? Icons.pause_rounded
+                                                                                                                    : Icons.play_arrow_rounded,
+                                                                                                                size: playIconSize,
+                                                                                                                grade: 200,
+                                                                                                                fill: 1,
+                                                                                                                color:
+                                                                                                                    (useTransparentPlayerChrome ||
+                                                                                                                        isDynamicTheme)
+                                                                                                                    ? Colors.black
+                                                                                                                    : Theme.of(
+                                                                                                                            context,
+                                                                                                                          ).brightness ==
+                                                                                                                          Brightness.light
+                                                                                                                    ? Theme.of(
+                                                                                                                        context,
+                                                                                                                      ).colorScheme.surface.withValues(
+                                                                                                                        alpha: 0.9,
+                                                                                                                      )
+                                                                                                                    : Theme.of(
+                                                                                                                        context,
+                                                                                                                      ).colorScheme.surface,
+                                                                                                              ),
+                                                                                                      ),
+                                                                                                    ),
                                                                                             ),
                                                                                           ),
-                                                                                          splashColor: Colors.transparent,
-                                                                                          highlightColor: Colors.transparent,
-                                                                                          onTap: () {
-                                                                                            if (isBusy) {
-                                                                                              return;
-                                                                                            }
-                                                                                            isPlaying
-                                                                                                ? audioHandler?.pause()
-                                                                                                : audioHandler?.play();
-                                                                                          },
-                                                                                          child:
-                                                                                              (useTransparentPlayerChrome ||
-                                                                                                      isDynamicTheme) &&
-                                                                                                  !isBusy
-                                                                                              ? SizedBox(
-                                                                                                  width: mainIconSize,
-                                                                                                  height: mainIconSize,
-                                                                                                  child:
-                                                                                                      TweenAnimationBuilder<
-                                                                                                        double
-                                                                                                      >(
-                                                                                                        tween:
-                                                                                                            Tween<
-                                                                                                              double
-                                                                                                            >(
-                                                                                                              end: isPlaying
-                                                                                                                  ? (mainIconSize /
-                                                                                                                        3)
-                                                                                                                  : (mainIconSize /
-                                                                                                                        2),
-                                                                                                            ),
-                                                                                                        duration: const Duration(
-                                                                                                          milliseconds: 250,
-                                                                                                        ),
-                                                                                                        curve: Curves.easeInOut,
-                                                                                                        builder:
-                                                                                                            (
-                                                                                                              context,
-                                                                                                              radius,
-                                                                                                              _,
-                                                                                                            ) {
-                                                                                                              return CustomPaint(
-                                                                                                                painter: _HolePunchPainter(
-                                                                                                                  color: Theme.of(
-                                                                                                                    context,
-                                                                                                                  ).colorScheme.onSurface,
-                                                                                                                  radius: radius,
-                                                                                                                  icon: isPlaying
-                                                                                                                      ? Icons.pause_rounded
-                                                                                                                      : Icons.play_arrow_rounded,
-                                                                                                                  iconSize: playIconSize,
-                                                                                                                ),
-                                                                                                              );
-                                                                                                            },
-                                                                                                      ),
-                                                                                                )
-                                                                                              : AnimatedContainer(
-                                                                                                  duration: const Duration(
-                                                                                                    milliseconds: 250,
-                                                                                                  ),
-                                                                                                  curve: Curves.easeInOut,
-                                                                                                  width: mainIconSize,
-                                                                                                  height: mainIconSize,
-                                                                                                  decoration: BoxDecoration(
-                                                                                                    color:
-                                                                                                        Theme.of(
-                                                                                                              context,
-                                                                                                            ).brightness ==
-                                                                                                            Brightness.light
-                                                                                                        ? Theme.of(
-                                                                                                            context,
-                                                                                                          ).colorScheme.onSurface.withValues(
-                                                                                                            alpha: 0.9,
-                                                                                                          )
-                                                                                                        : Theme.of(
-                                                                                                            context,
-                                                                                                          ).colorScheme.onSurface,
-                                                                                                    borderRadius: BorderRadius.circular(
-                                                                                                      isPlaying
-                                                                                                          ? (mainIconSize /
-                                                                                                                3)
-                                                                                                          : (mainIconSize /
-                                                                                                                2),
-                                                                                                    ),
-                                                                                                  ),
-                                                                                                  child: Center(
-                                                                                                    child: isBusy
-                                                                                                        ? SizedBox(
-                                                                                                            width:
-                                                                                                                playIconSize -
-                                                                                                                10,
-                                                                                                            height:
-                                                                                                                playIconSize -
-                                                                                                                10,
-                                                                                                            child: CircularProgressIndicator(
-                                                                                                              strokeWidth: 5,
-                                                                                                              strokeCap: StrokeCap.round,
-                                                                                                              color:
-                                                                                                                  Theme.of(
-                                                                                                                        context,
-                                                                                                                      ).brightness ==
-                                                                                                                      Brightness.light
-                                                                                                                  ? Theme.of(
-                                                                                                                      context,
-                                                                                                                    ).colorScheme.surface.withValues(
-                                                                                                                      alpha: 0.9,
-                                                                                                                    )
-                                                                                                                  : Theme.of(
-                                                                                                                      context,
-                                                                                                                    ).colorScheme.surface,
-                                                                                                            ),
-                                                                                                          )
-                                                                                                        : Icon(
-                                                                                                            isPlaying
-                                                                                                                ? Icons.pause_rounded
-                                                                                                                : Icons.play_arrow_rounded,
-                                                                                                            size: playIconSize,
-                                                                                                            grade: 200,
-                                                                                                            fill: 1,
-                                                                                                            color:
-                                                                                                                (useTransparentPlayerChrome ||
-                                                                                                                    isDynamicTheme)
-                                                                                                                ? Colors.black
-                                                                                                                : Theme.of(
-                                                                                                                        context,
-                                                                                                                      ).brightness ==
-                                                                                                                      Brightness.light
-                                                                                                                ? Theme.of(
-                                                                                                                    context,
-                                                                                                                  ).colorScheme.surface.withValues(
-                                                                                                                    alpha: 0.9,
-                                                                                                                  )
-                                                                                                                : Theme.of(
-                                                                                                                    context,
-                                                                                                                  ).colorScheme.surface,
-                                                                                                          ),
-                                                                                                  ),
-                                                                                                ),
                                                                                         ),
                                                                                       ),
                                                                                     ),
@@ -7370,7 +7347,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                     SizedBox(
                                                                                       width:
                                                                                           iconSize /
-                                                                                          6,
+                                                                                          3.1,
                                                                                     ),
                                                                                     (isAmoledTheme &&
                                                                                             repeatMode !=
@@ -7466,6 +7443,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                     bottomUtilityRowOffsetY,
                                                   ),
                                                   child: SizedBox(
+                                                    width: artworkSize,
                                                     height: 46,
                                                     child: Stack(
                                                       children: [
@@ -7475,9 +7453,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               .centerLeft,
                                                           child: Padding(
                                                             padding:
-                                                                const EdgeInsets.only(
-                                                                  left: 20.0,
-                                                                ),
+                                                                EdgeInsets.zero,
                                                             child: FutureBuilder<AudioSession>(
                                                               future:
                                                                   AudioSession
@@ -7628,9 +7604,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                               .centerRight,
                                                           child: Padding(
                                                             padding:
-                                                                const EdgeInsets.only(
-                                                                  right: 20.0,
-                                                                ),
+                                                                EdgeInsets.zero,
                                                             child: StreamBuilder<int>(
                                                               stream:
                                                                   Stream.periodic(

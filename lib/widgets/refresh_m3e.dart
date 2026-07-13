@@ -475,7 +475,7 @@ class ExpressiveRefreshIndicatorState extends State<ExpressiveRefreshIndicator>
             left: 0.0,
             right: 0.0,
             child: SizeTransition(
-              axisAlignment: _isIndicatorAtTop! ? 1.0 : -1.0,
+              alignment: Alignment(-1.0, _isIndicatorAtTop! ? 1.0 : -1.0),
               sizeFactor: _positionFactor,
               child: Padding(
                 padding: _isIndicatorAtTop!

@@ -172,7 +172,7 @@ class ScrollablePositionedList extends StatefulWidget {
   final bool addRepaintBoundaries;
 
   /// The minimum cache extent used by the underlying scroll lists.
-  /// See [ScrollView.cacheExtent].
+  /// See [ScrollView.scrollCacheExtent].
   ///
   /// Note that the [ScrollablePositionedList] uses two lists to simulate long
   /// scrolls, so using the [ScrollController.scrollTo] method may result

@@ -171,7 +171,9 @@ class _PositionedListState extends State<PositionedList> {
       controller: scrollController,
       scrollDirection: widget.scrollDirection,
       reverse: widget.reverse,
-      cacheExtent: widget.cacheExtent,
+      scrollCacheExtent: widget.cacheExtent != null
+          ? ScrollCacheExtent.pixels(widget.cacheExtent!)
+          : null,
       physics: widget.physics,
       shrinkWrap: widget.shrinkWrap,
       semanticChildCount: widget.semanticChildCount ?? widget.itemCount,
