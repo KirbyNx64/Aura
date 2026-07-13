@@ -48,7 +48,7 @@ import 'package:audio_session/audio_session.dart';
 import 'package:video_player/video_player.dart';
 import 'package:music/utils/yt_search/stream_provider.dart';
 import 'package:music/utils/yt_search/service.dart' as yt_service;
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 
 enum PanelContent { playlist, lyrics }
 

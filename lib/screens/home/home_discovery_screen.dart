@@ -27,7 +27,7 @@ import 'package:mini_music_visualizer/mini_music_visualizer.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 
 class HomeDiscoveryScreen extends StatefulWidget {
   const HomeDiscoveryScreen({super.key});

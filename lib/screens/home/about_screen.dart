@@ -231,7 +231,7 @@ class AboutScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${LocaleProvider.tr('version')}: $version ($buildNumber)',
+                        '${LocaleProvider.tr('version')}: $version ($buildNumber) preview',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -507,7 +507,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '3.41.5 • stable • Dart 3.11.3 • Compiled with Ubuntu 25.10 6.17.0-14-generic',
+                      '3.44.6 • stable • Dart 3.12.2 • Compiled with Ubuntu 26.04 7.0.0-27-generic',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(

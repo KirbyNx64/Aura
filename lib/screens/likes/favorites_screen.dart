@@ -32,7 +32,7 @@ import 'package:music/widgets/song_info_dialog.dart';
 import 'package:music/widgets/artwork_list_tile.dart';
 import 'package:music/screens/artist/artist_screen.dart';
 import 'package:music/widgets/refresh_m3e.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 
 enum OrdenFavoritos { normal, alfabetico, invertido, ultimoAgregado }
 

@@ -41,7 +41,7 @@ import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:open_settings_plus/open_settings_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 import 'dart:io';
 
 // Top-level function para usar con compute

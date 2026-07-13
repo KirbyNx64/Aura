@@ -33,7 +33,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:music/widgets/song_info_dialog.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 
 enum OrdenCarpetas {
   normal,

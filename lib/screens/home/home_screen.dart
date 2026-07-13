@@ -43,7 +43,7 @@ import 'dart:io';
 import 'package:music/widgets/refresh_m3e.dart';
 import 'package:music/utils/simple_yt_download.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 
 enum OrdenCancionesPlaylist { normal, alfabetico, invertido, ultimoAgregado }
 

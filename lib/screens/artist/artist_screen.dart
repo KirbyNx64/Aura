@@ -33,7 +33,7 @@ import 'package:music/widgets/sliding_up_panel/sliding_up_panel_overlay.dart'
     as overlay_panel;
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 import 'dart:io';
 
 class _ArtistStreamingArtwork extends StatefulWidget {

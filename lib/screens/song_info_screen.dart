@@ -15,7 +15,7 @@ import 'package:music/utils/db/download_history_model.dart';
 import 'package:music/utils/db/favorites_db.dart';
 import 'package:music/utils/db/playlists_db.dart';
 import 'package:music/utils/db/recent_db.dart';
-import 'package:ionicons/ionicons.dart';
+import 'package:ionicons_plus/ionicons_plus.dart';
 import 'package:share_plus/share_plus.dart';
 
 class _StreamingMetadata {
