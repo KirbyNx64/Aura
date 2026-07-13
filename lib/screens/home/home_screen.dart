@@ -9785,10 +9785,14 @@ class HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 final item = _homeListenAgainSongs[index];
                                 return SizedBox(
                                   width: 170,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(18),
+                                  child: AnimatedTapButton(
                                     onTap: () =>
                                         _playStreamingHomeListenAgain(item),
+                                    onLongPress: () async {
+                                      HapticFeedback.mediumImpact();
+                                      if (!mounted) return;
+                                      await _showStreamingShortcutOptions(item);
+                                    },
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,

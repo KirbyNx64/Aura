@@ -8,6 +8,8 @@ import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/theme_preferences.dart';
 import 'package:material_loading_indicator/loading_indicator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:music/utils/yt_search/service.dart';
+
 
 class LyricsSearchResult {
   final String title;
@@ -98,77 +100,68 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
     }
 
     try {
-      final dio = Dio();
-      dio.options.connectTimeout = const Duration(seconds: 10);
-      dio.options.receiveTimeout = const Duration(seconds: 10);
-
       final isSimpMusic =
           lyricsServiceProviderNotifier.value ==
           LyricsServiceProvider.simpmusic;
 
-      final response = await dio.get(
-        isSimpMusic
-            ? 'https://api-lyrics.simpmusic.org/v1/search'
-            : 'https://lrclib.net/api/search',
-        queryParameters: isSimpMusic ? {'q': query} : {'q': query},
-        options: Options(
-          headers: {'User-Agent': SyncedLyricsService.userAgent},
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
+      final results = <LyricsSearchResult>[];
 
-      if (response.statusCode == 200 && response.data != null) {
-        final List<dynamic> data;
-        if (isSimpMusic) {
-          final responseData = response.data;
-          if (responseData is Map<String, dynamic> &&
-              responseData['data'] is List) {
-            data = responseData['data'];
-          } else {
-            data = [];
+      if (isSimpMusic) {
+        // Buscar en YouTube Music para evadir bloqueos de Cloudflare
+        final ytResults = await searchSongsOnly(query, cancelPrevious: false);
+        
+        final futures = ytResults.map((ytResult) async {
+          final videoId = ytResult.videoId;
+          if (videoId == null || videoId.isEmpty) return;
+          
+          try {
+            // Buscamos la letra en SimpMusic por el ID de video.
+            // Usamos 'temp_$videoId' para no sobreescribir la letra activa en Hive.
+            final lyricsResult = await SimpMusicLyricsService.getLyricsByVideoId(
+              videoId,
+              'temp_$videoId',
+            );
+            
+            if (lyricsResult.type == LyricsResultType.found &&
+                lyricsResult.data != null) {
+              results.add(
+                LyricsSearchResult(
+                  title: ytResult.title ?? '',
+                  artist: ytResult.artist ?? '',
+                  album: null,
+                  syncedLyrics: lyricsResult.data!.synced ?? '',
+                  plainLyrics: lyricsResult.data!.plainLyrics,
+                  duration: (ytResult.durationMs ?? 0) ~/ 1000,
+                  videoId: videoId,
+                ),
+              );
+            }
+          } catch (_) {
+            // Ignorar errores individuales para no bloquear el resto de búsquedas
           }
-        } else {
-          data = response.data is List ? response.data : [];
-        }
+        }).toList();
 
-        final results = <LyricsSearchResult>[];
+        await Future.wait(futures);
+      } else {
+        // LRCLIB sigue funcionando con su endpoint normal de búsqueda
+        final dio = Dio();
+        dio.options.connectTimeout = const Duration(seconds: 10);
+        dio.options.receiveTimeout = const Duration(seconds: 10);
 
-        for (final item in data) {
-          if (item is Map<String, dynamic>) {
-            if (isSimpMusic) {
-              final title =
-                  item['songTitle']?.toString() ??
-                  item['title']?.toString() ??
-                  '';
-              final artist =
-                  item['artistName']?.toString() ??
-                  item['artist']?.toString() ??
-                  '';
-              final album =
-                  item['albumName']?.toString() ?? item['album']?.toString();
-              final syncedLyrics = item['syncedLyrics']?.toString() ?? '';
-              final plainLyrics =
-                  item['plainLyric']?.toString() ??
-                  item['plainLyrics']?.toString();
-              final duration = item['durationSeconds'] is int
-                  ? item['durationSeconds']
-                  : 0;
-              final videoId = item['videoId']?.toString();
+        final response = await dio.get(
+          'https://lrclib.net/api/search',
+          queryParameters: {'q': query},
+          options: Options(
+            headers: {'User-Agent': SyncedLyricsService.userAgent},
+            validateStatus: (status) => status != null && status < 500,
+          ),
+        );
 
-              if (title.isNotEmpty && artist.isNotEmpty) {
-                results.add(
-                  LyricsSearchResult(
-                    title: title,
-                    artist: artist,
-                    album: album,
-                    syncedLyrics: syncedLyrics,
-                    plainLyrics: plainLyrics,
-                    duration: duration,
-                    videoId: videoId,
-                  ),
-                );
-              }
-            } else {
+        if (response.statusCode == 200 && response.data != null) {
+          final List<dynamic> data = response.data is List ? response.data : [];
+
+          for (final item in data) {
+            if (item is Map<String, dynamic>) {
               final title = item['trackName']?.toString() ?? '';
               final artist = item['artistName']?.toString() ?? '';
               final album = item['albumName']?.toString();
@@ -193,18 +186,12 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
             }
           }
         }
+      }
 
-        if (mounted) {
-          setState(() {
-            _searchResults = results;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _searchResults = [];
-          });
-        }
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+        });
       }
     } catch (e) {
       if (mounted) {

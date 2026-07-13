@@ -387,65 +387,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildYtLoginLeadingIcon({double size = 34, bool emphasize = false}) {
+  Widget _buildYtLoginLeadingIcon({double size = 38}) {
     final hasSession = _hasYtAuthCookieHeader == true;
     final avatarUrl = _ytProfilePhotoUrl?.trim();
-    final ringColor = Theme.of(
-      context,
-    ).colorScheme.onSurface.withValues(alpha: 0.16);
-    final bgColor = Theme.of(context).colorScheme.surface;
 
     Widget fallbackAvatar() {
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: bgColor,
-          border: Border.all(color: ringColor, width: 2),
-          boxShadow: emphasize
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.28),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
-        child: Icon(
-          _isResolvingYtAuthState
-              ? Icons.account_circle_outlined
-              : hasSession
-              ? Icons.cloud_done_outlined
-              : Icons.cloud_off_outlined,
-          color: Theme.of(context).colorScheme.onSurface,
-          size: size * 0.56,
-        ),
+      return _buildCircleIcon(
+        _isResolvingYtAuthState
+            ? Icons.account_circle_outlined
+            : hasSession
+            ? Icons.cloud_done_outlined
+            : Icons.cloud_off_outlined,
+        Colors.red,
+        size: 20,
       );
     }
 
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
       return Container(
-        width: size + 4,
-        height: size + 4,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: emphasize
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.28),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : null,
-        ),
+        width: 38,
+        height: 38,
+        decoration: const BoxDecoration(shape: BoxShape.circle),
         child: ClipOval(
           child: CachedNetworkImage(
             imageUrl: avatarUrl,
-            width: size,
-            height: size,
+            width: 38,
+            height: 38,
             fit: BoxFit.cover,
             fadeInDuration: Duration.zero,
             fadeOutDuration: Duration.zero,
@@ -457,6 +424,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     return fallbackAvatar();
+  }
+
+  Widget _buildCircleIcon(
+    IconData iconData,
+    Color baseColor, {
+    double? fill,
+    double? weight,
+    double? grade,
+    double size = 20,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+
+    final Color circleColor;
+    final Color iconColor;
+
+    if (isAmoled && isDark) {
+      circleColor = Colors.white;
+      iconColor = Colors.black;
+    } else {
+      circleColor = Color.lerp(baseColor, Colors.white, 0.65)!;
+      iconColor = Color.lerp(baseColor, Colors.black, 0.75)!;
+    }
+
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Icon(
+        iconData,
+        color: iconColor,
+        size: size,
+        fill: fill,
+        weight: weight,
+        grade: grade,
+      ),
+    );
   }
 
   void _showArtworkBackgroundDialog() {
@@ -3863,7 +3868,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
-                leading: _buildYtLoginLeadingIcon(size: 52),
+                leading: _buildYtLoginLeadingIcon(size: 38),
                 title: TranslatedText(
                   'yt_music_login',
                   style: TextStyle(
@@ -3964,12 +3969,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
                       Theme.of(context).brightness == Brightness.dark
                           ? Icons.dark_mode_rounded
                           : Icons.light_mode_rounded,
+                      Colors.blue,
                       fill: 1,
-                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     title: TranslatedText(
                       'select_theme',
@@ -4017,10 +4022,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.palette,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.palette, Colors.deepOrange),
                     title: Text(
                       LocaleProvider.tr('select_color'),
                       style: TextStyle(
@@ -4071,10 +4073,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ).colorScheme.onSurface.withValues(alpha: 0.9),
                   ),
                 ),
-                leading: Icon(
-                  Icons.wallpaper,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+                leading: _buildCircleIcon(Icons.wallpaper, Colors.purple),
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(4)),
                 ),
@@ -4096,10 +4095,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.language,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.language, Colors.teal),
                     title: TranslatedText(
                       'change_language',
                       style: TextStyle(
@@ -4140,10 +4136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.touch_app,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.touch_app, Colors.orange),
                     title: TranslatedText(
                       'gesture_settings',
                       style: TextStyle(
@@ -4205,10 +4198,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.sd_storage,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.sd_storage, Colors.indigo),
                     title: Text(
                       _availableBytesAtDownloadDir != null &&
                               _totalBytesAtDownloadDir != null
@@ -4281,10 +4271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.folder,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.folder, Colors.amber),
                     title: TranslatedText(
                       'save_path',
                       style: TextStyle(
@@ -4349,10 +4336,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.download,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.download, Colors.blue),
                     title: TranslatedText(
                       'download_type',
                       style: TextStyle(
@@ -4400,10 +4384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.audiotrack,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.audiotrack, Colors.pink),
                     title: TranslatedText(
                       'audio_quality',
                       style: TextStyle(
@@ -4451,10 +4432,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.image,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.image, Colors.red),
                     title: TranslatedText(
                       'download_cover_quality',
                       style: TextStyle(
@@ -4502,10 +4480,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.security,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.security, Colors.redAccent),
                     title: Text(
                       LocaleProvider.tr('grant_all_files_permission'),
                       style: TextStyle(
@@ -4679,9 +4654,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               child: ListTile(
-                leading: Icon(
+                leading: _buildCircleIcon(
                   Icons.image_search_rounded,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  Colors.purple,
                 ),
                 title: Text(
                   LocaleProvider.tr('streaming_artwork_quality'),
@@ -4741,9 +4716,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               child: ListTile(
-                leading: Icon(
+                leading: _buildCircleIcon(
                   Icons.audiotrack_rounded,
-                  color: Theme.of(context).colorScheme.onSurface,
+                  Colors.pink,
                 ),
                 title: Text(
                   LocaleProvider.tr('audio_quality_streaming'),
@@ -4793,10 +4768,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               child: ListTile(
-                leading: Icon(
-                  Icons.image,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+                leading: _buildCircleIcon(Icons.image, Colors.deepPurple),
                 title: Text(
                   LocaleProvider.tr('artwork_quality'),
                   style: TextStyle(
@@ -4891,9 +4863,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ).colorScheme.onSurface.withValues(alpha: 0.9),
                           ),
                         ),
-                        secondary: Icon(
+                        secondary: _buildCircleIcon(
                           Icons.library_music,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          Colors.teal,
                         ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -4964,10 +4936,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ).colorScheme.onSurface.withValues(alpha: 0.9),
                           ),
                         ),
-                        secondary: Icon(
+                        secondary: _buildCircleIcon(
                           Icons.font_download_outlined,
+                          Colors.blue,
                           weight: 600,
-                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -5037,9 +5009,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ).colorScheme.onSurface.withValues(alpha: 0.9),
                       ),
                     ),
-                    secondary: Icon(
+                    secondary: _buildCircleIcon(
                       Icons.view_carousel_rounded,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.indigo,
                     ),
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -5139,10 +5111,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       },
                     ),
-                    leading: Icon(
-                      Icons.translate,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.translate, Colors.amber),
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(4)),
                     ),
@@ -5190,9 +5159,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ).colorScheme.onSurface.withValues(alpha: 0.9),
                       ),
                     ),
-                    leading: Icon(
+                    leading: _buildCircleIcon(
                       Icons.text_fields_rounded,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.orange,
                     ),
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -5245,12 +5214,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ).colorScheme.onSurface.withValues(alpha: 0.9),
                           ),
                         ),
-                        secondary: Icon(
+                        secondary: _buildCircleIcon(
                           Icons.skip_next_rounded,
+                          Colors.red,
                           grade: 200,
                           fill: 1,
-                          size: 28,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 22,
                         ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -5320,9 +5289,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ).colorScheme.onSurface.withValues(alpha: 0.9),
                           ),
                         ),
-                        secondary: Icon(
+                        secondary: _buildCircleIcon(
                           Symbols.mobile_unlock,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          Colors.cyan,
                         ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -5399,9 +5368,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ).colorScheme.onSurface.withValues(alpha: 0.9),
                           ),
                         ),
-                        secondary: Icon(
+                        secondary: _buildCircleIcon(
                           Icons.restore,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          Colors.green,
                         ),
                         shape: const RoundedRectangleBorder(
                           borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -5444,9 +5413,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
                       Icons.lyrics_outlined,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.pink,
                     ),
                     title: Text(
                       LocaleProvider.tr('lyrics_service'),
@@ -5495,10 +5464,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.delete_outline,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.delete_outline, Colors.red),
                     title: Text(
                       LocaleProvider.tr('delete_lyrics'),
                       style: TextStyle(
@@ -5539,9 +5505,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
                       Symbols.media_link,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.redAccent,
                     ),
                     title: Text(
                       LocaleProvider.tr('delete_audio_links'),
@@ -5583,9 +5549,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
                       Icons.battery_alert,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.orange,
                     ),
                     title: Text(
                       LocaleProvider.tr('ignore_battery_optimization'),
@@ -5668,10 +5634,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.save_alt,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.save_alt, Colors.green),
                     title: Text(
                       LocaleProvider.tr('export_backup'),
                       style: TextStyle(
@@ -5717,10 +5680,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.upload_file,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.upload_file, Colors.teal),
                     title: Text(
                       LocaleProvider.tr('import_backup'),
                       style: TextStyle(
@@ -5782,10 +5742,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
-                      Icons.restore,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    leading: _buildCircleIcon(Icons.restore, Colors.red),
                     title: Text(
                       LocaleProvider.tr('reset_app'),
                       style: TextStyle(
@@ -5831,11 +5788,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
                       Icons.system_update_alt_rounded,
+                      Colors.blue,
                       weight: 500,
                       grade: 200,
-                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                     title: Text(
                       LocaleProvider.tr('app_updates'),
@@ -5899,9 +5856,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
                       Icons.info_outline,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.indigo,
                     ),
                     title: Text(
                       LocaleProvider.tr('about'),

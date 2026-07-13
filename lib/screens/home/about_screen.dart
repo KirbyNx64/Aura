@@ -125,6 +125,45 @@ class AboutScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildCircleIcon(
+    BuildContext context,
+    IconData iconData,
+    Color baseColor, {
+    double? fill,
+    double? weight,
+    double? grade,
+    double size = 20,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isAmoled = colorSchemeNotifier.value == AppColorScheme.amoled;
+
+    final Color circleColor;
+    final Color iconColor;
+
+    if (isAmoled && isDark) {
+      circleColor = Colors.white;
+      iconColor = Colors.black;
+    } else {
+      circleColor = Color.lerp(baseColor, Colors.white, 0.65)!;
+      iconColor = Color.lerp(baseColor, Colors.black, 0.75)!;
+    }
+
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Icon(
+        iconData,
+        color: iconColor,
+        size: size,
+        fill: fill,
+        weight: weight,
+        grade: grade,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<AppColorScheme>(
@@ -231,7 +270,7 @@ class AboutScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        '${LocaleProvider.tr('version')}: $version ($buildNumber) preview',
+                        '${LocaleProvider.tr('version')}: $version ($buildNumber)',
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -282,9 +321,10 @@ class AboutScreen extends StatelessWidget {
                     ),
                   ),
                   child: ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
+                      context,
                       Icons.person_outline_rounded,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.blue,
                     ),
                     title: Text(
                       LocaleProvider.tr('developer'),
@@ -326,9 +366,10 @@ class AboutScreen extends StatelessWidget {
                       borderRadius: BorderRadius.all(Radius.circular(4)),
                     ),
                     onTap: () => _launchUrl('https://t.me/kirby_limon'),
-                    leading: Icon(
+                    leading: _buildCircleIcon(
+                      context,
                       Icons.telegram,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.lightBlue,
                     ),
                     title: const Text(
                       'Telegram',
@@ -368,9 +409,10 @@ class AboutScreen extends StatelessWidget {
                       borderRadius: BorderRadius.all(Radius.circular(4)),
                     ),
                     onTap: () => _launchUrl('https://ko-fi.com/kirbyestelar'),
-                    leading: Icon(
+                    leading: _buildCircleIcon(
+                      context,
                       Icons.volunteer_activism_outlined,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.red,
                     ),
                     title: Text(
                       LocaleProvider.tr('donate_ko_fi'),
@@ -411,9 +453,10 @@ class AboutScreen extends StatelessWidget {
                     ),
                     onTap: () =>
                         _launchUrl('https://github.com/KirbyNx64/Aura'),
-                    leading: Icon(
+                    leading: _buildCircleIcon(
+                      context,
                       Icons.code_rounded,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.teal,
                     ),
                     title: Text(
                       'GitHub',
@@ -457,9 +500,10 @@ class AboutScreen extends StatelessWidget {
                     ),
                     onTap: () =>
                         _launchUrl('https://github.com/KirbyNx64/Aura/issues'),
-                    leading: Icon(
+                    leading: _buildCircleIcon(
+                      context,
                       Icons.bug_report_outlined,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.orange,
                     ),
                     title: Text(
                       LocaleProvider.tr('issues'),
@@ -495,9 +539,10 @@ class AboutScreen extends StatelessWidget {
                     borderRadius: BorderRadius.all(Radius.circular(4)),
                   ),
                   child: ListTile(
-                    leading: Icon(
+                    leading: _buildCircleIcon(
+                      context,
                       Symbols.flutter,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.cyan,
                     ),
                     title: Text(
                       LocaleProvider.tr('flutter_version'),
@@ -539,9 +584,10 @@ class AboutScreen extends StatelessWidget {
                         borderRadius: BorderRadius.all(Radius.circular(4)),
                       ),
                       child: ListTile(
-                        leading: Icon(
+                        leading: _buildCircleIcon(
+                          context,
                           Icons.android,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          Colors.green,
                         ),
                         title: Text(
                           LocaleProvider.tr('device_info'),
@@ -617,9 +663,10 @@ class AboutScreen extends StatelessWidget {
                         ),
                       );
                     },
-                    leading: Icon(
+                    leading: _buildCircleIcon(
+                      context,
                       Icons.extension_rounded,
-                      color: Theme.of(context).colorScheme.onSurface,
+                      Colors.purple,
                     ),
                     title: Text(
                       LocaleProvider.tr('dependencies'),

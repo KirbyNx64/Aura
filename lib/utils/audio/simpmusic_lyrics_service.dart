@@ -3,6 +3,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
 import 'package:music/utils/connectivity_helper.dart';
 import 'package:music/utils/db/download_history_hive.dart';
+import 'package:music/utils/yt_search/service.dart';
 
 class SimpMusicLyricsService {
   static const String _apiBaseUrl = 'https://api-lyrics.simpmusic.org';
@@ -23,10 +24,9 @@ class SimpMusicLyricsService {
       dio.options.connectTimeout = const Duration(seconds: 10);
       dio.options.receiveTimeout = const Duration(seconds: 10);
 
-      // We use /v1/search/title as a health check
+      // We use /v1/dQw4w9WgXcQ (direct lookup) as a health check
       final response = await dio.get(
-        '$_apiBaseUrl/v1/search/title',
-        queryParameters: {'title': 'hello', 'limit': 1},
+        '$_apiBaseUrl/v1/dQw4w9WgXcQ',
         options: Options(
           headers: {'User-Agent': userAgent},
           validateStatus: (status) => status != null && status < 500,
@@ -165,58 +165,20 @@ class SimpMusicLyricsService {
   }
 
   static Future<LyricsResult> searchAndGetLyrics(MediaItem song) async {
-    final dio = Dio();
-    dio.options.connectTimeout = const Duration(seconds: 10);
-    dio.options.receiveTimeout = const Duration(seconds: 10);
-
     try {
       final query = '${song.artist ?? ""} ${song.title}'.trim();
       // print('SimpMusic: Searching for lyrics with query: $query');
-      final response = await dio.get(
-        '$_apiBaseUrl/v1/search',
-        queryParameters: {'q': query, 'limit': 5},
-        options: Options(
-          headers: {'User-Agent': userAgent},
-          validateStatus: (status) => status != null && status < 500,
-        ),
-      );
-
-      // print('SimpMusic: Search response status: ${response.statusCode}');
-
-      if (response.statusCode == 200 && response.data != null) {
-        final responseData = response.data;
-        if (responseData is Map<String, dynamic> &&
-            responseData['data'] is List) {
-          final List<dynamic> data = responseData['data'];
-          // print('SimpMusic: Search results count: ${data.length}');
-          if (data.isNotEmpty) {
-            final bestMatch = data.first;
-            if (bestMatch is Map<String, dynamic>) {
-              // print(
-              //   'SimpMusic: Best match: ${bestMatch['songTitle']} - ${bestMatch['artistName']} (videoId: ${bestMatch['videoId']})',
-              // );
-              if (bestMatch['syncedLyrics'] != null ||
-                  bestMatch['plainLyric'] != null ||
-                  bestMatch['plainLyrics'] != null) {
-                // print('SimpMusic: Lyrics found directly in search result');
-                final lyricsData = LyricsData(
-                  id: song.id,
-                  synced: bestMatch["syncedLyrics"],
-                  plainLyrics:
-                      bestMatch["plainLyric"] ?? bestMatch["plainLyrics"],
-                );
-                final lyricsBox = await SyncedLyricsService.box;
-                await lyricsBox.put(song.id, lyricsData);
-                return LyricsResult(
-                  type: LyricsResultType.found,
-                  data: lyricsData,
-                );
-              } else if (bestMatch['videoId'] != null) {
-                // print(
-                //   'SimpMusic: No direct lyrics, fetching by videoId from search match',
-                // );
-                return await getLyricsByVideoId(bestMatch['videoId'], song.id);
-              }
+      
+      // Buscar en YouTube Music para obtener los videoIds correspondientes
+      final ytResults = await searchSongsOnly(query, cancelPrevious: false);
+      if (ytResults.isNotEmpty) {
+        // Intentar obtener las letras para los mejores resultados
+        for (final ytResult in ytResults) {
+          final videoId = ytResult.videoId;
+          if (videoId != null && videoId.isNotEmpty) {
+            final result = await getLyricsByVideoId(videoId, song.id);
+            if (result.type == LyricsResultType.found) {
+              return result;
             }
           }
         }

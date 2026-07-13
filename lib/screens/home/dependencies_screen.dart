@@ -27,36 +27,36 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'just_audio': _DependencyInfo(
       'https://pub.dev/packages/just_audio',
-      '^0.10.5',
+      '^0.10.6',
     ),
     'audio_session': _DependencyInfo(
       'https://pub.dev/packages/audio_session',
-      '^0.2.2',
+      '^0.2.4',
     ),
     'audio_service': _DependencyInfo(
       'https://pub.dev/packages/audio_service',
-      '^0.18.18',
+      '^0.18.19',
     ),
     'path': _DependencyInfo('https://pub.dev/packages/path', '^1.9.1'),
     'shared_preferences': _DependencyInfo(
       'https://pub.dev/packages/shared_preferences',
-      '^2.5.4',
+      '^2.5.5',
     ),
     'shared_preferences_android': _DependencyInfo(
       'https://pub.dev/packages/shared_preferences_android',
-      '^2.4.20',
+      '^2.4.21',
     ),
     'path_provider': _DependencyInfo(
       'https://pub.dev/packages/path_provider',
-      '^2.1.5',
+      '^2.1.6',
     ),
     'permission_handler': _DependencyInfo(
       'https://pub.dev/packages/permission_handler',
-      '^12.0.1',
+      '^12.0.3',
     ),
     'share_plus': _DependencyInfo(
       'https://pub.dev/packages/share_plus',
-      '^11.1.0',
+      '^13.1.0',
     ),
     'cross_file': _DependencyInfo(
       'https://pub.dev/packages/cross_file',
@@ -64,7 +64,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'connectivity_plus': _DependencyInfo(
       'https://pub.dev/packages/connectivity_plus',
-      '^7.0.0',
+      '^7.2.0',
     ),
     'http': _DependencyInfo('https://pub.dev/packages/http', '^1.6.0'),
     'youtube_explode_dart': _DependencyInfo(
@@ -93,12 +93,12 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'device_info_plus': _DependencyInfo(
       'https://pub.dev/packages/device_info_plus',
-      '^12.3.0',
+      '^13.2.0',
     ),
-    'dio': _DependencyInfo('https://pub.dev/packages/dio', '^5.9.1'),
+    'dio': _DependencyInfo('https://pub.dev/packages/dio', '^5.10.0'),
     'open_file': _DependencyInfo(
       'https://pub.dev/packages/open_file',
-      '^3.5.11',
+      '^4.0.0',
     ),
     'smooth_page_indicator': _DependencyInfo(
       'https://pub.dev/packages/smooth_page_indicator',
@@ -112,17 +112,13 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/flutter_inappwebview',
       '^6.1.5',
     ),
-    'squiggly_slider': _DependencyInfo(
-      'https://pub.dev/packages/squiggly_slider',
-      '^1.0.5',
-    ),
     'android_intent_plus': _DependencyInfo(
       'https://pub.dev/packages/android_intent_plus',
       '^6.0.0',
     ),
     'package_info_plus': _DependencyInfo(
       'https://pub.dev/packages/package_info_plus',
-      '^9.0.0',
+      '^10.2.0',
     ),
     'ota_update': _DependencyInfo(
       'https://pub.dev/packages/ota_update',
@@ -138,11 +134,11 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'flutter_local_notifications': _DependencyInfo(
       'https://pub.dev/packages/flutter_local_notifications',
-      '^20.1.0',
+      '^22.0.1',
     ),
     'flutter_svg': _DependencyInfo(
       'https://pub.dev/packages/flutter_svg',
-      '^2.2.3',
+      '^2.3.0',
     ),
     'flutter_audio_toolkit': _DependencyInfo(
       'https://pub.dev/packages/flutter_audio_toolkit',
@@ -174,7 +170,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'video_player': _DependencyInfo(
       'https://pub.dev/packages/video_player',
-      '^2.11.1',
+      '^2.12.0',
     ),
     'video_player_media_kit': _DependencyInfo(
       'https://pub.dev/packages/video_player_media_kit',
@@ -198,30 +194,29 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/material_loading_indicator',
       '^1.0.0',
     ),
-    'palette_generator_master': _DependencyInfo(
-      'https://pub.dev/packages/palette_generator_master',
-      '^1.0.1',
-    ),
     'flutter_m3shapes': _DependencyInfo(
       'https://pub.dev/packages/flutter_m3shapes',
       '^1.0.0+2',
     ),
     'material_symbols_icons': _DependencyInfo(
       'https://pub.dev/packages/material_symbols_icons',
-      '^4.2906.0',
+      '^4.2928.1',
     ),
     'sliding_up_panel': _DependencyInfo(
       'https://pub.dev/packages/sliding_up_panel',
       '^2.0.0+1',
     ),
-    'wakelock_plus': _DependencyInfo(
-      'https://pub.dev/packages/wakelock_plus',
-      '^1.4.0',
-    ),
-    'marquee': _DependencyInfo('https://pub.dev/packages/marquee', '^2.3.0'),
     'open_settings_plus': _DependencyInfo(
       'https://pub.dev/packages/open_settings_plus',
-      '^0.4.0',
+      '^0.5.0',
+    ),
+    'palette_generator_master': _DependencyInfo(
+      'https://pub.dev/packages/palette_generator_master',
+      '^1.1.0',
+    ),
+    'wakelock_plus': _DependencyInfo(
+      'https://pub.dev/packages/wakelock_plus',
+      '^1.6.1',
     ),
     'android_nav_setting': _DependencyInfo(
       'https://pub.dev/packages/android_nav_setting',
@@ -239,17 +234,13 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/m3e_design',
       '^0.2.1',
     ),
-    'expressive_refresh': _DependencyInfo(
-      'https://pub.dev/packages/expressive_refresh',
-      '^0.1.2',
-    ),
     'terminate_restart': _DependencyInfo(
       'https://pub.dev/packages/terminate_restart',
-      '^1.0.11',
+      '^1.1.0',
     ),
-    'scrollable_positioned_list': _DependencyInfo(
-      'https://pub.dev/packages/scrollable_positioned_list',
-      '^0.3.8',
+    'ionicons_plus': _DependencyInfo(
+      'https://pub.dev/packages/ionicons_plus',
+      '^0.2.5',
     ),
   };
 
