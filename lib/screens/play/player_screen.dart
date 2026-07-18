@@ -7,7 +7,6 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:music/widgets/title_marquee.dart';
 import 'package:music/main.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:music/widgets/slider.dart';
 // import 'package:http/http.dart' as http;
 // import 'dart:convert';
 import 'package:audio_service/audio_service.dart';
@@ -53,6 +52,56 @@ import 'package:ionicons_plus/ionicons_plus.dart';
 enum PanelContent { playlist, lyrics }
 
 final OnAudioQuery _audioQuery = OnAudioQuery();
+
+/// Thumb invisible: sin renderizado visual pero con área táctil generosa.
+class _InvisibleThumbShape extends SliderComponentShape {
+  const _InvisibleThumbShape();
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => const Size(48, 48);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    // No pintar nada: thumb invisible.
+  }
+}
+
+/// Track que ocupa el ancho completo del padre, ignorando el padding del thumb.
+/// Esto evita que la barra se acorte al aumentar el tamaño táctil del thumb.
+class _FullWidthTrackShape extends RoundedRectSliderTrackShape {
+  const _FullWidthTrackShape();
+
+  @override
+  Rect getPreferredRect({
+    required RenderBox parentBox,
+    Offset offset = Offset.zero,
+    required SliderThemeData sliderTheme,
+    bool isEnabled = false,
+    bool isDiscrete = false,
+  }) {
+    final trackHeight = sliderTheme.trackHeight ?? 4.0;
+    final trackTop = offset.dy + (parentBox.size.height - trackHeight) / 2;
+    return Rect.fromLTWH(
+      offset.dx,
+      trackTop,
+      parentBox.size.width,
+      trackHeight,
+    );
+  }
+}
 
 class _PlaylistStreamingArtwork extends StatefulWidget {
   final List<String> sources;
@@ -6609,10 +6658,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                 builder: (context, playbackSnapshot) {
                                                   final playbackState =
                                                       playbackSnapshot.data;
-                                                  final isPlaying =
-                                                      playbackState?.playing ??
-                                                      false;
-
+                                                  final isStreamingItem =
+                                                      currentMediaItem
+                                                          .extras?['isStreaming'] ==
+                                                      true;
                                                   return ValueListenableBuilder<
                                                     bool
                                                   >(
@@ -6682,10 +6731,6 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                       ? duration
                                                                             .inMilliseconds
                                                                       : 1;
-                                                                  final isStreamingItem =
-                                                                      currentMediaItem
-                                                                          .extras?['isStreaming'] ==
-                                                                      true;
                                                                   final bufferedPositionMs =
                                                                       (playbackState?.bufferedPosition.inMilliseconds ??
                                                                               0)
@@ -6722,124 +6767,92 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                             return Column(
                                                                               children: [
                                                                                 SizedBox(
-                                                                                  width: progressBarWidth,
-                                                                                  child: ClipRect(
-                                                                                    child:
-                                                                                        TweenAnimationBuilder<
-                                                                                          double
-                                                                                        >(
-                                                                                          duration: const Duration(
-                                                                                            milliseconds: 400,
-                                                                                          ),
-                                                                                          curve: Curves.easeInOut,
-                                                                                          tween:
-                                                                                              Tween<
-                                                                                                double
-                                                                                              >(
-                                                                                                begin: isPlaying
-                                                                                                    ? 0.0
-                                                                                                    : 0.0,
-                                                                                                end: isPlaying
-                                                                                                    ? 3.0
-                                                                                                    : 0.0,
-                                                                                              ),
-                                                                                          builder:
-                                                                                              (
-                                                                                                context,
-                                                                                                amplitude,
-                                                                                                child,
-                                                                                              ) {
-                                                                                                return SliderTheme(
-                                                                                                  data:
-                                                                                                      SliderTheme.of(
-                                                                                                        context,
-                                                                                                      ).copyWith(
-                                                                                                        overlayShape: const RoundSliderOverlayShape(
-                                                                                                          overlayRadius: 12.0,
-                                                                                                        ),
-                                                                                                      ),
-                                                                                                  child: SquigglySlider(
-                                                                                                    trackHeight: 3.0,
-                                                                                                    useLineThumb: true,
-                                                                                                    min: 0.0,
-                                                                                                    max: durationMs.toDouble(),
-                                                                                                    value: sliderValueMs.toDouble(),
-                                                                                                    secondaryTrackValue: isStreamingItem
-                                                                                                        ? bufferedPositionMs
-                                                                                                        : null,
-                                                                                                    secondaryActiveColor:
-                                                                                                        Theme.of(
-                                                                                                          context,
-                                                                                                        ).colorScheme.primary.withValues(
-                                                                                                          alpha: 0.55,
-                                                                                                        ),
-                                                                                                    inactiveColor:
-                                                                                                        Theme.of(
-                                                                                                          context,
-                                                                                                        ).colorScheme.primary.withValues(
-                                                                                                          alpha: 0.3,
-                                                                                                        ),
-                                                                                                    onChanged:
-                                                                                                        (
-                                                                                                          value,
-                                                                                                        ) {
-                                                                                                          _dragValueSecondsNotifier.value =
-                                                                                                              value /
-                                                                                                              1000.0;
-                                                                                                        },
-                                                                                                    onChangeEnd:
-                                                                                                        (
-                                                                                                          value,
-                                                                                                        ) {
-                                                                                                          final now = DateTime.now();
-                                                                                                          final ms = value.toInt();
-                                                                                                          if (now
-                                                                                                                  .difference(
-                                                                                                                    _lastSeekTime,
-                                                                                                                  )
-                                                                                                                  .inMilliseconds >
-                                                                                                              _seekThrottleMs) {
-                                                                                                            audioHandler?.seek(
-                                                                                                              Duration(
-                                                                                                                milliseconds: ms,
-                                                                                                              ),
-                                                                                                            );
-                                                                                                            _lastSeekTime = now;
-                                                                                                          } else {
-                                                                                                            _lastSeekMs = ms;
-                                                                                                            Future.delayed(
-                                                                                                              Duration(
-                                                                                                                milliseconds: _seekThrottleMs,
-                                                                                                              ),
-                                                                                                              () {
-                                                                                                                if (_lastSeekMs !=
-                                                                                                                        null &&
-                                                                                                                    DateTime.now()
-                                                                                                                            .difference(
-                                                                                                                              _lastSeekTime,
-                                                                                                                            )
-                                                                                                                            .inMilliseconds >=
-                                                                                                                        _seekThrottleMs) {
-                                                                                                                  audioHandler?.seek(
-                                                                                                                    Duration(
-                                                                                                                      milliseconds: _lastSeekMs!,
-                                                                                                                    ),
-                                                                                                                  );
-                                                                                                                  _lastSeekTime = DateTime.now();
-                                                                                                                  _lastSeekMs = null;
-                                                                                                                }
-                                                                                                              },
-                                                                                                            );
-                                                                                                          }
-                                                                                                          _dragValueSecondsNotifier.value = null;
-                                                                                                        },
-                                                                                                    squiggleAmplitude: amplitude,
-                                                                                                    squiggleWavelength: 6.0,
-                                                                                                    squiggleSpeed: 0.05,
-                                                                                                  ),
-                                                                                                );
-                                                                                              },
+                                                                                  width: artworkSize,
+                                                                                  height: 26,
+                                                                                  child: SliderTheme(
+                                                                                    data:
+                                                                                        SliderTheme.of(
+                                                                                          context,
+                                                                                        ).copyWith(
+                                                                                          trackHeight: 4.5,
+                                                                                          trackShape: const _FullWidthTrackShape(),
+                                                                                          thumbShape: const _InvisibleThumbShape(),
+                                                                                          overlayShape: SliderComponentShape.noOverlay,
                                                                                         ),
+                                                                                    child: Slider(
+                                                                                      min: 0.0,
+                                                                                      max: durationMs.toDouble(),
+                                                                                      value: sliderValueMs.toDouble(),
+                                                                                      secondaryTrackValue: isStreamingItem
+                                                                                          ? bufferedPositionMs
+                                                                                          : null,
+                                                                                      secondaryActiveColor:
+                                                                                          Theme.of(
+                                                                                            context,
+                                                                                          ).colorScheme.primary.withValues(
+                                                                                            alpha: 0.3,
+                                                                                          ),
+                                                                                      inactiveColor:
+                                                                                          Theme.of(
+                                                                                            context,
+                                                                                          ).colorScheme.primary.withValues(
+                                                                                            alpha: 0.15,
+                                                                                          ),
+                                                                                      onChanged:
+                                                                                          (
+                                                                                            value,
+                                                                                          ) {
+                                                                                            _dragValueSecondsNotifier.value =
+                                                                                                value /
+                                                                                                1000.0;
+                                                                                          },
+                                                                                      onChangeEnd:
+                                                                                          (
+                                                                                            value,
+                                                                                          ) {
+                                                                                            final now = DateTime.now();
+                                                                                            final ms = value.toInt();
+                                                                                            if (now
+                                                                                                    .difference(
+                                                                                                      _lastSeekTime,
+                                                                                                    )
+                                                                                                    .inMilliseconds >
+                                                                                                _seekThrottleMs) {
+                                                                                              audioHandler?.seek(
+                                                                                                Duration(
+                                                                                                  milliseconds: ms,
+                                                                                                ),
+                                                                                              );
+                                                                                              _lastSeekTime = now;
+                                                                                            } else {
+                                                                                              _lastSeekMs = ms;
+                                                                                              Future.delayed(
+                                                                                                Duration(
+                                                                                                  milliseconds: _seekThrottleMs,
+                                                                                                ),
+                                                                                                () {
+                                                                                                  if (_lastSeekMs !=
+                                                                                                          null &&
+                                                                                                      DateTime.now()
+                                                                                                              .difference(
+                                                                                                                _lastSeekTime,
+                                                                                                              )
+                                                                                                              .inMilliseconds >=
+                                                                                                          _seekThrottleMs) {
+                                                                                                    audioHandler?.seek(
+                                                                                                      Duration(
+                                                                                                        milliseconds: _lastSeekMs!,
+                                                                                                      ),
+                                                                                                    );
+                                                                                                    _lastSeekTime = DateTime.now();
+                                                                                                    _lastSeekMs = null;
+                                                                                                  }
+                                                                                                },
+                                                                                              );
+                                                                                            }
+                                                                                            _dragValueSecondsNotifier.value = null;
+                                                                                          },
+                                                                                    ),
                                                                                   ),
                                                                                 ),
                                                                                 SizedBox(

@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 2.1.0+4024
+version: 2.1.1+4025
 
 environment:
   sdk: ^3.11.5
@@ -24,9 +24,9 @@ dependencies:
   path_provider: ^2.1.6
   permission_handler: ^12.0.3
 # audio_info: ^0.0.3  # Temporalmente comentado por incompatibilidad con Java 17
-  share_plus: ^13.1.0
+  share_plus: ^13.2.1
   cross_file: ^0.3.4+2
-  connectivity_plus: ^7.2.0
+  connectivity_plus: ^7.3.0
   http: ^1.6.0
   youtube_explode_dart:
     git:
@@ -45,7 +45,7 @@ dependencies:
   carousel_slider: ^5.1.2
   flutter_inappwebview: ^6.1.5
   android_intent_plus: ^6.0.0
-  package_info_plus: ^10.2.0
+  package_info_plus: ^10.2.1
   ota_update: ^7.1.0
   scroll_to_index: ^3.0.1
   mini_music_visualizer: ^1.1.4
@@ -58,7 +58,7 @@ dependencies:
   like_button: ^2.1.0
   translator: ^1.0.4+1
   buttons_tabbar: ^1.3.15
-  video_player: ^2.12.0
+  video_player: ^2.13.0
   video_player_media_kit: ^2.0.0
   media_kit_libs_android_video: any
   image: ^4.8.0

@@ -56,7 +56,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'share_plus': _DependencyInfo(
       'https://pub.dev/packages/share_plus',
-      '^13.1.0',
+      '^13.2.1',
     ),
     'cross_file': _DependencyInfo(
       'https://pub.dev/packages/cross_file',
@@ -64,7 +64,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'connectivity_plus': _DependencyInfo(
       'https://pub.dev/packages/connectivity_plus',
-      '^7.2.0',
+      '^7.3.0',
     ),
     'http': _DependencyInfo('https://pub.dev/packages/http', '^1.6.0'),
     'youtube_explode_dart': _DependencyInfo(
@@ -118,7 +118,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'package_info_plus': _DependencyInfo(
       'https://pub.dev/packages/package_info_plus',
-      '^10.2.0',
+      '^10.2.1',
     ),
     'ota_update': _DependencyInfo(
       'https://pub.dev/packages/ota_update',
@@ -170,7 +170,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'video_player': _DependencyInfo(
       'https://pub.dev/packages/video_player',
-      '^2.12.0',
+      '^2.13.0',
     ),
     'video_player_media_kit': _DependencyInfo(
       'https://pub.dev/packages/video_player_media_kit',

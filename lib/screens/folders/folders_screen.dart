@@ -4808,7 +4808,44 @@ class _FoldersScreenState extends State<FoldersScreen>
                                   shape: RoundedRectangleBorder(
                                     borderRadius: borderRadius,
                                   ),
-                                  leading: const Icon(Icons.folder, size: 38),
+                                  leading: Builder(
+                                    builder: (context) {
+                                      const List<Color> folderPastelBases = [
+                                        Color(0xFF6C8EBF), // azul
+                                        Color(0xFF5BA85C), // verde
+                                        Color(0xFFB56DB5), // morado
+                                        Color(0xFFD4875A), // naranja
+                                        Color(0xFF5AABAB), // teal
+                                        Color(0xFFD45A7A), // rosa
+                                        Color(0xFF8A7FC7), // violeta
+                                        Color(0xFFB5A84A), // amarillo
+                                      ];
+                                      final baseColor = folderPastelBases[i % folderPastelBases.length];
+                                      final Color circleColor;
+                                      final Color iconColor;
+                                      if (isAmoled && isDark) {
+                                        circleColor = Colors.white;
+                                        iconColor = Colors.black;
+                                      } else {
+                                        circleColor = Color.lerp(baseColor, Colors.white, 0.65)!;
+                                        iconColor = Color.lerp(baseColor, Colors.black, 0.75)!;
+                                      }
+                                      return Container(
+                                        width: 38,
+                                        height: 38,
+                                        decoration: BoxDecoration(
+                                          color: circleColor,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Icon(
+                                          Icons.folder_rounded,
+                                          color: iconColor,
+                                          size: 20,
+                                        ),
+                                      );
+                                    },
+                                  ),
                                   title: Text(
                                     nombre,
                                     maxLines: 2,
