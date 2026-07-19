@@ -90,6 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadTranslationLanguageSetting();
     _loadTranslationDisplayModeSetting();
     _loadArtworkBackgroundSetting();
+    _loadArtworkFullScreenSetting();
     _bootstrapYtAuthState();
   }
 
@@ -201,6 +202,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('use_dynamic_color_in_dialogs', value);
     useDynamicColorInDialogsNotifier.value = value;
+    setState(() {});
+  }
+
+  Future<void> _loadArtworkFullScreenSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isFullScreen = prefs.getBool('artwork_full_screen') ?? false;
+    artworkFullScreenNotifier.value = isFullScreen;
+  }
+
+  Future<void> _setArtworkFullScreen(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('artwork_full_screen', value);
+    artworkFullScreenNotifier.value = value;
     setState(() {});
   }
 
@@ -4077,6 +4091,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(4)),
                 ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
+                  bottomLeft: Radius.circular(4),
+                  bottomRight: Radius.circular(4),
+                ),
+              ),
+              child: ValueListenableBuilder<AppColorScheme>(
+                valueListenable: colorSchemeNotifier,
+                builder: (context, colorScheme, _) {
+                  final isAmoledTheme = colorScheme == AppColorScheme.amoled;
+                  final isAmoledActive = isAmoledTheme && isDark;
+                  return ValueListenableBuilder<bool>(
+                    valueListenable: artworkFullScreenNotifier,
+                    builder: (context, value, child) {
+                      return SwitchListTile(
+                        value: isAmoledActive ? value : false,
+                        onChanged: isAmoledActive ? (v) => _setArtworkFullScreen(v) : null,
+                        title: Text(
+                          LocaleProvider.tr('artwork_full_screen'),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isAmoledActive
+                                ? Theme.of(context).colorScheme.onSurface
+                                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                          ),
+                        ),
+                        subtitle: Text(
+                          LocaleProvider.tr('artwork_full_screen_desc'),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isAmoledActive
+                                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
+                                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                          ),
+                        ),
+                        secondary: Opacity(
+                          opacity: isAmoledActive ? 1.0 : 0.5,
+                          child: _buildCircleIcon(
+                            Icons.crop_free_rounded,
+                            Colors.teal,
+                          ),
+                        ),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(4)),
+                        ),
+                        thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
+                          Set<WidgetState> states,
+                        ) {
+                          if (!isAmoledActive) return const Icon(Icons.close, size: 20);
+                          final iconColor = isAmoledTheme && isDark
+                              ? Colors.white
+                              : null;
+                          if (states.contains(WidgetState.selected)) {
+                            return Icon(Icons.check, size: 20, color: iconColor);
+                          } else {
+                            return const Icon(Icons.close, size: 20);
+                          }
+                        }),
+                      );
+                    },
+                  );
+                },
               ),
             ),
             const SizedBox(height: 4),

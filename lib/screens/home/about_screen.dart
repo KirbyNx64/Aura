@@ -552,7 +552,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '3.44.6 • stable • Dart 3.12.2 • Compiled with Ubuntu 26.04 7.0.0-27-generic',
+                      '3.44.6 • stable • Dart 3.12.2 • Compiled with Ubuntu 26.04 7.0.0-28-generic',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(

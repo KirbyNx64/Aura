@@ -192,6 +192,9 @@ const Map<String, String> appLocalizationsEs = {
   'carousel_animation': 'Animación del carrusel',
   'carousel_animation_desc':
       'Anima la carátula al cambiar de canción en el reproductor',
+  'artwork_full_screen': 'Carátula a pantalla completa',
+  'artwork_full_screen_desc':
+      'La carátula ocupa todo el ancho del reproductor en lugar de dejarse como cuadro centrado',
   'api_unavailable': 'API no disponible',
   'no_connection': 'Sin conexión',
   'no_lyrics_found': 'No se encontraron letras',

@@ -186,6 +186,9 @@ const Map<String, String> appLocalizationsEn = {
   'carousel_animation': 'Carousel animation',
   'carousel_animation_desc':
       'Animate cover transitions when the song changes in the player',
+  'artwork_full_screen': 'Full-screen cover',
+  'artwork_full_screen_desc':
+      'The cover art fills the full player width instead of being kept as a centered square',
   'api_unavailable': 'API unavailable',
   'no_connection': 'No connection',
   'no_lyrics_found': 'No lyrics found',

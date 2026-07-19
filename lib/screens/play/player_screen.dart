@@ -1462,6 +1462,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     setState(() {});
   }
 
+  void _onArtworkFullScreenChanged() {
+    if (!mounted) return;
+
+    _cachedAmoledBackground = null;
+    _cachedBackgroundSongId = null;
+    _cachedBlurredImage = null;
+    _cachedBlurredImageSongId = null;
+    setState(() {});
+  }
+
   void _handleMediaSourceTransition(MediaItem mediaItem) {
     final isStreaming = mediaItem.extras?['isStreaming'] == true;
     final didSwitchSource =
@@ -2222,6 +2232,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     favoritesShouldReload.addListener(_onFavoritesChanged);
     dislikesShouldReload.addListener(_onDislikesChanged);
     coverQualityNotifier.addListener(_onCoverQualityChanged);
+    // Invalidar el caché del fondo cuando cambia el modo de carátula
+    artworkFullScreenNotifier.addListener(_onArtworkFullScreenChanged);
 
     // Inicializar animación de fade
     _fadeController = AnimationController(
@@ -2668,6 +2680,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     favoritesShouldReload.removeListener(_onFavoritesChanged);
     dislikesShouldReload.removeListener(_onDislikesChanged);
     coverQualityNotifier.removeListener(_onCoverQualityChanged);
+    artworkFullScreenNotifier.removeListener(_onArtworkFullScreenChanged);
     if (_gestureListener != null) {
       gesturePreferencesChanged.removeListener(_gestureListener!);
     }
@@ -4602,12 +4615,79 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       return null;
     }
 
+    final isFullScreenArtwork = artworkFullScreenNotifier.value;
+    if (isFullScreenArtwork) {
+      final backgroundWidget = RepaintBoundary(
+        key: ValueKey('amoled_bg_fs_$songId'),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Image(
+                image: imageProvider,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) =>
+                    const SizedBox.shrink(),
+              ),
+            ),
+            // Gradiente oscuro en la barra de estado y AppBar para mayor legibilidad
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 120,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.65),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 400,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.95),
+                      Colors.black.withValues(alpha: 0.70),
+                      Colors.black.withValues(alpha: 0.35),
+                      Colors.transparent,
+                    ],
+                    stops: const [0.0, 0.4, 0.8, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      _cachedAmoledBackground = backgroundWidget;
+      _cachedBackgroundSongId = songId;
+      return backgroundWidget;
+    }
+
     imageProvider = ResizeImage(imageProvider, width: 150);
 
     // Construir y cachear el widget con blur estático
     // Usar RepaintBoundary para aislar el blur y evitar repintados del resto del árbol
+    final backgroundSigma = isFullScreenArtwork ? 0.0 : 9.0;
+    // La clave incluye el modo para forzar re-render al cambiar la opción
+    final bgKey = 'amoled_bg_${songId}_${isFullScreenArtwork ? "fs" : "blur"}';
     final backgroundWidget = RepaintBoundary(
-      key: ValueKey('amoled_bg_$songId'),
+      key: ValueKey(bgKey),
       child: Stack(
         children: [
           Positioned.fill(
@@ -4629,6 +4709,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                   width: w,
                   height: h,
                   scale: scale + 0.1,
+                  sigma: backgroundSigma,
                   cachedImage: _cachedBlurredImageSongId == songId
                       ? _cachedBlurredImage
                       : null,
@@ -4648,11 +4729,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.75),
-                    Colors.black.withValues(alpha: 0.5),
-                    Colors.black.withValues(alpha: 0.3),
-                  ],
+                  colors: isFullScreenArtwork
+                      ? [
+                          // Modo pantalla completa: gradiente más suave para ver la carátula
+                          Colors.black.withValues(alpha: 0.65),
+                          Colors.black.withValues(alpha: 0.30),
+                          Colors.black.withValues(alpha: 0.10),
+                        ]
+                      : [
+                          Colors.black.withValues(alpha: 0.75),
+                          Colors.black.withValues(alpha: 0.5),
+                          Colors.black.withValues(alpha: 0.3),
+                        ],
                   stops: const [0.0, 0.5, 1.0],
                 ),
               ),
@@ -4796,7 +4884,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     final showBackground =
                         isAmoled &&
                         isDark &&
-                        useArtworkBg &&
+                        (useArtworkBg || artworkFullScreenNotifier.value) &&
                         !forceBlackBackgroundForVideo;
                     final showDynamicBg =
                         useDynamicBg &&
@@ -5337,9 +5425,29 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                   clipBehavior:
                                                                       Clip.none,
                                                                   children: [
-                                                                    _buildArtworkOrVideo(
-                                                                      currentMediaItem,
-                                                                      artworkSize,
+                                                                    ValueListenableBuilder<
+                                                                      bool
+                                                                    >(
+                                                                      valueListenable:
+                                                                          artworkFullScreenNotifier,
+                                                                      builder:
+                                                                          (
+                                                                            context,
+                                                                            isFullScreen,
+                                                                            child,
+                                                                          ) {
+                                                                            if (isFullScreen &&
+                                                                                !isVideoModeActive) {
+                                                                              return SizedBox(
+                                                                                width: artworkSize,
+                                                                                height: artworkSize,
+                                                                              );
+                                                                            }
+                                                                            return _buildArtworkOrVideo(
+                                                                              currentMediaItem,
+                                                                              artworkSize,
+                                                                            );
+                                                                          },
                                                                     ),
                                                                     // Indicadores de doble toque solo cuando las letras se muestran en modal y se ha hecho doble toque
                                                                     if (!showLyricsOnCover &&
@@ -5741,11 +5849,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                       .onSurface
                                                                       .withValues(
                                                                         alpha:
-                                                                            0.8,
+                                                                            0.7,
                                                                       ),
                                                               fontWeight:
                                                                   FontWeight
-                                                                      .w400,
+                                                                      .w500,
                                                               fontSize: 16,
                                                             ),
                                                         maxLines: 1,
@@ -8465,6 +8573,7 @@ class _StaticBlurImage extends StatefulWidget {
   final double width;
   final double height;
   final double scale;
+  final double sigma;
   final ui.Image? cachedImage;
   final ValueChanged<ui.Image> onImageCached;
 
@@ -8473,6 +8582,7 @@ class _StaticBlurImage extends StatefulWidget {
     required this.width,
     required this.height,
     required this.scale,
+    this.sigma = 9.0,
     this.cachedImage,
     required this.onImageCached,
   });
@@ -8549,12 +8659,19 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
       final canvas = Canvas(recorder);
       final paint = Paint();
 
-      // Aplicar blur usando ImageFilter
-      final blurFilter = ui.ImageFilter.blur(sigmaX: 9, sigmaY: 9);
-      canvas.saveLayer(
-        Offset.zero & Size(widget.width, widget.height),
-        paint..imageFilter = blurFilter,
-      );
+      // Aplicar blur usando ImageFilter (sigma=0 significa sin blur)
+      if (widget.sigma > 0) {
+        final blurFilter = ui.ImageFilter.blur(
+          sigmaX: widget.sigma,
+          sigmaY: widget.sigma,
+        );
+        canvas.saveLayer(
+          Offset.zero & Size(widget.width, widget.height),
+          paint..imageFilter = blurFilter,
+        );
+      } else {
+        canvas.save();
+      }
 
       // Recorte 1:1 centrado (4:4) y luego ajuste cover al fondo.
       final baseSrcRect = _centerSquareRect(image);
@@ -8610,6 +8727,13 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
   Widget build(BuildContext context) {
     if (_blurredImage == null) {
       // Mientras carga, mostrar el blur dinámico (solo la primera vez)
+      final imageWidget = Image(
+        image: widget.imageProvider,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.low,
+        errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
+      );
       return RepaintBoundary(
         child: Transform.scale(
           scale: widget.scale,
@@ -8617,17 +8741,15 @@ class _StaticBlurImageState extends State<_StaticBlurImage> {
             child: SizedBox(
               width: widget.width,
               height: widget.height,
-              child: ImageFiltered(
-                imageFilter: ui.ImageFilter.blur(sigmaX: 9, sigmaY: 9),
-                child: Image(
-                  image: widget.imageProvider,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                  filterQuality: FilterQuality.low,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const SizedBox.shrink(),
-                ),
-              ),
+              child: widget.sigma > 0
+                  ? ImageFiltered(
+                      imageFilter: ui.ImageFilter.blur(
+                        sigmaX: widget.sigma,
+                        sigmaY: widget.sigma,
+                      ),
+                      child: imageWidget,
+                    )
+                  : imageWidget,
             ),
           ),
         ),

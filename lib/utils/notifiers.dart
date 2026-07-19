@@ -131,6 +131,10 @@ final ValueNotifier<bool> wakelockEnabledNotifier = ValueNotifier<bool>(false);
 final ValueNotifier<bool> artworkCarouselAnimationEnabledNotifier =
     ValueNotifier<bool>(true);
 
+// Notifier para controlar si la carátula ocupa toda la pantalla del reproductor.
+final ValueNotifier<bool> artworkFullScreenNotifier =
+    ValueNotifier<bool>(false);
+
 enum LyricsServiceProvider { lrclib, simpmusic }
 
 final lyricsServiceProviderNotifier = ValueNotifier<LyricsServiceProvider>(
