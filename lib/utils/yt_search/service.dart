@@ -133,10 +133,22 @@ String _composeCookieHeader(String? authCookieHeader) {
   return '$baseCookie; $auth';
 }
 
-Map<String, String> _buildRequestHeaders({String? authCookieHeader}) {
+Map<String, String> _buildRequestHeaders({
+  String? authCookieHeader,
+  bool useAuth = true,
+}) {
   final requestHeaders = Map<String, String>.from(headers);
   if (_cachedVisitorId != null && _cachedVisitorId!.trim().isNotEmpty) {
     requestHeaders['x-goog-visitor-id'] = _cachedVisitorId!.trim();
+  }
+  if (!useAuth) {
+    // Sin cookies de autenticación — necesario para playlists PL* con sesión activa
+    requestHeaders.remove('cookie');
+    requestHeaders.remove('authorization');
+    requestHeaders.remove('x-origin');
+    requestHeaders.remove('x-goog-authuser');
+    requestHeaders.remove('referer');
+    return requestHeaders;
   }
   requestHeaders['cookie'] = _composeCookieHeader(authCookieHeader);
   final origin = domain.replaceFirst(RegExp(r'/$'), '');
@@ -1990,6 +2002,7 @@ Future<Response> sendRequest(
   Map<dynamic, dynamic> data, {
   String additionalParams = "",
   CancelToken? cancelToken,
+  bool useAuth = true,
 }) async {
   final dio = Dio(
     BaseOptions(
@@ -2000,9 +2013,11 @@ Future<Response> sendRequest(
   final url = "$baseUrl$action$fixedParms$additionalParams";
   try {
     await _ensureVisitorIdLoaded();
-    final authCookieHeader = await getYtMusicAuthCookieHeader();
+    final authCookieHeader =
+        useAuth ? await getYtMusicAuthCookieHeader() : null;
     final requestHeaders = _buildRequestHeaders(
       authCookieHeader: authCookieHeader,
+      useAuth: useAuth,
     );
     final browseId = data['browseId']?.toString();
     final isLibraryBrowse =
@@ -4322,7 +4337,10 @@ Map<String, String>? _parsePlaylistItem(Map<String, dynamic> renderer) {
   };
 }
 
-Future<String> _resolvePlaylistBrowseId(String playlistId) async {
+Future<String> _resolvePlaylistBrowseId(
+  String playlistId, {
+  bool useAuth = true,
+}) async {
   String browseId;
 
   // Manejar diferentes tipos de IDs de playlist
@@ -4409,6 +4427,7 @@ Future<Map<String, dynamic>> getPlaylistSongsPage(
   String playlistId, {
   String? continuationToken,
   int limit = 100,
+  bool useAuth = true,
 }) async {
   if (limit <= 0) {
     return {
@@ -4419,9 +4438,11 @@ Future<Map<String, dynamic>> getPlaylistSongsPage(
 
   try {
     if (continuationToken == null || continuationToken.trim().isEmpty) {
-      final browseId = await _resolvePlaylistBrowseId(playlistId);
+      final browseId =
+          await _resolvePlaylistBrowseId(playlistId, useAuth: useAuth);
       final data = {...ytServiceContext, 'browseId': browseId};
-      final response = (await sendRequest("browse", data)).data;
+      final response =
+          (await sendRequest("browse", data, useAuth: useAuth)).data;
 
       final contents = _findPlaylistContents(response);
       final pageResults = contents is List
@@ -4439,7 +4460,8 @@ Future<Map<String, dynamic>> getPlaylistSongsPage(
       ...ytServiceContext,
       'continuation': continuationToken.trim(),
     };
-    final continuationResponse = (await sendRequest("browse", data)).data;
+    final continuationResponse =
+        (await sendRequest("browse", data, useAuth: useAuth)).data;
     final continuationItems = _extractPlaylistContinuationItems(
       continuationResponse,
     );
@@ -4463,6 +4485,7 @@ Future<Map<String, dynamic>> getPlaylistSongsPage(
 Future<List<YtMusicResult>> getPlaylistSongs(
   String playlistId, {
   int? limit,
+  bool useAuth = true,
 }) async {
   final maxItems = limit ?? 999999;
   final results = <YtMusicResult>[];
@@ -4476,6 +4499,7 @@ Future<List<YtMusicResult>> getPlaylistSongs(
         playlistId,
         continuationToken: firstPage ? null : continuationToken,
         limit: 100,
+        useAuth: useAuth,
       );
       firstPage = false;
 
@@ -4924,7 +4948,10 @@ Future<String> getAlbumBrowseId(String audioPlaylistId) async {
 }
 
 // Función para obtener información de la playlist (título, autor, etc.)
-Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
+Future<Map<String, dynamic>?> getPlaylistInfo(
+  String playlistId, {
+  bool useAuth = true,
+}) async {
   String browseId;
 
   // Manejar diferentes tipos de IDs de playlist
@@ -4954,7 +4981,7 @@ Future<Map<String, dynamic>?> getPlaylistInfo(String playlistId) async {
   final data = {...ytServiceContext, 'browseId': browseId};
 
   try {
-    final response = (await sendRequest("browse", data)).data;
+    final response = (await sendRequest("browse", data, useAuth: useAuth)).data;
 
     // Buscar header en diferentes ubicaciones
     var header = nav(response, ['header', 'musicDetailHeaderRenderer']);

@@ -809,6 +809,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             prefs.getBool('use_dynamic_color_in_dialogs') ?? false;
         artworkCarouselAnimationEnabledNotifier.value =
             prefs.getBool('artwork_carousel_animation_enabled') ?? true;
+        artworkFullScreenNotifier.value =
+            prefs.getBool('artwork_full_screen') ?? false;
 
         final lyricsProviderIndex =
             prefs.getInt('lyrics_service_provider') ??

@@ -226,6 +226,8 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   bool _apiUnavailable = false;
   bool _noConnection = false;
   final ScrollController _lyricsScrollController = ScrollController();
+  final GlobalKey _artworkAreaKey = GlobalKey();
+  bool _dragStartedInArtwork = false;
   String? _lastMediaItemId;
   Timer? _seekDebounceTimer;
   int? _lastSeekMs;
@@ -1371,84 +1373,136 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       opacity: disabledOpacity,
       child: IgnorePointer(
         ignoring: !canVideo,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 100),
-          padding: const EdgeInsets.all(3),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            color: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.08),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: isVideoModeSelected
-                      ? () =>
-                            unawaited(_toggleVideoModeForItem(currentMediaItem))
-                      : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: artworkFullScreenNotifier,
+          builder: (context, isFullScreen, _) {
+            final colorScheme = colorSchemeNotifier.value;
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final isVideoModeActive = _isVideoModeActiveForItem(
+              currentMediaItem,
+            );
+            final forceBlackBackgroundForVideo =
+                isVideoModeActive && (isDark || isAmoled);
+            final useArtworkBg = useArtworkAsBackgroundPlayerNotifier.value;
+            final useDynamicBg = useDynamicColorBackgroundNotifier.value;
+
+            final showBackground =
+                isAmoled &&
+                isDark &&
+                (useArtworkBg || isFullScreen) &&
+                !forceBlackBackgroundForVideo;
+            final showDynamicBg =
+                useDynamicBg &&
+                isAmoled &&
+                isDark &&
+                !forceBlackBackgroundForVideo;
+            final showOverlayBackground = showBackground || showDynamicBg;
+            final useTransparentPlayerChrome =
+                showOverlayBackground || forceBlackBackgroundForVideo;
+
+            return Container(
+              constraints: const BoxConstraints(maxWidth: 100),
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: useTransparentPlayerChrome
+                    ? Colors.black.withValues(alpha: 0.35)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.primary.withValues(alpha: 0.08),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Expanded(
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(999),
-                      color: !isVideoModeSelected
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.10)
-                          : Colors.transparent,
-                    ),
-                    child: Icon(
-                      Icons.headphones_rounded,
-                      size: 20,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(
-                        alpha: !isVideoModeSelected
-                            ? selectedTextAlpha
-                            : unselectedTextAlpha,
+                      onTap: isVideoModeSelected
+                          ? () => unawaited(
+                              _toggleVideoModeForItem(currentMediaItem),
+                            )
+                          : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          color: !isVideoModeSelected
+                              ? (useTransparentPlayerChrome
+                                    ? Colors.white.withValues(alpha: 0.25)
+                                    : Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.10))
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.headphones_rounded,
+                          size: 20,
+                          color: useTransparentPlayerChrome
+                              ? Colors.white.withValues(
+                                  alpha: !isVideoModeSelected
+                                      ? selectedTextAlpha
+                                      : unselectedTextAlpha,
+                                )
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(
+                                  alpha: !isVideoModeSelected
+                                      ? selectedTextAlpha
+                                      : unselectedTextAlpha,
+                                ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: !isVideoModeSelected
-                      ? () =>
-                            unawaited(_toggleVideoModeForItem(currentMediaItem))
-                      : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
+                  Expanded(
+                    child: InkWell(
                       borderRadius: BorderRadius.circular(999),
-                      color: isVideoModeSelected
-                          ? Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.10)
-                          : Colors.transparent,
-                    ),
-                    child: Icon(
-                      Icons.smart_display_rounded,
-                      size: 20,
-                      color: Theme.of(context).colorScheme.onSurface.withValues(
-                        alpha: isVideoModeSelected
-                            ? selectedTextAlpha
-                            : unselectedTextAlpha,
+                      onTap: !isVideoModeSelected
+                          ? () => unawaited(
+                              _toggleVideoModeForItem(currentMediaItem),
+                            )
+                          : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOut,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          color: isVideoModeSelected
+                              ? (useTransparentPlayerChrome
+                                    ? Colors.white.withValues(alpha: 0.25)
+                                    : Theme.of(context).colorScheme.onSurface
+                                          .withValues(alpha: 0.10))
+                              : Colors.transparent,
+                        ),
+                        child: Icon(
+                          Icons.smart_display_rounded,
+                          size: 20,
+                          color: useTransparentPlayerChrome
+                              ? Colors.white.withValues(
+                                  alpha: isVideoModeSelected
+                                      ? selectedTextAlpha
+                                      : unselectedTextAlpha,
+                                )
+                              : Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(
+                                  alpha: isVideoModeSelected
+                                      ? selectedTextAlpha
+                                      : unselectedTextAlpha,
+                                ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
@@ -5190,6 +5244,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           mainAxisSize: MainAxisSize.max,
                                           children: [
                                             Stack(
+                                              key: _artworkAreaKey,
                                               alignment: Alignment.center,
                                               clipBehavior: Clip.none,
                                               children: [
@@ -5436,7 +5491,31 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                             isFullScreen,
                                                                             child,
                                                                           ) {
+                                                                            final colorScheme =
+                                                                                colorSchemeNotifier.value;
+                                                                            final isAmoled =
+                                                                                colorScheme ==
+                                                                                AppColorScheme.amoled;
+                                                                            final isDark =
+                                                                                Theme.of(
+                                                                                  context,
+                                                                                ).brightness ==
+                                                                                Brightness.dark;
+                                                                            final useArtworkBg =
+                                                                                useArtworkAsBackgroundPlayerNotifier.value;
+                                                                            final forceBlackBackgroundForVideo =
+                                                                                isVideoModeActive &&
+                                                                                (isDark ||
+                                                                                    isAmoled);
+                                                                            final showBackground =
+                                                                                isAmoled &&
+                                                                                isDark &&
+                                                                                (useArtworkBg ||
+                                                                                    isFullScreen) &&
+                                                                                !forceBlackBackgroundForVideo;
+
                                                                             if (isFullScreen &&
+                                                                                showBackground &&
                                                                                 !isVideoModeActive) {
                                                                               return SizedBox(
                                                                                 width: artworkSize,
@@ -7969,9 +8048,27 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       gestureWidget = Listener(
         onPointerDown: (event) {
           _dragStartY = event.position.dy;
+          _dragStartedInArtwork = false;
+          if (_showLyrics) {
+            final RenderBox? renderBox =
+                _artworkAreaKey.currentContext?.findRenderObject()
+                    as RenderBox?;
+            if (renderBox != null) {
+              final offset = renderBox.localToGlobal(Offset.zero);
+              final bounds = offset & renderBox.size;
+              if (bounds.contains(event.position)) {
+                _dragStartedInArtwork = true;
+              }
+            }
+          }
         },
         onPointerUp: (event) {
           if (_dragStartY != null) {
+            if (_dragStartedInArtwork) {
+              _dragStartY = null;
+              _dragStartedInArtwork = false;
+              return;
+            }
             // Ignorar si empezó cerca del borde inferior (gesto del sistema)
             if (_dragStartY! > MediaQuery.of(context).size.height - 50) {
               _dragStartY = null;
@@ -7992,6 +8089,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               }
             }
             _dragStartY = null;
+            _dragStartedInArtwork = false;
           }
         },
         child: streamContent,
@@ -8000,8 +8098,22 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       gestureWidget = GestureDetector(
         onVerticalDragStart: (details) {
           _dragStartY = details.globalPosition.dy;
+          _dragStartedInArtwork = false;
+          if (_showLyrics) {
+            final RenderBox? renderBox =
+                _artworkAreaKey.currentContext?.findRenderObject()
+                    as RenderBox?;
+            if (renderBox != null) {
+              final offset = renderBox.localToGlobal(Offset.zero);
+              final bounds = offset & renderBox.size;
+              if (bounds.contains(details.globalPosition)) {
+                _dragStartedInArtwork = true;
+              }
+            }
+          }
         },
         onVerticalDragUpdate: (details) {
+          if (_dragStartedInArtwork) return;
           if (_dragStartY != null &&
               _dragStartY! > MediaQuery.of(context).size.height - 50) {
             return;
@@ -8019,6 +8131,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               }
             }
           }
+        },
+        onVerticalDragEnd: (_) {
+          _dragStartedInArtwork = false;
+        },
+        onVerticalDragCancel: () {
+          _dragStartedInArtwork = false;
         },
         child: streamContent,
       );

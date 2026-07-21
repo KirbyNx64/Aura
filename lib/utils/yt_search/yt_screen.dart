@@ -135,10 +135,7 @@ String? _normalizeYtVideoType(String? raw) {
   return value.toUpperCase();
 }
 
-Map<String, dynamic> _ytTypePayload({
-  String? resultType,
-  String? videoType,
-}) {
+Map<String, dynamic> _ytTypePayload({String? resultType, String? videoType}) {
   final normalizedResultType = _normalizeYtResultType(resultType);
   final normalizedVideoType = _normalizeYtVideoType(videoType);
   return <String, dynamic>{
@@ -1575,16 +1572,18 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       // Validar y normalizar el ID
       final validatedId = _validatePlaylistId(playlistId);
 
-      // Obtener información de la playlist
-      final playlistInfo = await getPlaylistInfo(validatedId);
+      // Obtener información de la playlist sin cookies de auth
+      // (evita cuelgues cuando hay sesión de Google activa)
+      final playlistInfo = await getPlaylistInfo(validatedId, useAuth: false);
       if (playlistInfo == null) {
         throw Exception('No se pudo obtener información de la playlist');
       }
 
-      // Obtener todas las canciones de la playlist usando el servicio existente (sin límite)
+      // Obtener todas las canciones sin cookies de auth
       final allSongs = await getPlaylistSongs(
         validatedId,
-      ); // Sin límite para obtener todas
+        useAuth: false,
+      );
 
       setState(() {
         _urlPlaylistTitle = playlistInfo['title'];
@@ -2917,10 +2916,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       'title': title,
       'artist': artist,
       'artUri': artUri,
-      ..._ytTypePayload(
-        resultType: item.resultType,
-        videoType: item.videoType,
-      ),
+      ..._ytTypePayload(resultType: item.resultType, videoType: item.videoType),
       if (item.durationMs != null && item.durationMs! > 0)
         'durationMs': item.durationMs,
       if (item.durationText != null && item.durationText!.trim().isNotEmpty)
