@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 2.1.1+4025
+version: 2.1.2+4026
 
 environment:
   sdk: ^3.11.5
@@ -24,16 +24,16 @@ dependencies:
   path_provider: ^2.1.6
   permission_handler: ^12.0.3
 # audio_info: ^0.0.3  # Temporalmente comentado por incompatibilidad con Java 17
-  share_plus: ^13.2.1
+  share_plus: ^13.3.0
   cross_file: ^0.3.4+2
-  connectivity_plus: ^7.3.0
+  connectivity_plus: ^7.3.1
   http: ^1.6.0
   youtube_explode_dart:
     git:
       url: https://github.com/anandnet/youtube_explode_dart.git
       ref: 1d9ec9baa806705b1d859260eeb389ec28c6b024
   file_selector: ^1.0.3
-  file_selector_android: ^0.5.2+4
+  file_selector_android: ^0.5.2+9
   audiotags:
     path: ./audiotags/audiotags
   url_launcher: ^6.3.2
@@ -49,7 +49,7 @@ dependencies:
   ota_update: ^7.1.0
   scroll_to_index: ^3.0.1
   mini_music_visualizer: ^1.1.4
-  flutter_local_notifications: ^22.0.1
+  flutter_local_notifications: ^22.1.0
   flutter_svg: ^2.3.0
   flutter_audio_toolkit: ^1.0.0
   fading_edge_scrollview: ^4.1.1
@@ -71,7 +71,7 @@ dependencies:
   sliding_up_panel: ^2.0.0+1
   open_settings_plus: ^0.5.0
   palette_generator_master: ^1.1.0
-  wakelock_plus: ^1.6.1
+  wakelock_plus: 1.6.1
   android_nav_setting: ^0.0.2+2
   material_new_shapes: ^1.0.0
   progress_indicator_m3e: ^0.1.1

@@ -1,9 +1,9 @@
 {
-  "version": "2.1.1",
+  "version": "2.1.2",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.1/AuraMusic-v2.1.1-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.1/AuraMusic-v2.1.1-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.1/AuraMusic-v2.1.1-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.2/AuraMusic-v2.1.2-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.2/AuraMusic-v2.1.2-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.1.2/AuraMusic-v2.1.2-x86_64.apk"
   },
-  "changelog": "• Mejoras visuales en la interfaz de la aplicación.\n\n• Actualización de dependencias a sus versiones más recientes."
+  "changelog": "• Se añadió la opción de mostrar el fondo de pantalla a pantalla completa.\n\n• Se corrigió un problema al buscar listas de reproducción.\n\n• Actualización de dependencias a sus versiones más recientes."
 }
