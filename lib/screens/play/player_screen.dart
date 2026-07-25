@@ -4612,12 +4612,20 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   }
 
   // Construye el fondo con la carátula para el tema AMOLED
-  Widget? _buildAmoledBackground(MediaItem? mediaItem) {
+  // [omitFullscreenGradients]: cuando es true, no incluir los gradientes en el fullscreen
+  // para que puedan manejarse dinámicamente desde fuera del cache.
+  Widget? _buildAmoledBackground(
+    MediaItem? mediaItem, {
+    bool omitFullscreenGradients = false,
+  }) {
     if (mediaItem == null) return null;
 
     // Verificar si podemos usar el cache
+    // El cache key incluye el flag de gradientes para invalidar al cambiar entre modos
     final songId = (mediaItem.extras?['songId'] ?? mediaItem.id).toString();
-    if (_cachedBackgroundSongId == songId && _cachedAmoledBackground != null) {
+    final cacheKey = omitFullscreenGradients ? '${songId}_nofsgr' : songId;
+    if (_cachedBackgroundSongId == cacheKey &&
+        _cachedAmoledBackground != null) {
       return _cachedAmoledBackground;
     }
 
@@ -4668,11 +4676,12 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
       _cachedBlurredImageSongId = null;
       return null;
     }
+    // cacheKey ya calculado arriba; usarlo directamente para el widget
 
     final isFullScreenArtwork = artworkFullScreenNotifier.value;
     if (isFullScreenArtwork) {
       final backgroundWidget = RepaintBoundary(
-        key: ValueKey('amoled_bg_fs_$songId'),
+        key: ValueKey('amoled_bg_fs_$cacheKey'),
         child: Stack(
           children: [
             Positioned.fill(
@@ -4685,51 +4694,54 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                     const SizedBox.shrink(),
               ),
             ),
-            // Gradiente oscuro en la barra de estado y AppBar para mayor legibilidad
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: 120,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.65),
-                      Colors.transparent,
-                    ],
+            // Gradientes estáticos (negro) — solo se incluyen cuando NO hay color dinámico
+            if (!omitFullscreenGradients) ...[
+              // Gradiente oscuro en la barra de estado y AppBar para mayor legibilidad
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 120,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.65),
+                        Colors.transparent,
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: 400,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.95),
-                      Colors.black.withValues(alpha: 0.70),
-                      Colors.black.withValues(alpha: 0.35),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.4, 0.8, 1.0],
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 400,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.95),
+                        Colors.black.withValues(alpha: 0.70),
+                        Colors.black.withValues(alpha: 0.35),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.4, 0.8, 1.0],
+                    ),
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       );
       _cachedAmoledBackground = backgroundWidget;
-      _cachedBackgroundSongId = songId;
+      _cachedBackgroundSongId = cacheKey;
       return backgroundWidget;
     }
 
@@ -4806,7 +4818,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     // Guardar en cache
     _cachedAmoledBackground = backgroundWidget;
-    _cachedBackgroundSongId = songId;
+    _cachedBackgroundSongId = cacheKey;
 
     return backgroundWidget;
   }
@@ -4982,13 +4994,17 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           child:
                                               _buildAmoledBackground(
                                                 currentMediaItem,
+                                                omitFullscreenGradients:
+                                                    showDynamicBg,
                                               ) ??
                                               const SizedBox.shrink(
                                                 key: ValueKey('empty_bg'),
                                               ),
                                         ),
                                       ),
-                                    if (showDynamicBg)
+                                    // Capa de color dinámico como fondo:
+                                    // Solo cuando NO hay carátula de fondo (es el propio fondo en ese caso)
+                                    if (showDynamicBg && !showBackground)
                                       ValueListenableBuilder<Color?>(
                                         valueListenable: ThemeController
                                             .instance
@@ -5007,24 +5023,121 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                           );
                                         },
                                       ),
-                                    // Gradiente inferior para mejorar legibilidad (común para ambos fondos)
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.bottomCenter,
-                                            end: Alignment.topCenter,
-                                            colors: [
-                                              Colors.black.withValues(
-                                                alpha: 0.65,
-                                              ),
-                                              Colors.transparent,
-                                            ],
-                                            stops: const [0.0, 0.7],
+                                    // Gradiente para mejorar legibilidad:
+                                    // - Fullscreen + color dinámico: usa el color dominante de la carátula
+                                    // - Normal (blur) o sin color dinámico: siempre negro
+                                    if (showDynamicBg &&
+                                        artworkFullScreenNotifier.value)
+                                      ValueListenableBuilder<Color?>(
+                                        valueListenable: ThemeController
+                                            .instance
+                                            .dominantColor,
+                                        builder: (context, domColor, _) {
+                                          // Oscurecer el color dominante para mayor contraste
+                                          final baseColor =
+                                              normalizePaletteColor(
+                                                domColor ?? Colors.black,
+                                              );
+                                          final targetColor = Color.lerp(
+                                            baseColor,
+                                            Colors.black,
+                                            0.75,
+                                          )!;
+                                          // Animar la transición de color suavemente al cambiar de canción
+                                          return TweenAnimationBuilder<Color?>(
+                                            tween: ColorTween(end: targetColor),
+                                            duration: const Duration(
+                                              milliseconds: 400,
+                                            ),
+                                            curve: Curves.easeInOut,
+                                            builder: (context, gradColor, _) {
+                                              final c =
+                                                  gradColor ?? targetColor;
+                                              return Stack(
+                                                children: [
+                                                  // Gradiente superior
+                                                  Positioned(
+                                                    top: 0,
+                                                    left: 0,
+                                                    right: 0,
+                                                    height: 120,
+                                                    child: Container(
+                                                      decoration: BoxDecoration(
+                                                        gradient: LinearGradient(
+                                                          begin: Alignment
+                                                              .topCenter,
+                                                          end: Alignment
+                                                              .bottomCenter,
+                                                          colors: [
+                                                            c.withValues(
+                                                              alpha: 0.65,
+                                                            ),
+                                                            Colors.transparent,
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  // Gradiente inferior — altura reducida hasta la barra de progreso
+                                                  Positioned(
+                                                    bottom: 0,
+                                                    left: 0,
+                                                    right: 0,
+                                                    height: 540,
+                                                    child: Container(
+                                                      decoration: BoxDecoration(
+                                                        gradient: LinearGradient(
+                                                          begin: Alignment
+                                                              .bottomCenter,
+                                                          end: Alignment
+                                                              .topCenter,
+                                                          colors: [
+                                                            c.withValues(
+                                                              alpha: 0.95,
+                                                            ),
+                                                            c.withValues(
+                                                              alpha: 0.70,
+                                                            ),
+                                                            c.withValues(
+                                                              alpha: 0.20,
+                                                            ),
+                                                            Colors.transparent,
+                                                          ],
+                                                          stops: const [
+                                                            0.0,
+                                                            0.6,
+                                                            0.8,
+                                                            1.0,
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          );
+                                        },
+                                      )
+                                    else
+                                      // Modo normal (blur) o color dinámico desactivado: gradiente negro
+                                      Positioned.fill(
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              begin: Alignment.bottomCenter,
+                                              end: Alignment.topCenter,
+                                              colors: [
+                                                Colors.black.withValues(
+                                                  alpha: 0.65,
+                                                ),
+                                                Colors.transparent,
+                                              ],
+                                              stops: const [0.0, 0.7],
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               );
