@@ -16,7 +16,7 @@ class EnhancedStreamCacheService {
   /// Obtiene la mejor URL de audio para previews (compatible con StreamService)
   static Future<String?> getBestAudioUrl(String videoId) async {
     await _initCache();
-    
+
     // Primero intentar obtener del cache persistente
     final cachedStream = await _cacheDB!.getValidatedStream(videoId);
     if (cachedStream != null) {
@@ -34,7 +34,7 @@ class EnhancedStreamCacheService {
       // print('✅ [CACHE] URL: ${streamInfo['url']}');
       // print('✅ [CACHE] Codec: ${streamInfo['codec']}');
       // print('✅ [CACHE] Bitrate: ${streamInfo['bitrate']} bps');
-      
+
       // Guardar en cache persistente
       await _cacheDB!.saveStream(
         videoId: videoId,
@@ -46,12 +46,12 @@ class EnhancedStreamCacheService {
         duration: streamInfo['duration'],
         loudnessDb: streamInfo['loudnessDb'],
       );
-      
+
       // print('💾 [CACHE] Stream guardado en la base de datos');
-      
+
       // También actualizar cache en memoria para acceso rápido
       _urlCache[videoId] = streamInfo['url'];
-      
+
       return streamInfo['url'];
     }
 
@@ -62,7 +62,7 @@ class EnhancedStreamCacheService {
   /// Obtiene información completa del stream para descargas (compatible con StreamProvider)
   static Future<StreamProvider?> getStreamProvider(String videoId) async {
     await _initCache();
-    
+
     // Primero intentar obtener del cache persistente
     final cachedStream = await _cacheDB!.getValidatedStream(videoId);
     if (cachedStream != null) {
@@ -80,17 +80,18 @@ class EnhancedStreamCacheService {
     if (streamProvider != null && streamProvider.audioFormats != null) {
       // print('✅ [CACHE] Nuevo StreamProvider generado exitosamente');
       // print('✅ [CACHE] Formatos disponibles: ${streamProvider.audioFormats!.length}');
-      
+
       // Guardar en cache persistente
-      final bestAudio = streamProvider.highestBitrateMp4aAudio ?? 
-                       streamProvider.highestBitrateOpusAudio;
-      
+      final bestAudio =
+          streamProvider.highestBitrateMp4aAudio ??
+          streamProvider.highestBitrateOpusAudio;
+
       if (bestAudio != null) {
         // print('💾 [CACHE] Guardando mejor audio en la DB');
         // print('💾 [CACHE] Codec: ${bestAudio.audioCodec}');
         // print('💾 [CACHE] Bitrate: ${bestAudio.bitrate} bps');
         // print('💾 [CACHE] Tamaño: ${bestAudio.size} bytes');
-        
+
         await _cacheDB!.saveStream(
           videoId: videoId,
           streamUrl: bestAudio.url,
@@ -101,7 +102,7 @@ class EnhancedStreamCacheService {
           duration: bestAudio.duration,
           loudnessDb: bestAudio.loudnessDb,
         );
-        
+
         // print('💾 [CACHE] StreamProvider guardado en la base de datos');
       }
     } else {
@@ -112,17 +113,24 @@ class EnhancedStreamCacheService {
   }
 
   /// Obtiene información completa del mejor stream de audio
-  static Future<Map<String, dynamic>?> _getBestAudioStreamInfo(String videoId) async {
+  static Future<Map<String, dynamic>?> _getBestAudioStreamInfo(
+    String videoId,
+  ) async {
     final yt = YoutubeExplode();
     try {
       final manifest = await yt.videos.streamsClient.getManifest(videoId);
-      final audio = manifest.audioOnly
-        .where((s) => s.codec.mimeType == 'audio/mp4' || s.codec.toString().contains('mp4a'))
-        .toList()
-        ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
-      
+      final audio =
+          manifest.audioOnly
+              .where(
+                (s) =>
+                    s.codec.mimeType == 'audio/mp4' ||
+                    s.codec.toString().contains('mp4a'),
+              )
+              .toList()
+            ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
+
       if (audio.isEmpty) return null;
-      
+
       final bestAudio = audio.first;
       return {
         'url': bestAudio.url.toString(),
@@ -130,8 +138,9 @@ class EnhancedStreamCacheService {
         'codec': bestAudio.codec.toString(),
         'bitrate': bestAudio.bitrate.bitsPerSecond,
         'size': bestAudio.size.totalBytes,
-        'duration': bestAudio.duration,
-        'loudnessDb': 0.0, // YouTube no proporciona esta información directamente
+        'duration': null,
+        'loudnessDb':
+            0.0, // YouTube no proporciona esta información directamente
       };
     } catch (_) {
       return null;
@@ -141,7 +150,9 @@ class EnhancedStreamCacheService {
   }
 
   /// Obtiene StreamProvider desde YouTube
-  static Future<StreamProvider?> _getStreamProviderFromYouTube(String videoId) async {
+  static Future<StreamProvider?> _getStreamProviderFromYouTube(
+    String videoId,
+  ) async {
     final yt = YoutubeExplode();
     try {
       final manifest = await yt.videos.streamsClient.getManifest(videoId);
@@ -227,20 +238,23 @@ class EnhancedStreamCacheService {
   static Future<String?> refreshStream(String videoId) async {
     // Invalidar el stream actual
     await invalidateStream(videoId);
-    
+
     // Obtener nuevo stream
     return await getBestAudioUrl(videoId);
   }
 
   /// Configura el tiempo de expiración personalizado para un stream
-  static Future<void> setStreamExpiration(String videoId, Duration expiration) async {
+  static Future<void> setStreamExpiration(
+    String videoId,
+    Duration expiration,
+  ) async {
     await _initCache();
-    
+
     final cached = await _cacheDB!.getStream(videoId);
     if (cached != null) {
       // Invalidar el actual
       await _cacheDB!.invalidateStream(videoId);
-      
+
       // Guardar con nueva expiración
       await _cacheDB!.saveStream(
         videoId: videoId,

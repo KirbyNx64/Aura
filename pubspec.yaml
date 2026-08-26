@@ -1,7 +1,7 @@
 name: music
 description: "A new Flutter project."
 publish_to: 'none'
-version: 2.1.2+4026
+version: 2.2.0+4027
 
 environment:
   sdk: ^3.11.5
@@ -30,8 +30,8 @@ dependencies:
   http: ^1.6.0
   youtube_explode_dart:
     git:
-      url: https://github.com/anandnet/youtube_explode_dart.git
-      ref: 1d9ec9baa806705b1d859260eeb389ec28c6b024
+      url: https://github.com/justacalico/youtube_explode_dart.git
+      ref: fix-386-and-page-parsing
   file_selector: ^1.0.3
   file_selector_android: ^0.5.2+9
   audiotags:

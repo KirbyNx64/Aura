@@ -133,7 +133,7 @@ Future<Map<String, dynamic>?> _resolveBestAudioStreamInfoInIsolate(
       'codec': bestAudio.codec.toString(),
       'bitrate': bestAudio.bitrate.bitsPerSecond,
       'size': bestAudio.size.totalBytes,
-      'duration': bestAudio.duration,
+      'duration': null,
       'loudnessDb': 0.0,
     };
   } on SocketException catch (e) {
@@ -823,7 +823,9 @@ class StreamService {
         if (_isVideoResolveCancelled(requestGeneration)) return null;
         _videoLog('getBestVideoUrl:error videoId=$normalizedVideoId error=$e');
         if (_shouldRecreateClient(e)) {
-          _videoLog('getBestVideoUrl:recreate_client videoId=$normalizedVideoId');
+          _videoLog(
+            'getBestVideoUrl:recreate_client videoId=$normalizedVideoId',
+          );
           _recreateYoutubeExplode();
           try {
             final resolved = await resolveOnce();

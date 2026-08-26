@@ -1436,7 +1436,7 @@ class _DownloadScreenState extends State<DownloadScreen>
     int maxIntentos = 10,
   }) async {
     for (int intento = 1; intento <= maxIntentos; intento++) {
-      final yt = YoutubeExplode(YoutubeHttpClient());
+      final yt = YoutubeExplode();
 
       try {
         final video = await yt.videos.get(url);

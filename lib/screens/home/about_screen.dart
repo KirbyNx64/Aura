@@ -365,7 +365,7 @@ class AboutScreen extends StatelessWidget {
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(4)),
                     ),
-                    onTap: () => _launchUrl('https://t.me/kirby_limon'),
+                    onTap: () => _launchUrl('https://t.me/kirbynx'),
                     leading: _buildCircleIcon(
                       context,
                       Icons.telegram,
@@ -552,7 +552,7 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
                     subtitle: Text(
-                      '3.44.6 • stable • Dart 3.12.2 • Compiled with Ubuntu 26.04 7.0.0-28-generic',
+                      '3.47.1 • stable • Dart 3.13.1 • Compiled with Ubuntu 26.04 7.0.0-39-generic',
                       style: TextStyle(
                         fontSize: 13,
                         color: Theme.of(
