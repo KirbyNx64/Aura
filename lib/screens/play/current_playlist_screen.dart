@@ -541,7 +541,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                                           MediaQuery.of(
                                                             context,
                                                           ).size.width -
-                                                          160,
+                                                          150,
                                                       style: const TextStyle(
                                                         fontSize: 16,
                                                         fontWeight:
@@ -571,7 +571,7 @@ class _CurrentPlaylistScreenState extends State<CurrentPlaylistScreen>
                                                   ],
                                                 ),
                                               ),
-                                              const SizedBox(width: 12),
+                                              const SizedBox(width: 2),
                                               // Botón de play/pause
                                               StreamBuilder<PlaybackState>(
                                                 stream:

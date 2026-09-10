@@ -56,7 +56,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'share_plus': _DependencyInfo(
       'https://pub.dev/packages/share_plus',
-      '^13.2.1',
+      '^13.3.0',
     ),
     'cross_file': _DependencyInfo(
       'https://pub.dev/packages/cross_file',
@@ -64,12 +64,12 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'connectivity_plus': _DependencyInfo(
       'https://pub.dev/packages/connectivity_plus',
-      '^7.3.0',
+      '^7.3.1',
     ),
     'http': _DependencyInfo('https://pub.dev/packages/http', '^1.6.0'),
     'youtube_explode_dart': _DependencyInfo(
-      'https://github.com/anandnet/youtube_explode_dart',
-      'git: 1d9ec9baa80',
+      'https://github.com/justacalico/youtube_explode_dart',
+      'git: fix-386-and-page-parsing',
     ),
     'file_selector': _DependencyInfo(
       'https://pub.dev/packages/file_selector',
@@ -77,7 +77,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'file_selector_android': _DependencyInfo(
       'https://pub.dev/packages/file_selector_android',
-      '^0.5.2+4',
+      '^0.5.2+9',
     ),
     'audiotags': _DependencyInfo(
       'https://pub.dev/packages/audiotags',
@@ -102,7 +102,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'smooth_page_indicator': _DependencyInfo(
       'https://pub.dev/packages/smooth_page_indicator',
-      '^2.0.1',
+      '^3.0.0',
     ),
     'carousel_slider': _DependencyInfo(
       'https://pub.dev/packages/carousel_slider',
@@ -134,7 +134,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'flutter_local_notifications': _DependencyInfo(
       'https://pub.dev/packages/flutter_local_notifications',
-      '^22.0.1',
+      '^22.1.0',
     ),
     'flutter_svg': _DependencyInfo(
       'https://pub.dev/packages/flutter_svg',
@@ -180,7 +180,7 @@ class DependenciesScreen extends StatelessWidget {
       'https://pub.dev/packages/media_kit_libs_android_video',
       'any',
     ),
-    'image': _DependencyInfo('https://pub.dev/packages/image', '^4.8.0'),
+    'image': _DependencyInfo('https://pub.dev/packages/image', '^4.9.2'),
     'cached_network_image': _DependencyInfo(
       'https://pub.dev/packages/cached_network_image',
       '^3.4.1',
@@ -208,7 +208,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'open_settings_plus': _DependencyInfo(
       'https://pub.dev/packages/open_settings_plus',
-      '^0.5.0',
+      '^0.5.1',
     ),
     'palette_generator_master': _DependencyInfo(
       'https://pub.dev/packages/palette_generator_master',
@@ -216,7 +216,7 @@ class DependenciesScreen extends StatelessWidget {
     ),
     'wakelock_plus': _DependencyInfo(
       'https://pub.dev/packages/wakelock_plus',
-      '^1.6.1',
+      '1.8.0',
     ),
     'android_nav_setting': _DependencyInfo(
       'https://pub.dev/packages/android_nav_setting',

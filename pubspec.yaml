@@ -41,7 +41,7 @@ dependencies:
   device_info_plus: ^13.2.0
   dio: ^5.10.0
   open_file: ^4.0.0
-  smooth_page_indicator: ^2.0.1
+  smooth_page_indicator: ^3.0.0
   carousel_slider: ^5.1.2
   flutter_inappwebview: ^6.1.5
   android_intent_plus: ^6.0.0
@@ -61,7 +61,7 @@ dependencies:
   video_player: ^2.13.0
   video_player_media_kit: ^2.0.0
   media_kit_libs_android_video: any
-  image: ^4.8.0
+  image: ^4.9.2
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.4.1
   crypto: ^3.0.7
@@ -69,9 +69,9 @@ dependencies:
   flutter_m3shapes: ^1.0.0+2
   material_symbols_icons: ^4.2928.1
   sliding_up_panel: ^2.0.0+1
-  open_settings_plus: ^0.5.0
+  open_settings_plus: ^0.5.1
   palette_generator_master: ^1.1.0
-  wakelock_plus: 1.6.1
+  wakelock_plus: 1.8.0
   android_nav_setting: ^0.0.2+2
   material_new_shapes: ^1.0.0
   progress_indicator_m3e: ^0.1.1

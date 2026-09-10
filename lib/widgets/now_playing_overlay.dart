@@ -872,100 +872,98 @@ class _NowPlayingOverlayState extends State<NowPlayingOverlay> {
                                                     child: ValueListenableBuilder<bool>(
                                                       valueListenable:
                                                           _isPlayingNotifier,
-                                                      builder: (context, isPlaying, child) {
-                                                        return ValueListenableBuilder<
-                                                          AppColorScheme
-                                                        >(
-                                                          valueListenable:
-                                                              colorSchemeNotifier,
-                                                          builder:
-                                                              (
-                                                                context,
-                                                                colorScheme,
-                                                                child,
-                                                              ) {
-                                                                return ScaleAnimatedButton(
-                                                                  onTap: () {
-                                                                    // Actualizar el estado inmediatamente para mejor UX
-                                                                    _isPlayingNotifier
-                                                                            .value =
-                                                                        !isPlaying;
+                                                      builder:
+                                                          (
+                                                            context,
+                                                            isPlaying,
+                                                            child,
+                                                          ) {
+                                                            return ValueListenableBuilder<
+                                                              AppColorScheme
+                                                            >(
+                                                              valueListenable:
+                                                                  colorSchemeNotifier,
+                                                              builder:
+                                                                  (
+                                                                    context,
+                                                                    colorScheme,
+                                                                    child,
+                                                                  ) {
+                                                                    return ScaleAnimatedButton(
+                                                                      onTap: () {
+                                                                        // Actualizar el estado inmediatamente para mejor UX
+                                                                        _isPlayingNotifier.value =
+                                                                            !isPlaying;
 
-                                                                    // Ejecutar la acción de audio de forma asíncrona para no bloquear la UI
-                                                                    Future.microtask(() {
-                                                                      if (isPlaying) {
-                                                                        audioHandler
-                                                                            ?.pause();
-                                                                      } else {
-                                                                        audioHandler
-                                                                            ?.play();
-                                                                      }
-                                                                    });
-                                                                  },
-                                                                  child:
-                                                                      showBackground
-                                                                      ? SizedBox(
-                                                                          width:
-                                                                              40,
-                                                                          height:
-                                                                              40,
-                                                                          child: CustomPaint(
-                                                                            painter: _HolePunchPainter(
-                                                                              color: Colors.white,
-                                                                              radius: 20,
-                                                                              icon: isPlaying
-                                                                                  ? Icons.pause_rounded
-                                                                                  : Icons.play_arrow_rounded,
-                                                                              iconSize: 28,
-                                                                            ),
-                                                                          ),
-                                                                        )
-                                                                      : Container(
-                                                                          width:
-                                                                              40,
-                                                                          height:
-                                                                              40,
-                                                                          decoration: BoxDecoration(
-                                                                            color:
-                                                                                colorScheme ==
-                                                                                    AppColorScheme.amoled
-                                                                                ? Colors.white
-                                                                                : Theme.of(
-                                                                                    context,
-                                                                                  ).colorScheme.primary,
-                                                                            borderRadius: BorderRadius.circular(
-                                                                              20,
-                                                                            ),
-                                                                          ),
-                                                                          child: Center(
-                                                                            child: Icon(
-                                                                              isPlaying
-                                                                                  ? Icons.pause_rounded
-                                                                                  : Icons.play_arrow_rounded,
-                                                                              grade: 200,
-                                                                              size: 28,
-                                                                              fill: 1,
-                                                                              color:
-                                                                                  colorScheme ==
-                                                                                      AppColorScheme.amoled
-                                                                                  ? Colors.black
-                                                                                  : Theme.of(
+                                                                        // Ejecutar la acción de audio de forma asíncrona para no bloquear la UI
+                                                                        Future.microtask(() {
+                                                                          if (isPlaying) {
+                                                                            audioHandler?.pause();
+                                                                          } else {
+                                                                            audioHandler?.play();
+                                                                          }
+                                                                        });
+                                                                      },
+                                                                      child:
+                                                                          showBackground
+                                                                          ? SizedBox(
+                                                                              width: 40,
+                                                                              height: 40,
+                                                                              child: CustomPaint(
+                                                                                painter: _HolePunchPainter(
+                                                                                  color: Colors.white,
+                                                                                  radius: 20,
+                                                                                  icon: isPlaying
+                                                                                      ? Icons.pause_rounded
+                                                                                      : Icons.play_arrow_rounded,
+                                                                                  iconSize: 28,
+                                                                                ),
+                                                                              ),
+                                                                            )
+                                                                          : Container(
+                                                                              width: 40,
+                                                                              height: 40,
+                                                                              decoration: BoxDecoration(
+                                                                                color:
+                                                                                    colorScheme ==
+                                                                                        AppColorScheme.amoled
+                                                                                    ? Colors.white
+                                                                                    : Theme.of(
+                                                                                        context,
+                                                                                      ).colorScheme.primary,
+                                                                                borderRadius: BorderRadius.circular(
+                                                                                  20,
+                                                                                ),
+                                                                              ),
+                                                                              child: Center(
+                                                                                child: Icon(
+                                                                                  isPlaying
+                                                                                      ? Icons.pause_rounded
+                                                                                      : Icons.play_arrow_rounded,
+                                                                                  grade: 200,
+                                                                                  size: 28,
+                                                                                  fill: 1,
+                                                                                  color:
+                                                                                      colorScheme ==
+                                                                                          AppColorScheme.amoled
+                                                                                      ? Colors.black
+                                                                                      : Theme.of(
+                                                                                              context,
+                                                                                            ).brightness ==
+                                                                                            Brightness.light
+                                                                                      ? Theme.of(
                                                                                           context,
-                                                                                        ).brightness ==
-                                                                                        Brightness.light
-                                                                                  ? Theme.of(
-                                                                                      context,
-                                                                                    ).colorScheme.secondaryContainer
-                                                                                  : Theme.of(
-                                                                                      context,
-                                                                                    ).colorScheme.onPrimary,
+                                                                                        ).colorScheme.secondaryContainer
+                                                                                      : Theme.of(
+                                                                                          context,
+                                                                                        ).colorScheme.onPrimary,
+                                                                                ),
+                                                                              ),
                                                                             ),
-                                                                          ),
-                                                                        ),
-                                                                );
-                                                              },
-                                                        );
-                                                      },
+                                                                    );
+                                                                  },
+                                                            );
+                                                          },
                                                     ),
                                                   ),
 
