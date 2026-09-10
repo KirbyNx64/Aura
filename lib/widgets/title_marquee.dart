@@ -67,9 +67,9 @@ class TitleMarquee extends StatelessWidget {
     } else {
       return SizedBox(
         height: height,
-        width: maxWidth,
         child: Align(
           alignment: Alignment.centerLeft,
+          widthFactor: 1.0,
           child: Text(
             text,
             style: safeStyle,

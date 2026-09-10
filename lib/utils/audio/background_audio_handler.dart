@@ -73,7 +73,7 @@ Future<AudioHandler> initAudioService() async {
               'Controles de reproducción de música',
           androidNotificationOngoing: true,
           androidNotificationClickStartsActivity: true,
-          androidStopForegroundOnPause: false,
+          // androidStopForegroundOnPause: false,
           androidResumeOnClick: true,
           preloadArtwork: true,
         ),
@@ -1740,6 +1740,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     int initialIndex = 0,
     bool autoPlay = false,
     bool resetShuffle = true,
+    bool cancelPreviousPlayback = true,
   }) async {
     return setQueueFromSongsWithPosition(
       songs,
@@ -1747,6 +1748,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       initialPosition: Duration.zero,
       autoPlay: autoPlay,
       resetShuffle: resetShuffle,
+      cancelPreviousPlayback: cancelPreviousPlayback,
     );
   }
 
@@ -1756,6 +1758,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     Duration initialPosition = Duration.zero,
     bool autoPlay = false,
     bool resetShuffle = true,
+    bool cancelPreviousPlayback = true,
   }) async {
     _deferredStreamingQueueMode = false;
     _deferredStreamingQueueIndex = 0;
@@ -1824,6 +1827,11 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     // Verificar si el handler está inicializado correctamente
     if (!_isInitialized) {
       await _init();
+    }
+
+    // Cancelar y pausar inmediatamente la reproducción previa al cambiar de cola
+    if (cancelPreviousPlayback) {
+      await _cancelPreviousPlaybackForNewQueue();
     }
 
     // Al cargar cola local, desactivar cualquier estado de radio streaming.
@@ -2084,6 +2092,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         extras: normalizedExtras,
       );
 
+      // Cancelar y pausar inmediatamente la reproducción previa
+      await _cancelPreviousPlaybackForNewQueue();
       _resetStreamingSessionState(clearQueuedVideos: true);
       // Asignar DESPUÉS del reset para que no se sobreescriban
       _deferredStreamingQueueMode = requestedRadioMode;
@@ -2443,6 +2453,37 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     if (clearQueuedVideos) {
       _streamQueuedVideoIds.clear();
       _streamArtworkFileCache.clear();
+    }
+  }
+
+  /// Pausa y cancela inmediatamente cualquier reproducción anterior
+  /// antes de comenzar una nueva lista o cola.
+  Future<void> _cancelPreviousPlaybackForNewQueue() async {
+    _resolveGeneration++;
+    StreamService.cancelPendingResolves(resetClient: false);
+    _pendingArtworkOperations.clear();
+    cancelAllArtworkLoads();
+    _preloadDebounceTimer?.cancel();
+    _isPreloadingNext = false;
+    _resetTracking();
+    _isSwappingSource = true;
+    try {
+      if (_player.playing) {
+        await _player.pause().timeout(
+          const Duration(milliseconds: 300),
+          onTimeout: () {},
+        );
+      }
+      if (_concat != null && _concat!.children.isNotEmpty) {
+        // ignore: deprecated_member_use
+        await _concat!.clear().timeout(
+          const Duration(milliseconds: 500),
+          onTimeout: () {},
+        );
+      }
+    } catch (_) {
+    } finally {
+      _isSwappingSource = false;
     }
   }
 
@@ -5225,6 +5266,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         initialIndex = 0;
       }
 
+      // Cancelar y pausar inmediatamente la reproducción anterior
+      await _cancelPreviousPlaybackForNewQueue();
       _resetStreamingSessionState(clearQueuedVideos: true);
 
       _deferredStreamingQueueMode = true;
@@ -5251,6 +5294,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       mediaItem.add(_mediaQueue[initialIndex]);
       _ensureTrackingForMediaItem(_mediaQueue[initialIndex]);
       unawaited(_syncFavoriteFlagForItem(_mediaQueue[initialIndex]));
+
+      playbackState.add(
+        playbackState.value.copyWith(
+          playing: false,
+          processingState: AudioProcessingState.loading,
+          queueIndex: initialIndex,
+          updatePosition: Duration.zero,
+        ),
+      );
 
       final shouldAutoPlay = extras?['autoPlay'] != false;
       _deferredAutoPlayDesired = shouldAutoPlay;

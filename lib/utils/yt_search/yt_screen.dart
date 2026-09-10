@@ -1580,10 +1580,7 @@ class _YtSearchTestScreenState extends State<YtSearchTestScreen>
       }
 
       // Obtener todas las canciones sin cookies de auth
-      final allSongs = await getPlaylistSongs(
-        validatedId,
-        useAuth: false,
-      );
+      final allSongs = await getPlaylistSongs(validatedId, useAuth: false);
 
       setState(() {
         _urlPlaylistTitle = playlistInfo['title'];
