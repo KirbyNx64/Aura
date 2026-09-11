@@ -142,6 +142,17 @@ const Map<String, String> appLocalizationsEn = {
   'audio_quality_streaming': 'Streaming audio quality',
   'audio_quality_streaming_desc':
       'Choose the audio quality when streaming music',
+  'stream_audio_cache': 'Streaming audio cache',
+  'stream_audio_cache_desc':
+      'Saves songs to disk while listening for instant playback next time without using data.',
+  'stream_audio_cache_limit': 'Audio cache limit',
+  'stream_audio_cache_no_limit': 'No limit',
+  'stream_audio_cache_disabled': 'Disabled',
+  'stream_audio_cache_used': '{used} of {limit}',
+  'stream_audio_cache_clear': 'Clear cache',
+  'stream_audio_cache_cleared': 'Cache cleared',
+  'stream_audio_cache_cleared_desc':
+      'All songs stored in the streaming cache have been deleted.',
   'audio_quality_high': 'High quality',
   'audio_quality_high_desc': 'Best available quality (larger size)',
   'audio_quality_streaming_high_desc': 'Best quality (higher bitrate)',

@@ -352,9 +352,9 @@ class _LyricsSearchScreenState extends State<LyricsSearchScreen>
           description: LocaleProvider.tr('lyrics_selected_desc'),
         );
 
-        // Cerrar la pantalla
+        // Cerrar la pantalla indicando que se aplicó la letra
         if (mounted) {
-          Navigator.of(context).pop(false);
+          Navigator.of(context).pop(true);
         }
       }
     } catch (e) {

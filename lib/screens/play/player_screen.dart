@@ -8406,10 +8406,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
               }
 
               return _panelContent == PanelContent.lyrics
-                  ? CurrentLyricsScreen(
-                      key: ValueKey('lyrics_$_lyricsResetCounter'),
-                      currentMediaItem: audioHandler?.mediaItem.valueOrNull,
-                      panelController: _playlistPanelController,
+                  ? StreamBuilder<MediaItem?>(
+                      stream: audioHandler?.mediaItem,
+                      initialData: audioHandler?.mediaItem.valueOrNull,
+                      builder: (context, mediaSnapshot) {
+                        return CurrentLyricsScreen(
+                          key: ValueKey('lyrics_$_lyricsResetCounter'),
+                          currentMediaItem: mediaSnapshot.data,
+                          panelController: _playlistPanelController,
+                        );
+                      },
                     )
                   : StreamBuilder<List<MediaItem>>(
                       stream: audioHandler?.queue,

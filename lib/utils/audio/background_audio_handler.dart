@@ -1,6 +1,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:music/utils/audio/streaming_audio_cache_manager.dart';
 import 'package:on_audio_query/on_audio_query.dart';
 import 'dart:io';
 import 'dart:async';
@@ -526,8 +527,86 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     required String videoId,
   }) async {
     final uri = Uri.parse(streamUrl);
+    try {
+      // Si el archivo ya está completamente en caché, reproducirlo directamente
+      // desde disco (sin red, instantáneo).
+      final canCache = await StreamingAudioCacheManager.shouldCache(videoId);
+      if (canCache) {
+        final cacheFile = await StreamingAudioCacheManager.getCacheFile(videoId);
+        if (cacheFile.existsSync() && cacheFile.lengthSync() > 0) {
+          _releaseLog(
+            'resolve:audio_source using cached file videoId=$videoId path=${cacheFile.path}',
+          );
+          unawaited(StreamingAudioCacheManager.evictIfNeeded());
+          return AudioSource.uri(Uri.file(cacheFile.path));
+        }
+      }
+    } catch (e) {
+      _releaseLog('resolve:audio_source cache_check_failed error=$e');
+    }
+    // Sin caché disponible: streaming directo.
+    // El background download se inicia con delay para no competir
+    // con el player durante el buffer inicial crítico.
     _releaseLog('resolve:audio_source using AudioSource.uri videoId=$videoId');
+    unawaited(_cacheStreamingAudio(streamUrl: streamUrl, videoId: videoId));
     return AudioSource.uri(uri);
+  }
+
+  /// Descarga y guarda el audio en caché en background mientras se reproduce.
+  ///
+  /// Espera [_cacheDownloadDelay] antes de iniciar para no competir con el
+  /// player durante el buffer inicial (TCP slow-start de YouTube).
+  static const Duration _cacheDownloadDelay = Duration(seconds: 20);
+
+  Future<void> _cacheStreamingAudio({
+    required String streamUrl,
+    required String videoId,
+  }) async {
+    await Future.delayed(_cacheDownloadDelay);
+    // Si el videoId ya no es el activo, cancelar.
+    final currentVideoId = _mediaQueue.isNotEmpty
+        ? (_mediaQueue[_deferredStreamingQueueIndex]
+                .extras?['videoId']
+                ?.toString()
+                .trim() ??
+            '')
+        : '';
+    if (currentVideoId != videoId) {
+      _releaseLog('resolve:audio_cache cancelled (song changed) videoId=$videoId');
+      return;
+    }
+    try {
+      final canCache = await StreamingAudioCacheManager.shouldCache(videoId);
+      if (!canCache) return;
+      final cacheFile = await StreamingAudioCacheManager.getCacheFile(videoId);
+      if (cacheFile.existsSync() && cacheFile.lengthSync() > 0) return;
+
+      final client = HttpClient();
+      final request = await client.getUrl(Uri.parse(streamUrl));
+      final response = await request.close();
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        client.close();
+        return;
+      }
+      final sink = cacheFile.openWrite();
+      await response.pipe(sink);
+      await sink.close();
+      client.close();
+
+      if (!cacheFile.existsSync() || cacheFile.lengthSync() == 0) {
+        try {
+          cacheFile.deleteSync();
+        } catch (_) {}
+        return;
+      }
+
+      unawaited(StreamingAudioCacheManager.evictIfNeeded());
+      _releaseLog(
+        'resolve:audio_cache saved videoId=$videoId size=${cacheFile.lengthSync()} bytes',
+      );
+    } catch (e) {
+      _releaseLog('resolve:audio_cache failed videoId=$videoId error=$e');
+    }
   }
 
   // Finalizar el AudioPlayer con AndroidLoudnessEnhancer
@@ -814,6 +893,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _isInitialized = true;
       _initRetryCount = 0;
       _releaseLog('init:done');
+      // Limpiar caché de audio en background al iniciar la app
+      unawaited(StreamingAudioCacheManager.evictIfNeeded());
       // Intentar restaurar sesión previa si no hay cola actual
       if (!_restoredSession && _mediaQueue.isEmpty) {
         final restoreEnabled =

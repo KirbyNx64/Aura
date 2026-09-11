@@ -197,8 +197,9 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
 
   void _onLyricsUpdated() {
     final updatedId = lyricsUpdatedNotifier.value;
-    if (updatedId != null && updatedId == _currentMediaItem?.id) {
-      _lyricsCache.remove(updatedId);
+    if (updatedId != null &&
+        (_currentMediaItem == null || updatedId == _currentMediaItem?.id)) {
+      _lyricsCache.clear();
       _loadLyrics();
     }
   }
@@ -215,6 +216,7 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
     if (widget.currentMediaItem?.id != oldWidget.currentMediaItem?.id) {
       _currentMediaItem = widget.currentMediaItem;
       if (_currentMediaItem != null) {
+        _lyricsCache.clear();
         _loadLyrics();
       }
     }
@@ -522,8 +524,7 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
                                   children: [
                                     IconButton(
                                       onPressed: () async {
-                                        // Close panel before navigating as requested
-                                        widget.panelController?.close();
+                                        if (_currentMediaItem == null) return;
 
                                         await Navigator.of(context).push(
                                           PageRouteBuilder(
@@ -567,11 +568,10 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
                                                 },
                                           ),
                                         );
-                                        // Reload lyrics after return?
-                                        _lyricsCache.remove(
-                                          _currentMediaItem?.id,
-                                        );
-                                        _loadLyrics(); // Force reload if changed
+                                        if (mounted) {
+                                          _lyricsCache.clear();
+                                          await _loadLyrics();
+                                        }
                                       },
                                       icon: const Icon(
                                         Icons.lyrics_outlined,
@@ -727,7 +727,27 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
 
     if (_parsedLyrics != null && _parsedLyrics!.isNotEmpty) {
       return _LyricsWithTranslationView(
+        key: ValueKey(
+          '${currentMediaItem.id}_${_parsedLyrics!.length}_${_parsedLyrics!.first.text.hashCode}',
+        ),
         lyricLines: _parsedLyrics!,
+        isAmoled: isAmoled,
+        isDark: isDark,
+        currentMediaItem: currentMediaItem,
+      );
+    }
+
+    final rawPlain = (result.data?.plainLyrics?.trim().isNotEmpty == true)
+        ? result.data!.plainLyrics!
+        : (result.data?.synced?.trim().isNotEmpty == true &&
+                (_parsedLyrics == null || _parsedLyrics!.isEmpty))
+            ? result.data!.synced!
+            : null;
+
+    if (rawPlain != null && rawPlain.trim().isNotEmpty) {
+      return _PlainLyricsWithTranslationView(
+        key: ValueKey('${currentMediaItem.id}_plain_${rawPlain.hashCode}'),
+        plainLyrics: rawPlain,
         isAmoled: isAmoled,
         isDark: isDark,
         currentMediaItem: currentMediaItem,
@@ -770,10 +790,7 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () async {
-              // Close panel before navigating as requested
-              widget.panelController?.close();
-
-              await Navigator.of(context).push(
+              await Navigator.of(context).push<bool>(
                 PageRouteBuilder(
                   pageBuilder: (context, animation, secondaryAnimation) =>
                       LyricsSearchScreen(currentSong: currentMediaItem),
@@ -793,8 +810,10 @@ class _CurrentLyricsScreenState extends State<CurrentLyricsScreen> {
                       },
                 ),
               );
-              _lyricsCache.remove(currentMediaItem.id);
-              _loadLyrics();
+              if (mounted) {
+                _lyricsCache.clear();
+                await _loadLyrics();
+              }
             },
             icon: const Icon(Icons.search_rounded),
             label: Text(LocaleProvider.tr('search_lyrics')),
@@ -820,6 +839,7 @@ class _LyricsWithTranslationView extends StatefulWidget {
   final MediaItem currentMediaItem;
 
   const _LyricsWithTranslationView({
+    super.key,
     required this.lyricLines,
     required this.isAmoled,
     required this.isDark,
@@ -839,6 +859,19 @@ class _LyricsWithTranslationViewState
 
   bool _isSelectionMode = false;
   final Set<int> _selectedIndices = {};
+
+  @override
+  void didUpdateWidget(_LyricsWithTranslationView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.lyricLines != oldWidget.lyricLines ||
+        widget.currentMediaItem.id != oldWidget.currentMediaItem.id) {
+      _showTranslation = false;
+      _isTranslating = false;
+      _translatedLines = null;
+      _isSelectionMode = false;
+      _selectedIndices.clear();
+    }
+  }
 
   void _onLineSelected(int index) {
     setState(() {
@@ -1088,6 +1121,17 @@ class _LyricsModalListViewState extends State<_LyricsModalListView>
     });
 
     _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void didUpdateWidget(_LyricsModalListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.lyricLines != oldWidget.lyricLines) {
+      _calculateCurrentLyricIndex();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentLyric();
+      });
+    }
   }
 
   void _onScroll() {
@@ -1716,6 +1760,312 @@ class _LyricShareWidget extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _PlainLyricsWithTranslationView extends StatefulWidget {
+  final String plainLyrics;
+  final bool isAmoled;
+  final bool isDark;
+  final MediaItem currentMediaItem;
+
+  const _PlainLyricsWithTranslationView({
+    super.key,
+    required this.plainLyrics,
+    required this.isAmoled,
+    required this.isDark,
+    required this.currentMediaItem,
+  });
+
+  @override
+  State<_PlainLyricsWithTranslationView> createState() =>
+      _PlainLyricsWithTranslationViewState();
+}
+
+class _PlainLyricsWithTranslationViewState
+    extends State<_PlainLyricsWithTranslationView> {
+  bool _showTranslation = false;
+  bool _isTranslating = false;
+  List<String>? _translatedLines;
+
+  bool _isSelectionMode = false;
+  final Set<int> _selectedIndices = {};
+
+  List<String> get _lines => widget.plainLyrics
+      .split('\n')
+      .map((e) => e.trimRight())
+      .toList();
+
+  @override
+  void didUpdateWidget(_PlainLyricsWithTranslationView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.plainLyrics != oldWidget.plainLyrics ||
+        widget.currentMediaItem.id != oldWidget.currentMediaItem.id) {
+      _showTranslation = false;
+      _isTranslating = false;
+      _translatedLines = null;
+      _isSelectionMode = false;
+      _selectedIndices.clear();
+    }
+  }
+
+  void _onLineSelected(int index) {
+    setState(() {
+      if (_selectedIndices.contains(index)) {
+        _selectedIndices.remove(index);
+      } else {
+        if (_selectedIndices.length < 5) {
+          _selectedIndices.add(index);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: Theme.of(context).colorScheme.onSurface,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              content: Text(
+                LocaleProvider.tr('max_lyrics_reached'),
+                style: TextStyle(color: Theme.of(context).colorScheme.surface),
+              ),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _isSelectionMode = !_isSelectionMode;
+      if (!_isSelectionMode) {
+        _selectedIndices.clear();
+      }
+    });
+  }
+
+  Future<void> _shareLyrics() async {
+    if (_selectedIndices.isEmpty) return;
+
+    final lines = _lines;
+    final sortedItems = _selectedIndices.toList()..sort();
+    final selectedLyrics = sortedItems
+        .where((i) => i < lines.length)
+        .map((i) => LyricLine(Duration.zero, lines[i]))
+        .toList();
+
+    showDialog(
+      context: context,
+      builder: (context) => _LyricShareDialog(
+        lyrics: selectedLyrics,
+        mediaItem: widget.currentMediaItem,
+      ),
+    );
+  }
+
+  Future<void> _toggleTranslation() async {
+    if (_showTranslation) {
+      setState(() {
+        _showTranslation = false;
+        _translatedLines = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _isTranslating = true;
+    });
+
+    try {
+      final targetLanguage = translationLanguageNotifier.value == 'auto'
+          ? Localizations.localeOf(context).languageCode
+          : translationLanguageNotifier.value;
+
+      final translator = GoogleTranslator();
+      final translation = await translator.translate(
+        widget.plainLyrics,
+        to: targetLanguage,
+      );
+
+      if (mounted) {
+        setState(() {
+          _translatedLines = translation.text.split('\n');
+          _showTranslation = true;
+          _isTranslating = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isTranslating = false;
+        });
+
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(LocaleProvider.tr('translation_error')),
+            content: Text(LocaleProvider.tr('check_internet_connection')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(LocaleProvider.tr('ok')),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = _lines;
+    final primaryColor = Theme.of(context).colorScheme.primary;
+
+    return Stack(
+      children: [
+        ValueListenableBuilder<bool>(
+          valueListenable: translationReplaceOriginalNotifier,
+          builder: (context, replaceOriginal, _) {
+            return ListView.builder(
+              padding: EdgeInsets.only(
+                top: 60,
+                bottom: MediaQuery.of(context).padding.bottom + 80,
+              ),
+              itemCount: lines.length,
+              itemBuilder: (context, index) {
+                final line = lines[index];
+                final isSelected = _selectedIndices.contains(index);
+
+                final textStyle = TextStyle(
+                  color: widget.isAmoled && widget.isDark
+                      ? Colors.white.withValues(alpha: 0.9)
+                      : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
+                  height: 1.4,
+                );
+
+                final hasTranslation = _showTranslation &&
+                    _translatedLines != null &&
+                    index < _translatedLines!.length;
+
+                return GestureDetector(
+                  onTap: _isSelectionMode ? () => _onLineSelected(index) : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: isSelected
+                          ? primaryColor.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: hasTranslation
+                        ? (replaceOriginal
+                            ? Text(
+                                _translatedLines![index],
+                                style: textStyle.copyWith(
+                                  color: primaryColor,
+                                ),
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    line,
+                                    style: textStyle.copyWith(
+                                      color: textStyle.color?.withValues(alpha: 0.6),
+                                      fontSize: 17,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _translatedLines![index],
+                                    style: textStyle.copyWith(
+                                      color: primaryColor,
+                                    ),
+                                  ),
+                                ],
+                              ))
+                        : Text(
+                            line.isEmpty ? ' ' : line,
+                            style: textStyle,
+                          ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+        if (!_isSelectionMode) ...[
+          Positioned(
+            right: 24,
+            bottom: 140,
+            child: FloatingActionButton.small(
+              heroTag: 'plain_lyric_selection_toggle_btn',
+              onPressed: _toggleSelectionMode,
+              tooltip: LocaleProvider.tr('share'),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              child: const Icon(Icons.share_rounded, size: 20),
+            ),
+          ),
+          Positioned(
+            right: 24,
+            bottom: 70,
+            child: FloatingActionButton(
+              heroTag: 'plain_lyric_translate_btn',
+              onPressed: _isTranslating ? null : _toggleTranslation,
+              tooltip: _showTranslation
+                  ? LocaleProvider.tr('hide_translation')
+                  : LocaleProvider.tr('translate_lyrics'),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              child: _isTranslating
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    )
+                  : Icon(_showTranslation ? Icons.close : Icons.translate),
+            ),
+          ),
+        ] else ...[
+          Positioned(
+            right: 24,
+            bottom: 140,
+            child: FloatingActionButton.small(
+              heroTag: 'plain_lyric_cancel_selection_btn',
+              onPressed: _toggleSelectionMode,
+              tooltip: LocaleProvider.tr('cancel'),
+              backgroundColor: Theme.of(context).colorScheme.errorContainer,
+              foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+              child: const Icon(Icons.close, size: 20),
+            ),
+          ),
+          Positioned(
+            right: 24,
+            bottom: 70,
+            child: FloatingActionButton(
+              heroTag: 'plain_lyric_confirm_share_btn',
+              onPressed: _selectedIndices.isEmpty ? null : _shareLyrics,
+              tooltip: LocaleProvider.tr('share'),
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              child: const Icon(Icons.check_rounded),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

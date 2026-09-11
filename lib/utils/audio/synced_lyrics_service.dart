@@ -106,10 +106,23 @@ class SyncedLyricsService {
     int? durInSec,
     bool forceReload = false,
   }) async {
+    // 1. Prioridad: Buscar en caché local (Hive) primero si no es recarga forzada
+    final lyricsBox = await box;
+    if (!forceReload) {
+      final existingLyrics = lyricsBox.get(song.id);
+      if (existingLyrics != null &&
+          ((existingLyrics.synced != null &&
+                  existingLyrics.synced!.trim().isNotEmpty) ||
+              (existingLyrics.plainLyrics != null &&
+                  existingLyrics.plainLyrics!.trim().isNotEmpty))) {
+        return LyricsResult(type: LyricsResultType.found, data: existingLyrics);
+      }
+    }
+
     final isSimpProvider =
         lyricsServiceProviderNotifier.value == LyricsServiceProvider.simpmusic;
 
-    // 1. Prioridad: Buscar si tenemos un videoId (en extras o en el historial de Hive)
+    // 2. Buscar si tenemos un videoId (en extras o en el historial de Hive)
     var videoId = song.extras?['videoId'];
     if (videoId == null || videoId.toString().isEmpty) {
       final historyItem = await DownloadHistoryHive.getDownloadByPath(song.id);
@@ -120,7 +133,7 @@ class SyncedLyricsService {
 
     final hasVideoId = videoId != null && videoId.toString().isNotEmpty;
 
-    // 2. Si hay videoId O el proveedor es SimpMusic, intentar con SimpMusicService
+    // 3. Si hay videoId O el proveedor es SimpMusic, intentar con SimpMusicService
     if (hasVideoId || isSimpProvider) {
       // print(
       //  'SyncedLyrics: Usando SimpMusic (Prioridad por VideoID: $hasVideoId, Proveedor: $isSimpProvider)',
@@ -142,15 +155,6 @@ class SyncedLyricsService {
       // print(
       //  'SyncedLyrics: SimpMusic no encontró letras por VideoID. Continuando con LRCLIB...',
       // );
-    }
-
-    // 3. Fallback/Original: Buscar en caché local y luego en LRCLIB
-    final lyricsBox = await box;
-    if (!forceReload) {
-      final existingLyrics = lyricsBox.get(song.id);
-      if (existingLyrics != null) {
-        return LyricsResult(type: LyricsResultType.found, data: existingLyrics);
-      }
     }
 
     // Continuar con LRCLIB como antes...

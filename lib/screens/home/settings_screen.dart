@@ -27,6 +27,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:music/utils/notifiers.dart';
 import 'package:music/utils/audio/synced_lyrics_service.dart';
+import 'package:music/utils/audio/streaming_audio_cache_manager.dart';
 import 'package:music/l10n/locale_provider.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:convert';
@@ -63,6 +64,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _artworkQuality = 410; // 80% por defecto
   int? _availableBytesAtDownloadDir;
   int? _totalBytesAtDownloadDir;
+  // Streaming audio cache state
+  int _streamCacheUsedBytes = 0;
+  int _streamCacheLimitMb = StreamingAudioCacheManager.defaultLimitMb;
   static const String _ytSessionStatusCacheKey =
       'settings_yt_auth_status_cache_v1';
   static const String _ytSessionAvatarCacheKey =
@@ -92,6 +96,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadArtworkBackgroundSetting();
     _loadArtworkFullScreenSetting();
     _bootstrapYtAuthState();
+    _loadStreamingCacheStats();
   }
 
   Future<void> _bootstrapYtAuthState() async {
@@ -2074,6 +2079,200 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  // ─── Streaming Audio Cache ───────────────────────────────────────────────
+
+  Future<void> _loadStreamingCacheStats() async {
+    final stats = await StreamingAudioCacheManager.getStats();
+    final limitMb = await StreamingAudioCacheManager.getLimitMb();
+    if (!mounted) return;
+    setState(() {
+      _streamCacheUsedBytes = stats.usedBytes;
+      _streamCacheLimitMb = limitMb;
+    });
+  }
+
+  String _streamCacheSubtitle() {
+    final used = StreamingAudioCacheManager.formatBytes(_streamCacheUsedBytes);
+    if (_streamCacheLimitMb == -1) {
+      return '$used · ${LocaleProvider.tr('stream_audio_cache_no_limit')}';
+    }
+    if (_streamCacheLimitMb == 0) {
+      return LocaleProvider.tr('stream_audio_cache_disabled');
+    }
+    final limit = StreamingAudioCacheManager.formatLimit(_streamCacheLimitMb);
+    return LocaleProvider.tr('stream_audio_cache_used')
+        .replaceAll('{used}', used)
+        .replaceAll('{limit}', limit);
+  }
+
+  Future<void> _showStreamingCacheLimitDialog() async {
+    final options = [
+      (label: '500 MB', mb: 500),
+      (label: '1 GB', mb: 1024),
+      (label: '2 GB', mb: 2048),
+      (label: LocaleProvider.tr('stream_audio_cache_no_limit'), mb: -1),
+      (label: LocaleProvider.tr('stream_audio_cache_disabled'), mb: 0),
+    ];
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return ValueListenableBuilder<AppColorScheme>(
+          valueListenable: colorSchemeNotifier,
+          builder: (context, colorScheme, _) {
+            final isAmoled = colorScheme == AppColorScheme.amoled;
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final primaryColor = Theme.of(context).colorScheme.primary;
+
+            return AlertDialog(
+              backgroundColor: isAmoled && isDark
+                  ? Colors.black
+                  : Theme.of(context).colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+                side: isAmoled && isDark
+                    ? const BorderSide(color: Colors.white24, width: 1)
+                    : BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(0, 24, 0, 8),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 400,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.storage_rounded,
+                      size: 32,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    const SizedBox(height: 16),
+                    TranslatedText(
+                      'stream_audio_cache_limit',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: TranslatedText(
+                        'stream_audio_cache_desc',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withAlpha(180),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ...options.map((opt) {
+                      final isSelected = _streamCacheLimitMb == opt.mb;
+                      return _buildAudioQualityOption(
+                        context: context,
+                        title: opt.label,
+                        subtitle: '',
+                        value: opt.mb.toString(),
+                        isSelected: isSelected,
+                        onSelected: (_) async {
+                          await StreamingAudioCacheManager.setLimitMb(
+                            opt.mb == -1 ? null : opt.mb,
+                          );
+                          StreamingAudioCacheManager.evictIfNeeded().ignore();
+                          await _loadStreamingCacheStats();
+                          if (context.mounted) Navigator.of(context).pop();
+                        },
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.delete_sweep_rounded, size: 18),
+                        label: TranslatedText(
+                          'stream_audio_cache_clear',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                          minimumSize: const Size.fromHeight(40),
+                        ),
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          await _clearStreamingAudioCache();
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 24, bottom: 8),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: TranslatedText(
+                            'cancel',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _clearStreamingAudioCache() async {
+    await StreamingAudioCacheManager.clearAll();
+    await _loadStreamingCacheStats();
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => ValueListenableBuilder<AppColorScheme>(
+        valueListenable: colorSchemeNotifier,
+        builder: (context, colorScheme, _) {
+          final isAmoled = colorScheme == AppColorScheme.amoled;
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return AlertDialog(
+            backgroundColor: isAmoled && isDark
+                ? Colors.black
+                : Theme.of(context).colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+              side: isAmoled && isDark
+                  ? const BorderSide(color: Colors.white24, width: 1)
+                  : BorderSide.none,
+            ),
+            title: Text(LocaleProvider.tr('stream_audio_cache_cleared')),
+            content: Text(LocaleProvider.tr('stream_audio_cache_cleared_desc')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(LocaleProvider.tr('ok')),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _showStreamingAudioQualitySelection() async {
     showDialog(
       context: context,
@@ -3409,6 +3608,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onTap: () async {
                         Navigator.of(context).pop(true);
                         await StreamCacheDB().clearCache();
+                        await StreamingAudioCacheManager.clearAll();
+                        await _loadStreamingCacheStats();
                         if (context.mounted) {
                           _showAudioLinksDeletedDialog();
                         }
@@ -4116,14 +4317,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     builder: (context, value, child) {
                       return SwitchListTile(
                         value: isAmoledActive ? value : false,
-                        onChanged: isAmoledActive ? (v) => _setArtworkFullScreen(v) : null,
+                        onChanged: isAmoledActive
+                            ? (v) => _setArtworkFullScreen(v)
+                            : null,
                         title: Text(
                           LocaleProvider.tr('artwork_full_screen'),
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: isAmoledActive
                                 ? Theme.of(context).colorScheme.onSurface
-                                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                                : Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.38),
                           ),
                         ),
                         subtitle: Text(
@@ -4131,8 +4335,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           style: TextStyle(
                             fontSize: 13,
                             color: isAmoledActive
-                                ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9)
-                                : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface.withValues(alpha: 0.9)
+                                : Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.38),
                           ),
                         ),
                         secondary: Opacity(
@@ -4148,12 +4355,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         thumbIcon: WidgetStateProperty.resolveWith<Icon?>((
                           Set<WidgetState> states,
                         ) {
-                          if (!isAmoledActive) return const Icon(Icons.close, size: 20);
+                          if (!isAmoledActive) {
+                            return const Icon(Icons.close, size: 20);
+                          }
                           final iconColor = isAmoledTheme && isDark
                               ? Colors.white
                               : null;
                           if (states.contains(WidgetState.selected)) {
-                            return Icon(Icons.check, size: 20, color: iconColor);
+                            return Icon(
+                              Icons.check,
+                              size: 20,
+                              color: iconColor,
+                            );
                           } else {
                             return const Icon(Icons.close, size: 20);
                           }
@@ -4837,6 +5050,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
                 onTap: _showStreamingAudioQualitySelection,
+              ),
+            ),
+            const SizedBox(height: 4),
+            // ── Streaming audio cache tile ──
+            Card(
+              color: cardColor,
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(4)),
+              ),
+              child: ListTile(
+                leading: _buildCircleIcon(
+                  Icons.storage_rounded,
+                  Colors.teal,
+                ),
+                title: Text(
+                  LocaleProvider.tr('stream_audio_cache'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                subtitle: Text(
+                  _streamCacheSubtitle(),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.9),
+                  ),
+                ),
+                onTap: _showStreamingCacheLimitDialog,
               ),
             ),
             const SizedBox(height: 4),
@@ -7284,6 +7531,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await DiscoveryFoundDB().clear();
 
       await StreamCacheDB().clearCache();
+
+      await StreamingAudioCacheManager.clearAll();
 
       await ArtworkDB.clearCache();
 
