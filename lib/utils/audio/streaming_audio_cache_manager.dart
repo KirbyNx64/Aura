@@ -16,6 +16,38 @@ class StreamingAudioCacheManager {
   static const double _maxSingleFileRatio = 0.8;
   static const String _cacheDirName = 'aura_stream_audio';
 
+  /// Proveedor dinámico opcional de IDs activos/protegidos (ej. canción actual y siguiente en cola).
+  static Set<String> Function()? activeVideoIdsProvider;
+
+  /// IDs protegidos manualmente contra la eliminación por LRU.
+  static final Set<String> _protectedVideoIds = <String>{};
+
+  /// Agrega un videoId a la lista protegida contra eliminación.
+  static void protectVideoId(String? videoId) {
+    if (videoId != null && videoId.trim().isNotEmpty) {
+      _protectedVideoIds.add(videoId.trim());
+    }
+  }
+
+  /// Remueve un videoId de la lista protegida.
+  static void unprotectVideoId(String? videoId) {
+    if (videoId != null) {
+      _protectedVideoIds.remove(videoId.trim());
+    }
+  }
+
+  /// Actualiza la fecha de modificación del archivo al momento actual (LRU touch).
+  /// Esto asegura que una canción reproducida desde la caché pase al final
+  /// de la lista de eliminación (es la más recientemente usada).
+  static Future<void> touch(String videoId) async {
+    try {
+      final file = await getCacheFile(videoId);
+      if (file.existsSync()) {
+        await file.setLastModified(DateTime.now());
+      }
+    } catch (_) {}
+  }
+
   // ─────────────────────────────────────────
   //  Configuración
   // ─────────────────────────────────────────
@@ -85,12 +117,17 @@ class StreamingAudioCacheManager {
   ///
   /// Ordena los archivos por fecha de modificación (los más viejos primero)
   /// y los borra hasta que el total esté por debajo del límite.
-  static Future<void> evictIfNeeded() async {
+  ///
+  /// NUNCA borra archivos cuyos videoIds estén en [preserveVideoIds],
+  /// en [_protectedVideoIds] o provistos por [activeVideoIdsProvider].
+  static Future<void> evictIfNeeded({
+    Iterable<String>? preserveVideoIds,
+  }) async {
     try {
       final limitMb = await getLimitMb();
       if (limitMb == -1) return; // sin límite
       if (limitMb == 0) {
-        await clearAll();
+        await clearAll(preserveActive: true);
         return;
       }
 
@@ -108,6 +145,13 @@ class StreamingAudioCacheManager {
 
       if (totalBytes <= limitBytes) return;
 
+      // Consolidar todos los IDs protegidos de eliminación
+      final protected = <String>{
+        ...?preserveVideoIds?.map((id) => id.trim()),
+        ..._protectedVideoIds,
+        ...?activeVideoIdsProvider?.call().map((id) => id.trim()),
+      }..removeWhere((id) => id.isEmpty);
+
       // LRU: ordenar por lastModified ascendente (más viejos primero)
       files.sort((a, b) {
         final aTime = a.statSync().modified;
@@ -117,6 +161,13 @@ class StreamingAudioCacheManager {
 
       for (final f in files) {
         if (totalBytes <= limitBytes) break;
+
+        final videoId = _extractVideoIdFromPath(f.path);
+        if (videoId != null && protected.contains(videoId)) {
+          // Proteger canción en reproducción o en cola
+          continue;
+        }
+
         try {
           final size = f.lengthSync();
           f.deleteSync();
@@ -126,6 +177,14 @@ class StreamingAudioCacheManager {
     } catch (_) {
       // Silenciar errores para no interrumpir reproducción
     }
+  }
+
+  static String? _extractVideoIdFromPath(String path) {
+    final filename = path.split(Platform.pathSeparator).last;
+    if (filename.endsWith('.aac')) {
+      return filename.substring(0, filename.length - 4);
+    }
+    return null;
   }
 
   // ─────────────────────────────────────────
@@ -154,11 +213,31 @@ class StreamingAudioCacheManager {
   // ─────────────────────────────────────────
 
   /// Borra todos los archivos del caché de audio.
-  static Future<void> clearAll() async {
+  /// Si [preserveActive] es true, conserva las canciones en reproducción o protegidas.
+  static Future<void> clearAll({bool preserveActive = false}) async {
     try {
       final dir = await getCacheDir();
-      if (dir.existsSync()) {
+      if (!dir.existsSync()) return;
+
+      if (!preserveActive) {
         await dir.delete(recursive: true);
+        return;
+      }
+
+      final protected = <String>{
+        ..._protectedVideoIds,
+        ...?activeVideoIdsProvider?.call().map((id) => id.trim()),
+      }..removeWhere((id) => id.isEmpty);
+
+      final files = dir.listSync().whereType<File>().toList();
+      for (final f in files) {
+        final videoId = _extractVideoIdFromPath(f.path);
+        if (videoId != null && protected.contains(videoId)) {
+          continue;
+        }
+        try {
+          f.deleteSync();
+        } catch (_) {}
       }
     } catch (_) {}
   }

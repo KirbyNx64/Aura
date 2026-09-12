@@ -532,12 +532,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // desde disco (sin red, instantáneo).
       final canCache = await StreamingAudioCacheManager.shouldCache(videoId);
       if (canCache) {
-        final cacheFile = await StreamingAudioCacheManager.getCacheFile(videoId);
+        final cacheFile = await StreamingAudioCacheManager.getCacheFile(
+          videoId,
+        );
         if (cacheFile.existsSync() && cacheFile.lengthSync() > 0) {
           _releaseLog(
             'resolve:audio_source using cached file videoId=$videoId path=${cacheFile.path}',
           );
-          unawaited(StreamingAudioCacheManager.evictIfNeeded());
+          unawaited(StreamingAudioCacheManager.touch(videoId));
+          unawaited(
+            StreamingAudioCacheManager.evictIfNeeded(
+              preserveVideoIds: {videoId},
+            ),
+          );
           return AudioSource.uri(Uri.file(cacheFile.path));
         }
       }
@@ -565,14 +572,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     await Future.delayed(_cacheDownloadDelay);
     // Si el videoId ya no es el activo, cancelar.
     final currentVideoId = _mediaQueue.isNotEmpty
-        ? (_mediaQueue[_deferredStreamingQueueIndex]
-                .extras?['videoId']
-                ?.toString()
-                .trim() ??
-            '')
+        ? (_mediaQueue[_deferredStreamingQueueIndex].extras?['videoId']
+                  ?.toString()
+                  .trim() ??
+              '')
         : '';
     if (currentVideoId != videoId) {
-      _releaseLog('resolve:audio_cache cancelled (song changed) videoId=$videoId');
+      _releaseLog(
+        'resolve:audio_cache cancelled (song changed) videoId=$videoId',
+      );
       return;
     }
     try {
@@ -600,7 +608,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         return;
       }
 
-      unawaited(StreamingAudioCacheManager.evictIfNeeded());
+      unawaited(StreamingAudioCacheManager.touch(videoId));
+      unawaited(
+        StreamingAudioCacheManager.evictIfNeeded(
+          preserveVideoIds: {videoId},
+        ),
+      );
       _releaseLog(
         'resolve:audio_cache saved videoId=$videoId size=${cacheFile.lengthSync()} bytes',
       );
@@ -893,6 +906,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _isInitialized = true;
       _initRetryCount = 0;
       _releaseLog('init:done');
+      // Conectar proveedor de videoIds activos para protegerlos de la limpieza de caché
+      StreamingAudioCacheManager.activeVideoIdsProvider =
+          _getActiveStreamingVideoIds;
       // Limpiar caché de audio en background al iniciar la app
       unawaited(StreamingAudioCacheManager.evictIfNeeded());
       // Intentar restaurar sesión previa si no hay cola actual
@@ -918,6 +934,33 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         await _init();
       }
     }
+  }
+
+  /// Retorna los videoIds de streaming actualmente activos o en reproducción
+  /// para evitar que el algoritmo LRU los elimine del caché.
+  Set<String> _getActiveStreamingVideoIds() {
+    final ids = <String>{};
+    // 1. Canción actualmente en reproducción (mediaItem)
+    final currentItem = mediaItem.value;
+    if (currentItem != null) {
+      final vId = _streamingVideoIdForMediaItem(currentItem);
+      if (vId != null && vId.isNotEmpty) ids.add(vId);
+    }
+    // 2. Canción actual en cola diferida
+    if (_deferredStreamingQueueMode && _mediaQueue.isNotEmpty) {
+      final idx =
+          _deferredStreamingQueueIndex.clamp(0, _mediaQueue.length - 1);
+      final vId = _streamingVideoIdForMediaItem(_mediaQueue[idx]);
+      if (vId != null && vId.isNotEmpty) ids.add(vId);
+
+      // 3. Siguiente canción en cola diferida (para proteger precargas)
+      if (idx + 1 < _mediaQueue.length) {
+        final nextVId =
+            _streamingVideoIdForMediaItem(_mediaQueue[idx + 1]);
+        if (nextVId != null && nextVId.isNotEmpty) ids.add(nextVId);
+      }
+    }
+    return ids;
   }
 
   void _dismissLocalPlayLoaderOnPlaybackStart({PlaybackEvent? event}) {

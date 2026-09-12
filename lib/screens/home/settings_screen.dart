@@ -2239,7 +2239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _clearStreamingAudioCache() async {
-    await StreamingAudioCacheManager.clearAll();
+    await StreamingAudioCacheManager.clearAll(preserveActive: true);
     await _loadStreamingCacheStats();
     if (!mounted) return;
     showDialog<void>(
