@@ -687,8 +687,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _dismissLocalPlayLoaderOnPlaybackStart(event: event);
 
           // Si se completó y está en loop one, lanza el seek/play en segundo plano
+          // Solo si no estamos en medio de un cambio de cola o reemplazo de fuente.
           if (event.processingState == ProcessingState.completed &&
               !_stopAtEndOfSong &&
+              !_isSwappingSource &&
+              !isQueueTransitioning.value &&
+              !_initializing &&
+              _mediaQueue.isNotEmpty &&
+              _concat != null &&
+              _concat!.children.isNotEmpty &&
               _player.loopMode == LoopMode.one) {
             unawaited(_player.seek(Duration.zero));
             unawaited(_player.play());
@@ -700,6 +707,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
           // Si se completó y es la última canción de la lista, pausar automáticamente
           if (event.processingState == ProcessingState.completed) {
+            // Ignorar eventos completed artificiales si estamos cambiando de cola o fuente
+            if (_isSwappingSource ||
+                isQueueTransitioning.value ||
+                _initializing ||
+                _mediaQueue.isEmpty ||
+                _concat == null ||
+                _concat!.children.isEmpty) {
+              return;
+            }
             if (_stopAtEndOfSong) {
               unawaited(() async {
                 await pause();
@@ -1976,6 +1992,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     isQueueTransitioning.value = true;
     initializingNotifier.value = true;
     _initializing = true;
+    _isSwappingSource = true;
     _loadVersion++;
     final int currentVersion = _loadVersion;
 
@@ -2019,7 +2036,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     );
 
     // 3. Cargar fuentes en el reproductor de forma asíncrona con timeout
-    Future.delayed(Duration.zero, () async {
+    try {
       try {
         // ignore: deprecated_member_use
         await _player
@@ -2091,11 +2108,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           }
         }
 
-        // Finalizar la inicialización
-        _initializing = false;
-        initializingNotifier.value = false;
-        isQueueTransitioning.value = false;
-
         // Sincronizar el estado del shuffle
         _syncShuffleState();
 
@@ -2151,17 +2163,17 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             mediaItem.add(null);
           }
         }
-
-        // Finalizar la inicialización incluso si hay error
-        _initializing = false;
-        initializingNotifier.value = false;
-        isQueueTransitioning.value = false;
-        if (playLoadingNotifier.value) {
-          playLoadingNotifier.value = false;
-          _clearLocalPlayLoaderGuard();
-        }
       }
-    });
+    } finally {
+      _isSwappingSource = false;
+      _initializing = false;
+      initializingNotifier.value = false;
+      isQueueTransitioning.value = false;
+      if (playLoadingNotifier.value) {
+        playLoadingNotifier.value = false;
+        _clearLocalPlayLoaderGuard();
+      }
+    }
 
     // Precargar carátulas de las primeras canciones de forma asíncrona
     if (songs.isNotEmpty) {
@@ -2592,12 +2604,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _resetTracking();
     _isSwappingSource = true;
     try {
-      if (_player.playing) {
-        await _player.pause().timeout(
+      try {
+        await _player.stop().timeout(
           const Duration(milliseconds: 300),
           onTimeout: () {},
         );
-      }
+      } catch (_) {}
       if (_concat != null && _concat!.children.isNotEmpty) {
         // ignore: deprecated_member_use
         await _concat!.clear().timeout(
@@ -4177,6 +4189,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
 
     final bool canResumeImmediately =
+        !isQueueTransitioning.value &&
+        !_isSwappingSource &&
+        !_initializing &&
         !_player.playing &&
         _player.currentIndex != null &&
         (_player.processingState == ProcessingState.ready ||
@@ -4184,10 +4199,6 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
     // Si ya hay una pista preparada, no bloquear por _initializing.
     if (canResumeImmediately) {
-      if (_initializing) {
-        _initializing = false;
-        initializingNotifier.value = false;
-      }
       try {
         _restoreAudioConfiguration();
         if (!_equalizerSettingsApplied) {
@@ -4200,11 +4211,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
     }
 
-    // Si estamos inicializando fuentes, espera brevemente a que termine
-    if (_initializing) {
-      final int maxWaitMs = 1500;
+    // Si estamos inicializando fuentes o cambiando de cola, espera a que termine
+    if (_initializing || isQueueTransitioning.value || _isSwappingSource) {
+      final int maxWaitMs = 3000;
       int waited = 0;
-      while (_initializing && waited < maxWaitMs) {
+      while ((_initializing || isQueueTransitioning.value || _isSwappingSource) &&
+          waited < maxWaitMs) {
         await Future.delayed(const Duration(milliseconds: 50));
         waited += 50;
       }
@@ -4219,7 +4231,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       }
 
       // Si la lista terminó (estado completed), reiniciar la canción actual
-      if (_player.processingState == ProcessingState.completed) {
+      // Solo si la cola no está en transición o vacía
+      if (_player.processingState == ProcessingState.completed &&
+          !isQueueTransitioning.value &&
+          !_isSwappingSource &&
+          !_initializing &&
+          _mediaQueue.isNotEmpty &&
+          _concat != null &&
+          _concat!.children.isNotEmpty) {
         await _player.seek(Duration.zero);
         //delay de 200 ms
         await Future.delayed(const Duration(milliseconds: 200));
