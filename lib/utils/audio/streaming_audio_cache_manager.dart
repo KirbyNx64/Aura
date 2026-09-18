@@ -84,6 +84,72 @@ class StreamingAudioCacheManager {
     return File('${dir.path}/$videoId.aac');
   }
 
+  /// Archivo de metadatos (.meta) para un videoId dado.
+  /// Contiene el tamaño esperado (Content-Length) del audio completo.
+  static Future<File> getMetaFile(String videoId) async {
+    final dir = await getCacheDir();
+    return File('${dir.path}/$videoId.meta');
+  }
+
+  /// Guarda el tamaño esperado del archivo de audio en el .meta sidecar.
+  static Future<void> saveExpectedSize(String videoId, int expectedBytes) async {
+    try {
+      final meta = await getMetaFile(videoId);
+      await meta.writeAsString(expectedBytes.toString());
+    } catch (_) {}
+  }
+
+  /// Lee el tamaño esperado guardado en el .meta sidecar.
+  /// Retorna null si el archivo no existe o no es válido.
+  static Future<int?> readExpectedSize(String videoId) async {
+    try {
+      final meta = await getMetaFile(videoId);
+      if (!meta.existsSync()) return null;
+      final raw = await meta.readAsString();
+      return int.tryParse(raw.trim());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Retorna true solo si el archivo de caché existe Y su tamaño coincide
+  /// con el Content-Length registrado en el .meta sidecar.
+  ///
+  /// Si no hay .meta (descarga antigua), se considera completo para no
+  /// romper archivos ya cacheados correctamente en versiones anteriores.
+  static Future<bool> isCacheComplete(String videoId) async {
+    try {
+      final cacheFile = await getCacheFile(videoId);
+      if (!cacheFile.existsSync() || cacheFile.lengthSync() == 0) return false;
+
+      final expectedSize = await readExpectedSize(videoId);
+      if (expectedSize == null) {
+        // Sin metadatos: descarga de versión anterior, asumir completo.
+        return true;
+      }
+      return cacheFile.lengthSync() >= expectedSize;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Borra el archivo .aac y su .meta sidecar si el caché está incompleto.
+  /// Retorna true si se borró algo, false si estaba completo o no existía.
+  static Future<bool> deleteIfIncomplete(String videoId) async {
+    try {
+      final complete = await isCacheComplete(videoId);
+      if (complete) return false;
+
+      final cacheFile = await getCacheFile(videoId);
+      final metaFile = await getMetaFile(videoId);
+      try { if (cacheFile.existsSync()) cacheFile.deleteSync(); } catch (_) {}
+      try { if (metaFile.existsSync()) metaFile.deleteSync(); } catch (_) {}
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // ─────────────────────────────────────────
   //  Decisión de cachear
   // ─────────────────────────────────────────
@@ -162,6 +228,9 @@ class StreamingAudioCacheManager {
       for (final f in files) {
         if (totalBytes <= limitBytes) break;
 
+        // Solo considerar .aac para el cálculo de espacio
+        if (!f.path.endsWith('.aac')) continue;
+
         final videoId = _extractVideoIdFromPath(f.path);
         if (videoId != null && protected.contains(videoId)) {
           // Proteger canción en reproducción o en cola
@@ -172,6 +241,12 @@ class StreamingAudioCacheManager {
           final size = f.lengthSync();
           f.deleteSync();
           totalBytes -= size;
+          // Borrar también el .meta sidecar si existe
+          try {
+            final dir = f.parent;
+            final meta = File('${dir.path}/${videoId ?? ''}.meta');
+            if (meta.existsSync()) meta.deleteSync();
+          } catch (_) {}
         } catch (_) {}
       }
     } catch (_) {
@@ -231,9 +306,16 @@ class StreamingAudioCacheManager {
 
       final files = dir.listSync().whereType<File>().toList();
       for (final f in files) {
+        // Para .aac verificar si está protegido; para .meta borrar junto con .aac
         final videoId = _extractVideoIdFromPath(f.path);
         if (videoId != null && protected.contains(videoId)) {
           continue;
+        }
+        // Si es .meta y su .aac está protegido, también proteger el .meta
+        if (f.path.endsWith('.meta')) {
+          final metaBasename = f.path.split(Platform.pathSeparator).last;
+          final metaVideoId = metaBasename.substring(0, metaBasename.length - 5);
+          if (protected.contains(metaVideoId)) continue;
         }
         try {
           f.deleteSync();

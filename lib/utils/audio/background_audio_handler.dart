@@ -536,22 +536,33 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           videoId,
         );
         if (cacheFile.existsSync() && cacheFile.lengthSync() > 0) {
-          _releaseLog(
-            'resolve:audio_source using cached file videoId=$videoId path=${cacheFile.path}',
-          );
-          unawaited(StreamingAudioCacheManager.touch(videoId));
-          unawaited(
-            StreamingAudioCacheManager.evictIfNeeded(
-              preserveVideoIds: {videoId},
-            ),
-          );
-          return AudioSource.uri(Uri.file(cacheFile.path));
+          // Verificar que el caché esté completo (no truncado por cambio de canción)
+          final isComplete = await StreamingAudioCacheManager.isCacheComplete(videoId);
+          if (isComplete) {
+            _releaseLog(
+              'resolve:audio_source using cached file videoId=$videoId path=${cacheFile.path}',
+            );
+            unawaited(StreamingAudioCacheManager.touch(videoId));
+            unawaited(
+              StreamingAudioCacheManager.evictIfNeeded(
+                preserveVideoIds: {videoId},
+              ),
+            );
+            return AudioSource.uri(Uri.file(cacheFile.path));
+          } else {
+            // Caché incompleto (usuario cambió canción antes de que terminara
+            // de descargarse). Borrarlo para forzar streaming + re-descarga.
+            _releaseLog(
+              'resolve:audio_source partial cache detected, deleting videoId=$videoId',
+            );
+            await StreamingAudioCacheManager.deleteIfIncomplete(videoId);
+          }
         }
       }
     } catch (e) {
       _releaseLog('resolve:audio_source cache_check_failed error=$e');
     }
-    // Sin caché disponible: streaming directo.
+    // Sin caché completo disponible: streaming directo.
     // El background download se inicia con delay para no competir
     // con el player durante el buffer inicial crítico.
     _releaseLog('resolve:audio_source using AudioSource.uri videoId=$videoId');
@@ -587,7 +598,18 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final canCache = await StreamingAudioCacheManager.shouldCache(videoId);
       if (!canCache) return;
       final cacheFile = await StreamingAudioCacheManager.getCacheFile(videoId);
-      if (cacheFile.existsSync() && cacheFile.lengthSync() > 0) return;
+
+      // Si existe un caché parcial (de una descarga interrumpida anterior),
+      // borrarlo antes de reintentar para evitar servir datos incompletos.
+      if (cacheFile.existsSync() && cacheFile.lengthSync() > 0) {
+        final alreadyComplete = await StreamingAudioCacheManager.isCacheComplete(videoId);
+        if (alreadyComplete) {
+          _releaseLog('resolve:audio_cache already complete videoId=$videoId');
+          return;
+        }
+        _releaseLog('resolve:audio_cache removing incomplete cache videoId=$videoId');
+        await StreamingAudioCacheManager.deleteIfIncomplete(videoId);
+      }
 
       final client = HttpClient();
       final request = await client.getUrl(Uri.parse(streamUrl));
@@ -596,15 +618,37 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         client.close();
         return;
       }
+
+      // Guardar el Content-Length esperado en el .meta sidecar ANTES de escribir
+      // el audio, para que isCacheComplete() pueda detectar descargas incompletas.
+      final contentLength = response.contentLength;
+      if (contentLength > 0) {
+        await StreamingAudioCacheManager.saveExpectedSize(videoId, contentLength);
+      }
+
       final sink = cacheFile.openWrite();
-      await response.pipe(sink);
-      await sink.close();
+      try {
+        await response.pipe(sink);
+      } finally {
+        await sink.close();
+      }
       client.close();
 
       if (!cacheFile.existsSync() || cacheFile.lengthSync() == 0) {
-        try {
-          cacheFile.deleteSync();
-        } catch (_) {}
+        try { cacheFile.deleteSync(); } catch (_) {}
+        // Si la descarga falló por completo, borrar también el .meta
+        await StreamingAudioCacheManager.deleteIfIncomplete(videoId);
+        return;
+      }
+
+      // Verificar que la descarga fue completa antes de considerar el caché válido
+      final isComplete = await StreamingAudioCacheManager.isCacheComplete(videoId);
+      if (!isComplete) {
+        _releaseLog(
+          'resolve:audio_cache incomplete download, removing videoId=$videoId '
+          'actual=${cacheFile.lengthSync()} expected=$contentLength',
+        );
+        await StreamingAudioCacheManager.deleteIfIncomplete(videoId);
         return;
       }
 
@@ -619,6 +663,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       );
     } catch (e) {
       _releaseLog('resolve:audio_cache failed videoId=$videoId error=$e');
+      // Limpiar caché parcial si la descarga falló a mitad
+      try {
+        await StreamingAudioCacheManager.deleteIfIncomplete(videoId);
+      } catch (_) {}
     }
   }
 
@@ -2052,6 +2100,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
               },
             );
 
+        if (initialPosition > Duration.zero) {
+          await _player.seek(initialPosition, index: initialIndex);
+        } else {
+          await _player.seek(Duration.zero, index: initialIndex);
+        }
+
         if (currentVersion != _loadVersion) return;
 
         // En cola local, ocultar el loader tan pronto como la fuente queda lista.
@@ -2081,7 +2135,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             mediaItem.add(finalSelectedItem);
             unawaited(_syncFavoriteFlagForItem(finalSelectedItem));
             playbackState.add(
-              playbackState.value.copyWith(queueIndex: initialIndex),
+              playbackState.value.copyWith(
+                queueIndex: initialIndex,
+                updatePosition: initialPosition,
+              ),
             );
             // Persistir índice y posición inicial
             unawaited(() async {
@@ -2105,6 +2162,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
                 mediaItem.add(updatedMediaItem);
               }
             }
+          } else {
+            playbackState.add(
+              playbackState.value.copyWith(
+                queueIndex: initialIndex,
+                updatePosition: initialPosition,
+              ),
+            );
           }
         }
 
@@ -2610,6 +2674,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           onTimeout: () {},
         );
       } catch (_) {}
+      try {
+        await _player.seek(Duration.zero);
+      } catch (_) {}
       if (_concat != null && _concat!.children.isNotEmpty) {
         // ignore: deprecated_member_use
         await _concat!.clear().timeout(
@@ -2670,6 +2737,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         playbackState.value.copyWith(
           queueIndex: targetIndex,
           processingState: AudioProcessingState.loading,
+          updatePosition: Duration.zero,
         ),
       );
     }
@@ -2795,6 +2863,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         );
         // ignore: deprecated_member_use
         await _concat!.add(deferredSource);
+        await _player.seek(Duration.zero, index: 0);
         _isSwappingSource = false;
 
         _releaseLog(
@@ -4593,6 +4662,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       playbackState.value.copyWith(
         queueIndex: targetIndex,
         processingState: AudioProcessingState.loading,
+        updatePosition: Duration.zero,
       ),
     );
 
