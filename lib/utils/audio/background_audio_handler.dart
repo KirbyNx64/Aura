@@ -3981,6 +3981,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       _deferredStreamingQueueIndex = 0;
       _streamRadioEnabled = false;
       _streamRadioInitialBatchLoaded = false;
+      // Limpiar flag de inicialización para que el completed handler funcione.
+      _initializing = false;
+      initializingNotifier.value = false;
+      isQueueTransitioning.value = false;
 
       final firstItem = buildQueueItem(queueIndex: 0);
       _mediaQueue
@@ -5482,6 +5486,14 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       // Cancelar y pausar inmediatamente la reproducción anterior
       await _cancelPreviousPlaybackForNewQueue();
       _resetStreamingSessionState(clearQueuedVideos: true);
+
+      // Garantizar que el flag de inicialización esté limpio para que el
+      // completed handler pueda disparar el auto-advance de streaming.
+      // Si la app nunca reprodujo canciones locales, _initializing puede
+      // quedarse en true desde el arranque y bloquear el auto-advance.
+      _initializing = false;
+      initializingNotifier.value = false;
+      isQueueTransitioning.value = false;
 
       _deferredStreamingQueueMode = true;
       _deferredStreamingQueueIndex = initialIndex;
