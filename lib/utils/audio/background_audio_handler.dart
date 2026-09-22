@@ -454,6 +454,9 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   static const int _streamRadioPrefetchThreshold = 2;
   static const int _streamRadioFixedQueueSize = 50;
   static const int _streamRadioOverscanCount = 12;
+  /// Número de canciones restantes en la cola que disparan la recarga de radio.
+  /// Si el índice actual está a menos de este valor del final, se carga más.
+  static const int _streamRadioRefillThreshold = 5;
   static const int _streamArtworkPrefetchCount = 1;
   static const int _streamArtworkCacheMaxEntries = 120;
   static const bool _enableDeferredStreamPrefetch = false;
@@ -888,7 +891,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
             0,
             _mediaQueue.length - 1,
           );
+          debugPrint(
+            '[RADIO_REFILL] currentIndexStream (deferred) idx=$effectiveIndex queueSize=${_mediaQueue.length} radioEnabled=$_streamRadioEnabled initialBatchLoaded=$_streamRadioInitialBatchLoaded',
+          );
           _updateCurrentMediaItem(effectiveIndex);
+          // En modo deferred, también verificar si hay que recargar la radio.
+          _maybeRefillStreamingRadioQueue(effectiveIndex);
           return;
         }
         if (index != null && index < _mediaQueue.length) {
@@ -896,9 +904,12 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           _preloadArtworkForIndex(index);
           _preloadNextStreamingArtworks(index);
           _updateCurrentMediaItem(index);
+          debugPrint(
+            '[RADIO_REFILL] currentIndexStream (normal) idx=$index queueSize=${_mediaQueue.length} radioEnabled=$_streamRadioEnabled isStreaming=${_isStreamingMediaItem(_mediaQueue[index])} initialBatchLoaded=$_streamRadioInitialBatchLoaded',
+          );
           if (_streamRadioEnabled &&
               _isStreamingMediaItem(_mediaQueue[index])) {
-            unawaited(_ensureStreamingRadioQueue());
+            _maybeRefillStreamingRadioQueue(index);
           }
         }
       });
@@ -3527,6 +3538,75 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     return {'videoId': videoId, 'item': item};
   }
 
+  /// Verifica si el índice actual está entre las últimas [_streamRadioRefillThreshold]
+  /// canciones de la cola. Si es así, desbloquea el estado de carga inicial para
+  /// permitir que se annexen más canciones de la radio (ventana deslizante).
+  ///
+  /// Si la radio no estaba activa (p. ej. playlist reproducida sin autoStartRadio),
+  /// la activa automáticamente llamando a [_startStreamingRadioFromCurrent].
+  void _maybeRefillStreamingRadioQueue(int currentIndex) {
+    debugPrint(
+      '[RADIO_REFILL] maybeRefill called: currentIndex=$currentIndex queueSize=${_mediaQueue.length} radioEnabled=$_streamRadioEnabled appendInProgress=$_streamRadioAppendInProgress initialBatchLoaded=$_streamRadioInitialBatchLoaded deferredMode=$_deferredStreamingQueueMode',
+    );
+    if (_mediaQueue.isEmpty) {
+      debugPrint('[RADIO_REFILL] skip: queue empty');
+      return;
+    }
+    if (!_isStreamingMediaItem(_mediaQueue.first)) {
+      debugPrint('[RADIO_REFILL] skip: first item is not streaming');
+      return;
+    }
+    final int remaining = (_mediaQueue.length - 1) - currentIndex;
+    debugPrint(
+      '[RADIO_REFILL] remaining=$remaining threshold=$_streamRadioRefillThreshold → willRefill=${remaining < _streamRadioRefillThreshold}',
+    );
+    if (remaining >= _streamRadioRefillThreshold) {
+      debugPrint(
+        '[RADIO_REFILL] skip: remaining=$remaining >= threshold=$_streamRadioRefillThreshold, no refill needed',
+      );
+      return;
+    }
+
+    // Si la radio ya está activa, simplemente desbloquear y cargar más.
+    if (_streamRadioEnabled) {
+      if (_streamRadioInitialBatchLoaded) {
+        _streamRadioInitialBatchLoaded = false;
+        _releaseLog(
+          'radio:refill unlocked remaining=$remaining threshold=$_streamRadioRefillThreshold queueSize=${_mediaQueue.length}',
+        );
+        debugPrint(
+          '[RADIO_REFILL] *** UNLOCKED initialBatchLoaded *** remaining=$remaining queueSize=${_mediaQueue.length}',
+        );
+      } else {
+        debugPrint(
+          '[RADIO_REFILL] already unlocked (initialBatchLoaded=false), calling ensure directly',
+        );
+      }
+      debugPrint('[RADIO_REFILL] → calling _ensureStreamingRadioQueue()');
+      unawaited(_ensureStreamingRadioQueue());
+      return;
+    }
+
+    // La radio no está activa pero estamos en modo deferred streaming con pocas
+    // canciones restantes: activarla automáticamente (ocurre cuando se reproducen
+    // playlists completas sin autoStartRadio=true).
+    if (!_deferredStreamingQueueMode) {
+      debugPrint('[RADIO_REFILL] skip: radioEnabled=false and not in deferred mode');
+      return;
+    }
+    if (_streamRadioAppendInProgress) {
+      debugPrint('[RADIO_REFILL] skip: appendInProgress=true, wait for current fetch');
+      return;
+    }
+    debugPrint(
+      '[RADIO_REFILL] *** AUTO-ACTIVATING RADIO *** radioEnabled was false, activating now remaining=$remaining queueSize=${_mediaQueue.length}',
+    );
+    _releaseLog(
+      'radio:refill auto_activate remaining=$remaining queueSize=${_mediaQueue.length}',
+    );
+    unawaited(_startStreamingRadioFromCurrent(replaceQueue: false));
+  }
+
   Future<void> _ensureStreamingRadioQueue({bool force = false}) async {
     _releaseLog(
       'radio:ensure start enabled=$_streamRadioEnabled appendInProgress=$_streamRadioAppendInProgress initialBatchLoaded=$_streamRadioInitialBatchLoaded force=$force queueSize=${_mediaQueue.length}',
@@ -3534,17 +3614,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     debugPrint(
       '[RADIO_DEBUG] ensure start enabled=$_streamRadioEnabled appendInProgress=$_streamRadioAppendInProgress initialBatchLoaded=$_streamRadioInitialBatchLoaded force=$force queueSize=${_mediaQueue.length}',
     );
-    if (!_streamRadioEnabled ||
-        _streamRadioAppendInProgress ||
-        _streamRadioInitialBatchLoaded) {
+    if (!_streamRadioEnabled) {
+      debugPrint('[RADIO_ENSURE] skip: _streamRadioEnabled=false');
       _releaseLog('radio:ensure skip state_flags');
-      debugPrint('[RADIO_DEBUG] ensure skip by state flags');
+      return;
+    }
+    if (_streamRadioAppendInProgress) {
+      debugPrint('[RADIO_ENSURE] skip: appendInProgress=true');
+      _releaseLog('radio:ensure skip state_flags');
+      return;
+    }
+    if (_streamRadioInitialBatchLoaded) {
+      debugPrint('[RADIO_ENSURE] skip: initialBatchLoaded=true (still locked!)');
+      _releaseLog('radio:ensure skip state_flags');
       return;
     }
     if (_mediaQueue.isEmpty || !_isStreamingMediaItem(_mediaQueue.first)) {
       _releaseLog('radio:ensure skip queue_not_streaming');
       debugPrint(
-        '[RADIO_DEBUG] ensure skip: queue empty or first item not streaming',
+        '[RADIO_ENSURE] skip: queue empty or first item is not streaming (queueSize=${_mediaQueue.length})',
       );
       return;
     }
@@ -3558,12 +3646,15 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     final int targetSize =
         _streamRadioTargetQueueSize ?? _streamRadioFixedQueueSize;
     final int missingItems = targetSize - _mediaQueue.length;
+    debugPrint(
+      '[RADIO_ENSURE] state ok → currentIndex=$currentIndex remaining=$remaining targetSize=$targetSize queueSize=${_mediaQueue.length} missingItems=$missingItems force=$force',
+    );
     if (missingItems <= 0) {
       _streamRadioInitialBatchLoaded = true;
       _streamRadioTargetQueueSize = null;
       _releaseLog('radio:ensure lock no_missing_items target=$targetSize');
       debugPrint(
-        '[RADIO_DEBUG] ensure skip: no missing items (target=$targetSize), locking',
+        '[RADIO_ENSURE] skip: no missing items (target=$targetSize queueSize=${_mediaQueue.length}), locking initialBatchLoaded',
       );
       return;
     }
@@ -3572,10 +3663,13 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
         'radio:ensure skip remaining=$remaining threshold=$_streamRadioPrefetchThreshold force=$force',
       );
       debugPrint(
-        '[RADIO_DEBUG] ensure skip: remaining=$remaining threshold=$_streamRadioPrefetchThreshold (force=$force)',
+        '[RADIO_ENSURE] skip: remaining=$remaining > prefetchThreshold=$_streamRadioPrefetchThreshold (force=$force)',
       );
       return;
     }
+    debugPrint(
+      '[RADIO_ENSURE] *** PROCEEDING TO FETCH *** missingItems=$missingItems remaining=$remaining force=$force',
+    );
 
     final currentItem = _mediaQueue[currentIndex];
     final currentVideoId = currentItem.extras?['videoId']?.toString().trim();
