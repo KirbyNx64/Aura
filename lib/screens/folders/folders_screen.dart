@@ -4820,15 +4820,25 @@ class _FoldersScreenState extends State<FoldersScreen>
                                         Color(0xFF8A7FC7), // violeta
                                         Color(0xFFB5A84A), // amarillo
                                       ];
-                                      final baseColor = folderPastelBases[i % folderPastelBases.length];
+                                      final baseColor =
+                                          folderPastelBases[i %
+                                              folderPastelBases.length];
                                       final Color circleColor;
                                       final Color iconColor;
                                       if (isAmoled && isDark) {
                                         circleColor = Colors.white;
                                         iconColor = Colors.black;
                                       } else {
-                                        circleColor = Color.lerp(baseColor, Colors.white, 0.65)!;
-                                        iconColor = Color.lerp(baseColor, Colors.black, 0.75)!;
+                                        circleColor = Color.lerp(
+                                          baseColor,
+                                          Colors.white,
+                                          0.65,
+                                        )!;
+                                        iconColor = Color.lerp(
+                                          baseColor,
+                                          Colors.black,
+                                          0.75,
+                                        )!;
                                       }
                                       return Container(
                                         width: 38,

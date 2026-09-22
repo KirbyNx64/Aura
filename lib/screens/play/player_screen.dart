@@ -264,7 +264,7 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
   Timer? _sourceBounceGuardTimer;
   bool? _sourceBounceTargetIsStreaming;
   static const Duration _sourceBounceGuardDuration = Duration(
-    milliseconds: 850,
+    milliseconds: 2500,
   );
   final CarouselSliderController _artworkCarouselController =
       CarouselSliderController();
@@ -1229,6 +1229,9 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                         }
                       : null,
                   child: CarouselSlider.builder(
+                    key: ValueKey(
+                      'carousel_${mediaItem.extras?['isStreaming'] == true ? 'stream' : 'local'}_${queue.firstOrNull?.id}',
+                    ),
                     carouselController: _artworkCarouselController,
                     itemCount: queue.length,
                     itemBuilder: (context, index, _) {
@@ -1534,6 +1537,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
 
     _lastMediaItemWasStreaming = isStreaming;
     if (!didSwitchSource) return;
+
+    // Limpiar inmediatamente cachés de fondo y artwork previo para que no reboten
+    _cachedAmoledBackground = null;
+    _cachedBackgroundSongId = null;
+    _cachedBlurredImage = null;
+    _cachedBlurredImageSongId = null;
+    _artworkCarouselPage = null;
 
     _sourceSwitchTransitionTimer?.cancel();
     _suppressSourceSwitchTransitions = true;
@@ -4668,7 +4678,11 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
     // Si no hay imagen disponible, no mostrar fondo
     if (imageProvider == null) {
       if (_suppressSourceSwitchTransitions && _cachedAmoledBackground != null) {
-        return _cachedAmoledBackground;
+        final previousIsStreaming = _lastMediaItemWasStreaming;
+        final currentIsStreaming = mediaItem.extras?['isStreaming'] == true;
+        if (previousIsStreaming == currentIsStreaming) {
+          return _cachedAmoledBackground;
+        }
       }
       _cachedAmoledBackground = null;
       _cachedBackgroundSongId = null;
@@ -4918,8 +4932,13 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           }());
         }
 
-        // Usar el MediaItem inicial si no hay uno actual
-        final currentMediaItem = mediaItem ?? widget.initialMediaItem;
+        // Usar el MediaItem inicial solo si no hay uno actual y la fuente coincide
+        final initialFallback = (_lastMediaItemWasStreaming != null &&
+                (widget.initialMediaItem?.extras?['isStreaming'] == true) !=
+                    _lastMediaItemWasStreaming)
+            ? null
+            : widget.initialMediaItem;
+        final currentMediaItem = mediaItem ?? initialFallback;
 
         if (currentMediaItem == null) {
           return const Scaffold(

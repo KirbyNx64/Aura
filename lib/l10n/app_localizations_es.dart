@@ -119,7 +119,8 @@ const Map<String, String> appLocalizationsEs = {
   'error_audiohandler_not_available': 'Error: AudioHandler no disponible',
   'error_loading_audio':
       'No se pudo cargar el contenido. Intenta con otra canción.',
-  'error_loading_audio_restricted': 'Este contenido podría no está disponible.',
+  'error_loading_audio_restricted':
+      'Este contenido podría no estar disponible.',
   'error_loading_audio_network':
       'No se pudo cargar el contenido. Revisa tu conexión a internet.',
   'error_loading_video': 'No se pudo cargar video',
