@@ -363,7 +363,7 @@ class StreamService {
 
     final request = _resolveBestAudioUrl(
       normalizedVideoId,
-      fastFail: fastFail || reportError,
+      fastFail: fastFail,
       requestGeneration: requestGeneration,
     );
     _inFlightRequests[normalizedVideoId] = request;
