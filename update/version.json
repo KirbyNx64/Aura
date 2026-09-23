@@ -1,9 +1,9 @@
 {
-  "version": "2.2.3",
+  "version": "2.2.4",
   "apk_urls": {
-    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.2.3/AuraMusic-v2.2.3-arm64-v8a.apk",
-    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.2.3/AuraMusic-v2.2.3-armeabi-v7a.apk",
-    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.2.3/AuraMusic-v2.2.3-x86_64.apk"
+    "arm64-v8a": "https://github.com/KirbyNx64/Aura/releases/download/v2.2.4/AuraMusic-v2.2.4-arm64-v8a.apk",
+    "armeabi-v7a": "https://github.com/KirbyNx64/Aura/releases/download/v2.2.4/AuraMusic-v2.2.4-armeabi-v7a.apk",
+    "x86_64": "https://github.com/KirbyNx64/Aura/releases/download/v2.2.4/AuraMusic-v2.2.4-x86_64.apk"
   },
-  "changelog": "• Se implementó un nuevo sistema de caché para las canciones reproducidas mediante streaming, permitiendo una reproducción más rápida y reduciendo las peticiones realizadas a YouTube.\n\n• Se corrigió un error que impedía iniciar la reproducción después de utilizar el modo de repetición.\n\n• Se corrigió un error que impedía aplicar correctamente las letras de las canciones.\n\n• Se corrigieron otros errores menores y se realizaron mejoras generales de estabilidad."
+  "changelog": "• Se corrigieron diversos errores menores.\n\n• Se realizaron mejoras generales para aumentar la estabilidad de la aplicación."
 }
