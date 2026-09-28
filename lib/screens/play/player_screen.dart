@@ -1194,7 +1194,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
             return buildArtwork(mediaItem, artworkSize);
           }
 
-          final seededPage = _artworkCarouselPage ?? currentIndex;
+          // Si _artworkCarouselPage apunta a un ítem distinto del mediaItem actual
+          // (puede ocurrir cuando se reproduce la misma canción desde otro contexto
+          // y la cola cambia), resincronizar al índice correcto.
+          final cachedPage = _artworkCarouselPage;
+          final pagePointsToWrongItem =
+              cachedPage != null &&
+              cachedPage < queue.length &&
+              queue[cachedPage].id != mediaItem.id;
+          final seededPage =
+              (pagePointsToWrongItem || cachedPage == null)
+              ? currentIndex
+              : cachedPage;
           _artworkCarouselPage = seededPage.clamp(0, queue.length - 1);
           final carouselInitialPage = _artworkCarouselPage!;
           final isCarouselAnimationEnabled =
@@ -4873,6 +4884,27 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
           WidgetsBinding.instance.addPostFrameCallback((_) {
             _handleArtworkChange(mediaItem);
           });
+        }
+
+        // Cuando la misma canción se reproduce desde otro contexto (otra parte de la app),
+        // el id no cambia pero la cola puede haber cambiado. Detectar este caso y
+        // resincronizar el carousel para evitar mostrar la carátula incorrecta.
+        if (mediaItem != null && mediaItem.id == _lastMediaItemId) {
+          final queue = audioHandler?.queue.value ?? const <MediaItem>[];
+          final actualIndex = queue.indexWhere((item) => item.id == mediaItem.id);
+          final cachedPage = _artworkCarouselPage;
+          final pageIsStale =
+              cachedPage != null &&
+              actualIndex >= 0 &&
+              cachedPage < queue.length &&
+              queue[cachedPage].id != mediaItem.id;
+          if (pageIsStale) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _handleArtworkChange(mediaItem);
+              _syncArtworkCarouselToMediaItem(mediaItem);
+            });
+          }
         }
 
         // Solo procesar si es una canción nueva
