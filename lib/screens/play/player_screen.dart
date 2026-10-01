@@ -7121,7 +7121,16 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                               durationSnapshot.data;
                                                                           final mediaDuration =
                                                                               currentMediaItem.duration;
-                                                                          // Si no hay duración, usa 1 segundo como mínimo para el slider
+                                                                          // Determina si hay duración conocida (metadatos o stream del player)
+                                                                          final hasDuration =
+                                                                              (mediaDuration !=
+                                                                                      null &&
+                                                                                  mediaDuration.inMilliseconds >
+                                                                                      0) ||
+                                                                              (fallbackDuration !=
+                                                                                      null &&
+                                                                                  fallbackDuration.inMilliseconds >
+                                                                                      0);
                                                                           final duration =
                                                                               (mediaDuration !=
                                                                                       null &&
@@ -7133,14 +7142,18 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                     fallbackDuration.inMilliseconds >
                                                                                         0)
                                                                               ? fallbackDuration
-                                                                              : const Duration(
-                                                                                  seconds: 1,
-                                                                                );
+                                                                              : null;
+                                                                          // Si no hay duración conocida, usa la posición actual como máximo para evitar clamp
                                                                           final durationMs =
-                                                                              duration.inMilliseconds >
-                                                                                  0
+                                                                              (duration != null &&
+                                                                                      duration.inMilliseconds >
+                                                                                          0)
                                                                               ? duration.inMilliseconds
-                                                                              : 1;
+                                                                              : (position.inMilliseconds >
+                                                                                      0
+                                                                                  ? position.inMilliseconds +
+                                                                                      1000
+                                                                                  : 1000);
                                                                           final bufferedPositionMs =
                                                                               (playbackState?.bufferedPosition.inMilliseconds ??
                                                                                       0)
@@ -7170,11 +7183,15 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                     0,
                                                                                                     durationMs.toDouble(),
                                                                                                   )
-                                                                                            : position.inMilliseconds
+                                                                                            : hasDuration
+                                                                                            ? position.inMilliseconds
                                                                                                   .clamp(
                                                                                                     0,
                                                                                                     durationMs,
                                                                                                   )
+                                                                                                  .toDouble()
+                                                                                            // Sin duración conocida: mostrar posición sin clamp
+                                                                                            : position.inMilliseconds
                                                                                                   .toDouble();
                                                                                         return Column(
                                                                                           children: [
@@ -7326,13 +7343,10 @@ class _FullPlayerScreenState extends State<FullPlayerScreen>
                                                                                                   ),
                                                                                                   Text(
                                                                                                     // Si la duración es desconocida, muestra '--:--'
-                                                                                                    (mediaDuration ==
-                                                                                                                null ||
-                                                                                                            mediaDuration.inMilliseconds <=
-                                                                                                                0)
+                                                                                                    !hasDuration
                                                                                                         ? '--:--'
                                                                                                         : _formatDuration(
-                                                                                                            duration,
+                                                                                                            duration!,
                                                                                                           ),
                                                                                                     style: TextStyle(
                                                                                                       fontSize: is16by9
